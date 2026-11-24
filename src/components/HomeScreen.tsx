@@ -59,7 +59,6 @@ interface HomeScreenProps {
   ) => void;
   onNavigateToAcessos?: () => void;
   onOpenClassPendingFichas?: (cls: ClassGroup) => void;
-  onOpenSpotlightSearch?: () => void;
 }
 
 interface QuickActionItem {
@@ -92,7 +91,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onMarkNoticeRead,
   onNavigateToAcessos,
   onOpenClassPendingFichas,
-  onOpenSpotlightSearch,
 }) => {
   const isStrictAdmin =
     userRole === 'admin' && teacherRoleType !== 'apoio' && teacherRoleType !== 'aee';
@@ -553,30 +551,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </div>
 
-        {onOpenSpotlightSearch && (
-          <motion.button
-            type="button"
-            whileTap={tapAnimation}
-            onClick={() => {
-              triggerMenuHaptic('light');
-              onOpenSpotlightSearch();
-            }}
-            className="w-full min-h-[48px] px-3.5 sm:px-4 py-2 rounded-2xl bg-[#eef3fa] hover:bg-[#e3ecf8] flex items-center justify-between gap-3 text-left cursor-pointer transition-all duration-200 hover:shadow-[0_6px_18px_rgba(14,58,138,0.12)] group"
-          >
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <span className="w-8 h-8 rounded-xl bg-white text-[#0e3a8a] flex items-center justify-center shrink-0 shadow-[0_2px_6px_rgba(14,58,138,0.10)]">
-                <SFSymbol name="search" size={18} weight={500} />
-              </span>
-              <span className="text-[13.5px] sm:text-sm font-medium text-slate-700 group-hover:text-[#071e46] truncate">
-                <span className="sm:hidden">Buscar aluno, RA ou turma...</span>
-                <span className="hidden sm:inline">Buscar estudante por nome, RA ou turma em toda a escola...</span>
-              </span>
-            </div>
-            <kbd className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white text-[11px] font-mono font-semibold text-[#0e3a8a] shrink-0 shadow-[0_1px_3px_rgba(15,23,42,0.10)]">
-              ⌘ K
-            </kbd>
-          </motion.button>
-        )}
 
         {/* Faixa Unificada de KPIs com Ícones SF Symbols e Hierarquia Tonal */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 min-w-0 items-stretch">

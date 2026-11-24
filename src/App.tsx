@@ -138,10 +138,7 @@ const VisualizarPdfNominalModal = lazyWithRetry(
     })),
   'VisualizarPdfNominalModal'
 );
-const SpotlightCommandModal = lazyWithRetry(
-  () => import('./components/SpotlightCommandModal').then((m) => ({ default: m.SpotlightCommandModal })),
-  'SpotlightCommandModal'
-);
+
 const AdminArrastePdfsModal = lazyWithRetry(
   () => import('./components/AdminArrastePdfsModal').then((m) => ({ default: m.AdminArrastePdfsModal })),
   'AdminArrastePdfsModal'
@@ -434,21 +431,9 @@ export default function App() {
   const [schoolNotices, setSchoolNotices] = useState<SchoolNotice[]>(() =>
     getStoredSchoolNotices()
   );
-  const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
 
-  // Global keyboard shortcut Ctrl+K or Cmd+K for Spotlight Search
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (currentScreen !== 'login') {
-          setIsSpotlightOpen((prev) => !prev);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [currentScreen]);
+
+
 
   // Probe whether backend Express API is active (or if running as pure static SPA on GitHub Pages)
   useEffect(() => {
@@ -1986,7 +1971,6 @@ export default function App() {
           }
           navigateToScreen(screen);
         }}
-        onOpenSpotlightSearch={() => setIsSpotlightOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -2066,7 +2050,6 @@ export default function App() {
             schoolNotices={schoolNotices}
             onSaveSchoolNotices={handleSaveSchoolNotices}
             onMarkNoticeRead={handleMarkNoticeRead}
-            onOpenSpotlightSearch={() => setIsSpotlightOpen(true)}
             onNavigateToScreen={(targetScreen) => {
               if (targetScreen === 'turmas' && userRole === 'usuario') {
                 const targetCls = classes.find((c) => c.id === assignedClassId) || classes[0];
@@ -2486,40 +2469,6 @@ export default function App() {
         </LazyErrorBoundary>
       )}
 
-      {/* Busca Global Instantânea (Spotlight Command Bar · Ctrl+K / ⌘K) */}
-      {isSpotlightOpen && (
-        <LazyErrorBoundary mode="modal" resetKey={isSpotlightOpen} onDismiss={() => setIsSpotlightOpen(false)}>
-        <Suspense fallback={null}>
-          <SpotlightCommandModal
-            isOpen={isSpotlightOpen}
-            onClose={() => setIsSpotlightOpen(false)}
-            classes={userRole === 'usuario' ? visibleClasses : classes}
-            userRole={userRole}
-            onSelectClass={(cls) => {
-              setAssignedClassId(cls.id);
-              setSelectedClass(cls);
-              navigateToScreen('detalhes');
-            }}
-            onOpenStudentGrid={(student, classId, className, diasLetivosMes) => {
-              const foundCls = classes.find((c) => c.id === classId);
-              if (foundCls) setSelectedClass(foundCls);
-              setGridModalData({
-                student,
-                classId,
-                className,
-                diasLetivosMes,
-              });
-            }}
-            onOpenStudentPdf={(student, className) => {
-              setPdfModalData({ student, className });
-            }}
-            onNavigateToScreen={(screen) => {
-              navigateToScreen(screen);
-            }}
-          />
-        </Suspense>
-        </LazyErrorBoundary>
-      )}
 
       {/* Visualizador no App dos Documentos PDF Nominais */}
       {pdfModalData !== null && (

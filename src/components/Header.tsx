@@ -37,7 +37,6 @@ interface HeaderProps {
   onRestoreAdminRole?: () => void;
   onChangeScreen?: (screen: ScreenType) => void;
   onSelectClassById?: (classId: string) => void;
-  onOpenSpotlightSearch?: () => void;
   onLogout: () => void;
 }
 
@@ -55,7 +54,6 @@ export const Header: React.FC<HeaderProps> = ({
   onRestoreAdminRole,
   onChangeScreen,
   onSelectClassById,
-  onOpenSpotlightSearch,
   onLogout,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -313,7 +311,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-2 sm:gap-3 cursor-pointer group select-none min-w-0 shrink text-left min-h-[44px]"
             title="Ir para o Início"
           >
-            <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white shadow-[0_4px_16px_rgba(15,23,42,0.1)] p-1 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <span className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <img
                 src={APP_LOGO_URL}
                 alt="Brasão de Jundiaí"
@@ -576,22 +574,7 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </motion.button>
 
-            {onOpenSpotlightSearch && (
-              <motion.button
-                type="button"
-                whileTap={tapAnimation}
-                onClick={() => {
-                  triggerMenuHaptic('light');
-                  onOpenSpotlightSearch();
-                }}
-                aria-label="Buscar aluno ou turma"
-                title="Buscar aluno ou turma (⌘K)"
-                className="h-9 w-9 xl:w-auto xl:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-[13px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-2xs"
-              >
-                <SFSymbol name="search" size={19} weight={480} className="text-[#1649a8]" />
-                <span className="hidden xl:inline">Buscar</span>
-              </motion.button>
-            )}
+
 
             <PushNotificationCenter
               visibleClasses={visibleClasses}
