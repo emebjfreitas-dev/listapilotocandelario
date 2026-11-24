@@ -24,7 +24,7 @@ export const OfflineIndicator: React.FC = () => {
           role="status"
           aria-live="polite"
           data-status="offline"
-          className="fixed bottom-20 lg:bottom-6 left-4 z-[125] flex items-center gap-2.5 rounded-2xl bg-[#be123c] px-4 py-2.5 text-xs font-medium text-white shadow-[0_14px_34px_rgba(2,6,23,0.45)] animate-gentle-fade"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-4 z-[125] flex items-center gap-2.5 rounded-2xl bg-[#be123c] px-4 py-2.5 text-xs font-medium text-white shadow-[0_14px_34px_rgba(2,6,23,0.45)] animate-gentle-fade"
         >
           <WifiOff className="w-4 h-4 shrink-0 text-white" />
           <span className="text-white">Modo Offline Ativo — Os dados locais continuam salvos e acessíveis.</span>
@@ -40,7 +40,7 @@ export const OfflineIndicator: React.FC = () => {
           role="status"
           aria-live="polite"
           data-status="info"
-          className="fixed bottom-20 lg:bottom-6 left-4 z-[125] flex items-center gap-2.5 rounded-2xl bg-[#0f2e6b] px-4 py-2.5 text-xs font-medium text-white shadow-[0_14px_34px_rgba(2,6,23,0.4)] animate-gentle-fade"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-4 z-[125] flex items-center gap-2.5 rounded-2xl bg-[#0f2e6b] px-4 py-2.5 text-xs font-medium text-white shadow-[0_14px_34px_rgba(2,6,23,0.4)] animate-gentle-fade"
         >
           <CloudOff className="w-4 h-4 shrink-0 text-amber-300" />
           <span className="text-white">
@@ -58,7 +58,7 @@ export const OfflineIndicator: React.FC = () => {
         role="status"
         aria-live="polite"
         data-status="warning"
-        className="fixed bottom-20 lg:bottom-6 left-4 z-[125] flex items-center gap-2.5 rounded-2xl bg-[#b45309] px-4 py-2.5 text-xs font-medium text-white shadow-[0_14px_34px_rgba(2,6,23,0.4)] animate-gentle-fade"
+        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] left-4 z-[125] flex items-center gap-2.5 rounded-2xl bg-[#b45309] px-4 py-2.5 text-xs font-medium text-white shadow-[0_14px_34px_rgba(2,6,23,0.4)] animate-gentle-fade"
       >
         <AlertTriangle className="w-4 h-4 shrink-0 text-white" />
         <span className="text-white">

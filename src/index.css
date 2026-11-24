@@ -306,12 +306,20 @@
     cursor: pointer;
   }
 
-  /* Safe-area mobile padding */
+  /* Safe-area mobile padding (barra de gestos iOS/Android e notch) */
   .pt-safe {
     padding-top: env(safe-area-inset-top, 0px);
   }
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .main-safe-pb {
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 1024px) {
+    .main-safe-pb {
+      padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    }
   }
 
   /* Barra de Rolagem Minimalista */

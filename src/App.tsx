@@ -79,6 +79,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { SavingIndicator } from './components/SavingIndicator';
+import { SafeAreaView } from './components/ui/SafeAreaView';
 import { Toaster, toast } from 'sonner';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 
@@ -1886,18 +1887,24 @@ export default function App() {
 
   if (isAuthChecking) {
     return (
-      <div className="min-h-[100dvh] w-full bg-[#070d19] bg-[var(--canvas-gradient)] flex flex-col items-center justify-center p-6 text-white font-sans">
+      <SafeAreaView
+        edges={['top', 'bottom']}
+        className="min-h-[100dvh] w-full bg-[#070d19] bg-[var(--canvas-gradient)] flex flex-col items-center justify-center p-6 text-white font-sans"
+      >
         <Loader2 className="w-10 h-10 text-blue-300 animate-spin mb-4" aria-hidden="true" />
         <p className="text-sm font-semibold tracking-wide text-slate-100">
           Verificando sessão institucional...
         </p>
-      </div>
+      </SafeAreaView>
     );
   }
 
   if (!isAuthVerified || currentScreen === 'login') {
     return (
-      <div className="min-h-screen w-full overflow-x-clip bg-[#0a1529] font-sans">
+      <SafeAreaView
+        edges={['top', 'bottom']}
+        className="min-h-screen w-full overflow-x-clip bg-[#0a1529] font-sans"
+      >
         <LoginScreen
           authorizedUsers={authorizedUsers}
           schoolNotices={schoolNotices}
@@ -1916,12 +1923,15 @@ export default function App() {
             className: 'sonner-sf-toast',
           }}
         />
-      </div>
+      </SafeAreaView>
     );
   }
 
   return (
-    <div className="min-h-screen w-full overflow-x-clip bg-[#070d19] bg-[var(--canvas-gradient)] bg-fixed text-[#0f172a] flex flex-col font-sans selection:bg-blue-500/30 selection:text-inherit">
+    <SafeAreaView
+      edges={['bottom']}
+      className="min-h-screen w-full overflow-x-clip bg-[#070d19] bg-[var(--canvas-gradient)] bg-fixed text-[#0f172a] flex flex-col font-sans selection:bg-blue-500/30 selection:text-inherit"
+    >
       {/* Top Minimalist Header */}
       <Header
         currentScreen={currentScreen}
@@ -1962,8 +1972,12 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* Main Content Area: Responsive Proportions for Mobile, Tablet, Laptop & Full HD Desktop */}
-      <main className="flex-1 w-full min-w-0 max-w-[1600px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-[76px] sm:pt-[84px] pb-28 lg:pb-14">
+      {/* Main Content Area: Responsive Proportions with Safe Area Padding for iOS/Android */}
+      <SafeAreaView
+        as="main"
+        edges={['left', 'right']}
+        className="flex-1 w-full min-w-0 max-w-[1600px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-[calc(4.75rem+env(safe-area-inset-top,0px))] sm:pt-[calc(5.25rem+env(safe-area-inset-top,0px))] main-safe-pb"
+      >
         {/* Banner de Aviso de Menor Privilégio e Segurança LGPD */}
         {securityBlockNotice && (
           <div className="mb-5 w-full min-w-0 p-4 sm:p-5 rounded-2xl bg-amber-50 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-sm animate-gentle-fade">
@@ -2318,7 +2332,7 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </MotionConfig>
-      </main>
+      </SafeAreaView>
 
       {/* Fixed Bottom Navigation - Interactive for Senior & Lay Educators */}
       <BottomNav
@@ -2614,6 +2628,6 @@ export default function App() {
           className: 'sonner-sf-toast',
         }}
       />
-    </div>
+    </SafeAreaView>
   );
 }

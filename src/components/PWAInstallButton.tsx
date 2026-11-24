@@ -132,9 +132,9 @@ export const PWAInstallButton: React.FC<{ variant?: 'header' | 'menu' }> = ({ va
         }}
         disabled={isInstalling}
         title="Instalar Lista Piloto como aplicativo no seu dispositivo"
-        className="h-9 px-2.5 xl:px-3 rounded-xl bg-[#0e3a8a]/10 hover:bg-[#0e3a8a]/16 text-[#0a2d6b] font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+        className="h-9 px-2.5 xl:px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
       >
-        <SFSymbol name="download" size={18} weight={480} className="text-[#0e3a8a]" />
+        <SFSymbol name="download" size={18} weight={480} className="text-blue-200" />
         <span className="hidden xl:inline">Instalar App</span>
       </button>
     );
@@ -150,9 +150,9 @@ export const PWAInstallButton: React.FC<{ variant?: 'header' | 'menu' }> = ({ va
             setShowIOSGuide(true);
           }}
           title="Instalar no iPhone / iPad"
-          className="h-9 px-2.5 xl:px-3 rounded-xl bg-[#eef3fa] hover:bg-[#dfe9f7] text-[#0a2d6b] font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+          className="h-9 px-2.5 xl:px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
         >
-          <SFSymbol name="smartphone" size={18} weight={460} className="text-[#0e3a8a]" />
+          <SFSymbol name="smartphone" size={18} weight={460} className="text-blue-200" />
           <span className="hidden xl:inline">Instalar iOS</span>
         </button>
 

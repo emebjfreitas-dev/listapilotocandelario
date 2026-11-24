@@ -443,8 +443,8 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
           title="Notificações"
           className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-92 ${
             isOpen
-              ? 'bg-gradient-to-b from-[#1649a8] to-[#0a2d6b] text-white shadow-[0_6px_14px_rgba(10,45,107,0.28)]'
-              : 'bg-[#eef3fa] hover:bg-[#dfe9f7] text-[#0e3a8a]'
+              ? 'bg-[#1649a8] text-white shadow-[0_4px_14px_rgba(22,73,168,0.45)]'
+              : 'bg-white/10 hover:bg-white/20 text-blue-200 hover:text-white'
           }`}
         >
           <SFSymbol
@@ -455,7 +455,7 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
           />
 
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#be123c] text-white text-[11px] font-semibold flex items-center justify-center tabular-nums shadow-xs">
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#be123c] text-white text-[11px] font-semibold flex items-center justify-center tabular-nums shadow-[0_0_0_2px_#081326]">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
