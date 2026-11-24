@@ -14,8 +14,9 @@ if ('serviceWorker' in navigator && typeof window !== 'undefined') {
     const swUrl = `${baseUrl}sw.js`;
 
     navigator.serviceWorker
-      .register(swUrl, { scope: baseUrl, updateViaCache: 'imports' })
+      .register(swUrl, { scope: baseUrl, updateViaCache: 'none' })
       .then((registration) => {
+        registration.update().catch(() => {});
         registration.onupdatefound = () => {
           const installingWorker = registration.installing;
           if (installingWorker) {

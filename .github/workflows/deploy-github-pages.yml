@@ -26,28 +26,38 @@ jobs:
       - name: 1. Checkout do Código
         uses: actions/checkout@v4
 
-      - name: 2. Configurar Node.js 22
+      - name: 2. Configurar GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+          token: ${{ secrets.GH_PAGES_TOKEN || github.token }}
+
+      - name: Diagnóstico de Permissão do GitHub Pages
+        if: failure() && steps.pages.outcome == 'failure'
+        run: |
+          echo "::error::O GitHub Pages ainda não está ativado neste repositório (ou o repositório está privado no plano Free). O token padrão GITHUB_TOKEN não tem permissão para criar o site Pages pela primeira vez."
+          echo "Solução (1 clique): Acesse Settings > Pages > Build and deployment > Source e selecione 'GitHub Actions'. Se o repositório estiver privado no plano Free, altere para Público (ou adicione um PAT com Administration:write em Settings > Secrets > GH_PAGES_TOKEN)."
+          exit 1
+
+      - name: 3. Configurar Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: 3. Instalar Dependências
+      - name: 4. Instalar Dependências
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: 4. Compilar Aplicativo (Vite Build)
+      - name: 5. Compilar Aplicativo (Vite Build)
         env:
           VITE_CONFIG_NATIVE_IGNORE_WARNING: 'true'
+          VITE_BASE_PATH: ${{ steps.pages.outputs.base_path || '/' }}
         run: npm run build
 
-      - name: 5. Garantir Fallback SPA (404.html) e Remover CNAME antigo
+      - name: 6. Garantir Fallback SPA (404.html) e Remover CNAME antigo
         run: |
           cp dist/index.html dist/404.html
           rm -f dist/CNAME public/CNAME
-
-      - name: 6. Configurar GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: 7. Enviar Artefato da Build
         uses: actions/upload-pages-artifact@v3

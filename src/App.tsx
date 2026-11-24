@@ -80,53 +80,71 @@ import { HomeScreen } from './components/HomeScreen';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { SavingIndicator } from './components/SavingIndicator';
 import { SafeAreaView } from './components/ui/SafeAreaView';
+import { LazyErrorBoundary } from './components/ui/LazyErrorBoundary';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 import { Toaster, toast } from 'sonner';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 
-const MinhasTurmasScreen = React.lazy(() =>
-  import('./components/MinhasTurmasScreen').then((m) => ({ default: m.MinhasTurmasScreen }))
+const MinhasTurmasScreen = lazyWithRetry(
+  () => import('./components/MinhasTurmasScreen').then((m) => ({ default: m.MinhasTurmasScreen })),
+  'MinhasTurmasScreen'
 );
-const DetalhesTurmaScreen = React.lazy(() =>
-  import('./components/DetalhesTurmaScreen').then((m) => ({ default: m.DetalhesTurmaScreen }))
+const DetalhesTurmaScreen = lazyWithRetry(
+  () => import('./components/DetalhesTurmaScreen').then((m) => ({ default: m.DetalhesTurmaScreen })),
+  'DetalhesTurmaScreen'
 );
-const RegistroFrequenciaMensalScreen = React.lazy(() =>
-  import('./components/RegistroFrequenciaMensalScreen').then((m) => ({
-    default: m.RegistroFrequenciaMensalScreen,
-  }))
+const RegistroFrequenciaMensalScreen = lazyWithRetry(
+  () =>
+    import('./components/RegistroFrequenciaMensalScreen').then((m) => ({
+      default: m.RegistroFrequenciaMensalScreen,
+    })),
+  'RegistroFrequenciaMensalScreen'
 );
-const FaltasConsecutivasScreen = React.lazy(() =>
-  import('./components/FaltasConsecutivasScreen').then((m) => ({
-    default: m.FaltasConsecutivasScreen,
-  }))
+const FaltasConsecutivasScreen = lazyWithRetry(
+  () =>
+    import('./components/FaltasConsecutivasScreen').then((m) => ({
+      default: m.FaltasConsecutivasScreen,
+    })),
+  'FaltasConsecutivasScreen'
 );
-const UsuariosAcessoScreen = React.lazy(() =>
-  import('./components/UsuariosAcessoScreen').then((m) => ({ default: m.UsuariosAcessoScreen }))
+const UsuariosAcessoScreen = lazyWithRetry(
+  () => import('./components/UsuariosAcessoScreen').then((m) => ({ default: m.UsuariosAcessoScreen })),
+  'UsuariosAcessoScreen'
 );
-const ListasNominaisScreen = React.lazy(() =>
-  import('./components/ListasNominaisScreen').then((m) => ({ default: m.ListasNominaisScreen }))
+const ListasNominaisScreen = lazyWithRetry(
+  () => import('./components/ListasNominaisScreen').then((m) => ({ default: m.ListasNominaisScreen })),
+  'ListasNominaisScreen'
 );
-const AlunosModal = React.lazy(() =>
-  import('./components/AlunosModal').then((m) => ({ default: m.AlunosModal }))
+const AlunosModal = lazyWithRetry(
+  () => import('./components/AlunosModal').then((m) => ({ default: m.AlunosModal })),
+  'AlunosModal'
 );
-const AnotacoesModal = React.lazy(() =>
-  import('./components/AnotacoesModal').then((m) => ({ default: m.AnotacoesModal }))
+const AnotacoesModal = lazyWithRetry(
+  () => import('./components/AnotacoesModal').then((m) => ({ default: m.AnotacoesModal })),
+  'AnotacoesModal'
 );
-const UploadFotoModal = React.lazy(() =>
-  import('./components/UploadFotoModal').then((m) => ({ default: m.UploadFotoModal }))
+const UploadFotoModal = lazyWithRetry(
+  () => import('./components/UploadFotoModal').then((m) => ({ default: m.UploadFotoModal })),
+  'UploadFotoModal'
 );
-const GradeDadosCriancaModal = React.lazy(() =>
-  import('./components/GradeDadosCriancaModal').then((m) => ({ default: m.GradeDadosCriancaModal }))
+const GradeDadosCriancaModal = lazyWithRetry(
+  () => import('./components/GradeDadosCriancaModal').then((m) => ({ default: m.GradeDadosCriancaModal })),
+  'GradeDadosCriancaModal'
 );
-const VisualizarPdfNominalModal = React.lazy(() =>
-  import('./components/VisualizarPdfNominalModal').then((m) => ({
-    default: m.VisualizarPdfNominalModal,
-  }))
+const VisualizarPdfNominalModal = lazyWithRetry(
+  () =>
+    import('./components/VisualizarPdfNominalModal').then((m) => ({
+      default: m.VisualizarPdfNominalModal,
+    })),
+  'VisualizarPdfNominalModal'
 );
-const SpotlightCommandModal = React.lazy(() =>
-  import('./components/SpotlightCommandModal').then((m) => ({ default: m.SpotlightCommandModal }))
+const SpotlightCommandModal = lazyWithRetry(
+  () => import('./components/SpotlightCommandModal').then((m) => ({ default: m.SpotlightCommandModal })),
+  'SpotlightCommandModal'
 );
-const AdminArrastePdfsModal = React.lazy(() =>
-  import('./components/AdminArrastePdfsModal').then((m) => ({ default: m.AdminArrastePdfsModal }))
+const AdminArrastePdfsModal = lazyWithRetry(
+  () => import('./components/AdminArrastePdfsModal').then((m) => ({ default: m.AdminArrastePdfsModal })),
+  'AdminArrastePdfsModal'
 );
 
 const screenSlideVariants = {
@@ -2026,6 +2044,7 @@ export default function App() {
               exit="exit"
               className="w-full min-w-0"
             >
+        <LazyErrorBoundary resetKey={currentScreen}>
         <Suspense
           fallback={
             <div className="w-full py-16 flex flex-col items-center justify-center gap-3 text-white">
@@ -2329,6 +2348,7 @@ export default function App() {
 
 
         </Suspense>
+        </LazyErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </MotionConfig>
@@ -2358,6 +2378,7 @@ export default function App() {
 
       {/* Modals */}
       {isStudentListModalOpen && (
+        <LazyErrorBoundary mode="modal" resetKey={isStudentListModalOpen} onDismiss={() => setIsStudentListModalOpen(false)}>
         <Suspense fallback={null}>
           <AlunosModal
             isOpen={isStudentListModalOpen}
@@ -2378,9 +2399,11 @@ export default function App() {
             }
           />
         </Suspense>
+        </LazyErrorBoundary>
       )}
 
       {isNotesModalOpen && (
+        <LazyErrorBoundary mode="modal" resetKey={isNotesModalOpen} onDismiss={() => setIsNotesModalOpen(false)}>
         <Suspense fallback={null}>
           <AnotacoesModal
             isOpen={isNotesModalOpen}
@@ -2389,9 +2412,11 @@ export default function App() {
             onSaveNotes={handleSaveNotes}
           />
         </Suspense>
+        </LazyErrorBoundary>
       )}
 
       {photoModalStudent && (
+        <LazyErrorBoundary mode="modal" resetKey={photoModalStudent.id} onDismiss={() => setPhotoModalStudent(null)}>
         <Suspense fallback={null}>
           <UploadFotoModal
             isOpen={photoModalStudent !== null}
@@ -2410,10 +2435,12 @@ export default function App() {
             }}
           />
         </Suspense>
+        </LazyErrorBoundary>
       )}
 
       {/* Grade de Dados Interativa de Cada Criança (Com Navegação Anterior / Próximo) */}
       {gridModalData !== null && (
+        <LazyErrorBoundary mode="modal" resetKey={gridModalData.student?.id} onDismiss={() => setGridModalData(null)}>
         <Suspense fallback={null}>
           <GradeDadosCriancaModal
             isOpen={gridModalData !== null}
@@ -2456,10 +2483,12 @@ export default function App() {
             }}
           />
         </Suspense>
+        </LazyErrorBoundary>
       )}
 
       {/* Busca Global Instantânea (Spotlight Command Bar · Ctrl+K / ⌘K) */}
       {isSpotlightOpen && (
+        <LazyErrorBoundary mode="modal" resetKey={isSpotlightOpen} onDismiss={() => setIsSpotlightOpen(false)}>
         <Suspense fallback={null}>
           <SpotlightCommandModal
             isOpen={isSpotlightOpen}
@@ -2489,10 +2518,12 @@ export default function App() {
             }}
           />
         </Suspense>
+        </LazyErrorBoundary>
       )}
 
       {/* Visualizador no App dos Documentos PDF Nominais */}
       {pdfModalData !== null && (
+        <LazyErrorBoundary mode="modal" resetKey={pdfModalData.student?.id} onDismiss={() => setPdfModalData(null)}>
         <Suspense fallback={null}>
           <VisualizarPdfNominalModal
             isOpen={pdfModalData !== null}
@@ -2589,10 +2620,12 @@ export default function App() {
             }}
           />
         </Suspense>
+        </LazyErrorBoundary>
       )}
 
       {/* Modal Admin de Arraste & Solte em Lote de Fichas PDF dos Alunos (Acesso contextual do visualizador) */}
       {isAdminPdfsModalOpen && (
+        <LazyErrorBoundary mode="modal" resetKey={isAdminPdfsModalOpen} onDismiss={() => setIsAdminPdfsModalOpen(false)}>
         <Suspense fallback={null}>
           <AdminArrastePdfsModal
             isOpen={isAdminPdfsModalOpen}
@@ -2607,6 +2640,7 @@ export default function App() {
             }}
           />
         </Suspense>
+        </LazyErrorBoundary>
       )}
 
       {/* Non-intrusive Auto-Save Indicator */}

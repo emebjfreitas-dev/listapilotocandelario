@@ -1,6 +1,6 @@
 /* Service Worker Oficial — EMEB Joaquim Candelário de Freitas (PWA Offline & Web Push) */
-const SW_VERSION = 'candelario-pwa-v7';
-const CACHE_NAME = 'candelario-offline-v7';
+const SW_VERSION = 'candelario-pwa-v8';
+const CACHE_NAME = 'candelario-offline-v8';
 
 const PRECACHE_ASSETS = [
   './',
@@ -13,6 +13,7 @@ const PRECACHE_ASSETS = [
   './apple-touch-icon.png',
   './pwa-192x192.png',
   './pwa-512x512.png',
+  './pwa-maskable-512x512.png',
 ];
 
 /* ==========================================================================
@@ -351,8 +352,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Ignora APIs dinâmicas, WebSocket, extensões de navegador e autenticação
+  // 2. Ignora módulos de desenvolvimento do Vite, HMR, Service Workers, APIs dinâmicas e extensões
+  const isViteDevOrSourceModule =
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.includes('/node_modules/') ||
+    /\.(ts|tsx|jsx|map)(\?|$)/i.test(url.pathname) ||
+    url.searchParams.has('t') ||
+    url.searchParams.has('v') ||
+    url.searchParams.has('import') ||
+    url.pathname.endsWith('/sw.js') ||
+    url.pathname.endsWith('/firebase-messaging-sw.js');
+
   if (
+    isViteDevOrSourceModule ||
     url.pathname.startsWith('/api/') ||
     url.hostname.includes('firestore.googleapis.com') ||
     url.hostname.includes('identitytoolkit.googleapis.com') ||
@@ -425,10 +438,12 @@ self.addEventListener('fetch', (event) => {
             }
             return networkRes;
           })
-          .catch(() => {
+          .catch(async () => {
             if (req.destination === 'image') {
-              return caches.match('./pwa-192x192.png');
+              const fallbackImg = await caches.match('./pwa-192x192.png');
+              if (fallbackImg) return fallbackImg;
             }
+            return Response.error();
           });
       })
     );

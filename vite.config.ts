@@ -23,8 +23,9 @@ const reactIsPath = resolveModuleDir('react-is');
 const rechartsPath = resolveModuleDir('recharts');
 
 export default defineConfig(() => {
+  const basePath = process.env.VITE_BASE_PATH || '/';
   return {
-    base: '/',
+    base: basePath,
     plugins: [react(), tailwindcss()],
     resolve: {
       dedupe: ['react', 'react-dom', 'react-is', 'recharts'],
