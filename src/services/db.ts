@@ -252,10 +252,10 @@ export const clearSensitiveStudentPiiCacheOnLogout = (
 const ensureCleanDatabaseEpochLocal = (): void => {
   if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   try {
-    if (localStorage.getItem(DB_CLEAN_EPOCH_STORAGE_KEY) !== CLEAN_DB_RESET_EPOCH_ID) {
-      clearLocalSchoolDataOnly();
+    // RESILIÊNCIA TOTAL: Nunca limpa dados de estudantes do usuário ao atualizar versão do app ou epoch
+    if (!localStorage.getItem(DB_CLEAN_EPOCH_STORAGE_KEY)) {
       localStorage.setItem(DB_CLEAN_EPOCH_STORAGE_KEY, CLEAN_DB_RESET_EPOCH_ID);
-      touchLocalEpochState(0, CLEAN_DB_RESET_EPOCH_ID);
+      touchLocalEpochState(Date.now(), CLEAN_DB_RESET_EPOCH_ID);
     }
   } catch {
     // ignore storage access issues
@@ -1846,16 +1846,33 @@ const enrichClassesWithOfficialMatrix = (loadedClasses: ClassGroup[]): ClassGrou
   });
 };
 
-// Load classes from localStorage or fallback to defaults
+// Load classes from localStorage or fallback to defaults (com migração automática de chaves legadas anti-perda)
 export const getStoredClasses = (): ClassGroup[] => {
   if (memoryCachedClasses && memoryCachedClasses.length > 0) {
     return memoryCachedClasses;
   }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      const legacyKeys = [
+        'emeb_candelario_sed_classes_2027_v7',
+        'emeb_candelario_sed_classes_2027_v6',
+        'emeb_candelario_sed_classes_2027_v5',
+        'emeb_candelario_sed_classes_2027_v4',
+      ];
+      for (const lk of legacyKeys) {
+        const legacyVal = localStorage.getItem(lk);
+        if (legacyVal) {
+          raw = legacyVal;
+          localStorage.setItem(STORAGE_KEY, legacyVal);
+          break;
+        }
+      }
+    }
+
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length === 40) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         const enriched = enrichClassesWithOfficialMatrix(parsed);
         memoryCachedClasses = enriched;
         return enriched;
