@@ -103,19 +103,27 @@ function verifyPublicIcons(): { ok: boolean; results: IconCheckResult[] } {
     };
   });
 
-  checkFile('apple-touch-icon.png', (buf) => {
-    const info = readPngInfo(buf);
-    const dimsOk = Boolean(info.isPng && info.width === 180 && info.height === 180);
-    const opaque = !info.hasAlphaChannel;
-    return {
-      valid: dimsOk && opaque,
-      details: info.isPng
-        ? `PNG ${info.width}×${info.height}px · ${
-            opaque ? 'Fundo opaco iOS (OK)' : 'Contém canal alfa (pode ficar preto no iOS)'
-          }`
-        : 'Assinatura PNG inválida',
-    };
-  });
+  for (const [fname, expectedSize] of [
+    ['apple-touch-icon.png', 180],
+    ['apple-touch-icon-180x180.png', 180],
+    ['apple-touch-icon-167x167.png', 167],
+    ['apple-touch-icon-152x152.png', 152],
+    ['apple-touch-icon-120x120.png', 120],
+  ] as const) {
+    checkFile(fname, (buf) => {
+      const info = readPngInfo(buf);
+      const dimsOk = Boolean(info.isPng && info.width === expectedSize && info.height === expectedSize);
+      const opaque = !info.hasAlphaChannel;
+      return {
+        valid: dimsOk && opaque,
+        details: info.isPng
+          ? `PNG ${info.width}×${info.height}px · ${
+              opaque ? 'Fundo opaco iOS (OK)' : 'Contém canal alfa (pode ficar preto no iOS)'
+            }`
+          : 'Assinatura PNG inválida',
+      };
+    });
+  }
 
   checkFile('pwa-192x192.png', (buf) => {
     const info = readPngInfo(buf);
