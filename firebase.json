@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "listapilotocandelario",
     "public": "dist",
     "ignore": [
       "firebase.json",

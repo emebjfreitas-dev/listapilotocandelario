@@ -437,7 +437,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             e.currentTarget.onerror = null;
             e.currentTarget.src = APP_LOGO_FALLBACK_URL;
           }}
-          className="w-16 h-16 object-contain mb-4 shrink-0 drop-shadow-xs"
+          className="w-20 h-20 object-contain mb-3.5 shrink-0 drop-shadow-xs"
         />
 
         {/* Identificação Institucional */}

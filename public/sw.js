@@ -1,11 +1,12 @@
 /* Service Worker Oficial — EMEB Joaquim Candelário de Freitas (PWA Offline & Web Push) */
-const SW_VERSION = 'candelario-pwa-v8';
-const CACHE_NAME = 'candelario-offline-v8';
+const SW_VERSION = 'candelario-pwa-v9';
+const CACHE_NAME = 'candelario-offline-v9';
 
 const PRECACHE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './brasao-jundiai.png',
   './favicon.ico',
   './favicon.svg',
   './favicon-32x32.png',

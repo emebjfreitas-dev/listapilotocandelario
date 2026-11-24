@@ -269,8 +269,9 @@ export const INITIAL_AUTHORIZED_USERS: AuthorizedUser[] = Array.from(
 
 const APP_BASE_URL =
   (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
-export const APP_LOGO_URL = `${APP_BASE_URL}favicon.svg`;
-export const APP_LOGO_FALLBACK_URL = `${APP_BASE_URL}pwa-192x192.png`;
+export const APP_LOGO_URL = `${APP_BASE_URL}brasao-jundiai.png`;
+export const APP_LOGO_FALLBACK_URL =
+  'https://jundiai.sp.gov.br/a-cidade/wp-content/uploads/sites/31/2024/11/brasao_tradicional_jundiai_v1656_solitario_2024.png';
 export const SCHOOL_PATRON_WATERMARK_URL =
   'https://live.staticflickr.com/65535/51747624614_48845297df_b.jpg';
 
