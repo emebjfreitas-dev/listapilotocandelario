@@ -23,6 +23,7 @@ import {
   isUserAccessExpired,
 } from './authSessionService';
 import { getStoredLgpdConfig, maskSensitiveText } from './securityAuditService';
+import { exportUniversalReport } from '../utils/universalExport';
 
 const sanitizeSpreadsheetCell = (val: string | number): string | number => {
   if (typeof val !== 'string') return val;
@@ -1322,7 +1323,7 @@ export interface ClassCustomExportOptions {
   sortBy: ClassExportSortOrder;
   statusFilter: ClassExportStatusFilter;
   includeSummarySheet: boolean;
-  fileFormat?: 'xls' | 'xlsx';
+  fileFormat?: 'xls' | 'xlsx' | 'docx' | 'pdf';
 }
 
 export const buildCustomClassExportPreview = (
@@ -1515,8 +1516,66 @@ export const downloadClassCustomXLS = async (
   }
 
   const format = options.fileFormat || 'xls';
-  const cleanFileName = `Relatorio_${cls.name.replace(/\s+/g, '_')}_2027.${format}`;
+  const cleanFileNameBase = `Relatorio_${cls.name.replace(/\s+/g, '_')}_2027`;
 
+  if (format === 'docx' || format === 'pdf') {
+    const diasLetivosMes = cls.classesHeld || 20;
+    const cm = getClassAttendanceMetrics(cls, calendar);
+    const ativosCount = cls.students.filter((s) => {
+      const sit = (s.situacao || 'ATIVO').toUpperCase().trim();
+      return !sit.includes('BXTR') && !sit.includes('TRANSF') && !sit.includes('REMAN') && !sit.includes('RM');
+    }).length;
+    const pcdCount = cls.students.filter((s) => Boolean(s.deficiencia && s.deficiencia.trim())).length;
+
+    const matrixRows = rows.map((rowObj) => headers.map((h) => rowObj[h] ?? ''));
+    const sheets = [
+      {
+        sheetName: safeSheetName,
+        sectionTitle: `Relatório Nominal — ${cls.name} (${headers.length} campos selecionados)`,
+        headers,
+        rows: matrixRows,
+        columnWidths: colDefs.map((c) => c.width || 20),
+      },
+    ];
+
+    if (options.includeSummarySheet) {
+      sheets.push({
+        sheetName: 'Resumo_Turma',
+        sectionTitle: 'Resumo Consolidado da Turma',
+        headers: ['Indicador', 'Valor', 'Detalhe'],
+        rows: [
+          ['Turma / Turno', cls.name, `${cls.grade} · ${cls.shift}`],
+          ['Sala / Dias Letivos', cls.room || '—', `${diasLetivosMes} dias letivos no mês`],
+          ['Total Matriculados', cls.students.length, `${ativosCount} estudantes ativos`],
+          ['Educação Especial / AEE', pcdCount, 'Estudantes com registro AEE'],
+          ['Presença Média da Turma', `${cm.presenceRate}%`, `${cm.totalFaltasTurma} faltas · ${cm.totalAtestadosTurma} atestados`],
+        ],
+        columnWidths: [28, 20, 42],
+      });
+    }
+
+    await exportUniversalReport(
+      {
+        fileNameBase: cleanFileNameBase,
+        title: `Relatório da Turma — ${cls.name}`,
+        subtitle: `${cls.grade} · ${cls.shift.replace('Turno ', '')} · ${cls.room || 'Sala'} · Regente: ${cls.teacherName || '—'}`,
+        orientation: headers.length > 5 ? 'landscape' : 'portrait',
+        summaryMetrics: options.includeSummarySheet
+          ? [
+              { label: 'Estudantes Listados', value: String(matrixRows.length) },
+              { label: 'Ativos na Turma', value: String(ativosCount) },
+              { label: 'Presença Turma', value: `${cm.presenceRate}%` },
+              { label: 'Faltas / Atestados', value: `${cm.totalFaltasTurma} / ${cm.totalAtestadosTurma}` },
+            ]
+          : undefined,
+        sheets,
+      },
+      format
+    );
+    return;
+  }
+
+  const cleanFileName = `${cleanFileNameBase}.${format}`;
   if (format === 'xls') {
     XLSX.writeFile(wb, cleanFileName, { bookType: 'biff8' });
   } else {

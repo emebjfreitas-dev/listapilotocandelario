@@ -12,6 +12,9 @@ import {
 } from '../services/db';
 import { saveClassesToFirestoreCloud } from '../services/firebaseSync';
 import { PaginationBar } from './ui/PaginationBar';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildAeeDisabilitiesReport } from '../utils/reportBuilders';
 import {
   AlertCircle,
   AlertTriangle,
@@ -456,20 +459,39 @@ export const ImportarDeficienciasHtmScreen: React.FC<ImportarDeficienciasHtmScre
             </p>
           </div>
 
-          {rows.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setParsedFiles([]);
-                setRows([]);
-                setFeedback(null);
+          <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
+            <ExportFormatButton
+              label="Exportar AEE"
+              variant="secondary"
+              disabled={currentAeeStudentsCount === 0 && rows.length === 0}
+              onExport={async (format) => {
+                const report = buildAeeDisabilitiesReport({
+                  classes,
+                  importedPreviewRows: rows.length > 0 ? rows : undefined,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                setFeedback({
+                  type: 'success',
+                  text: `Relatório de Educação Especial ${fileName} baixado com sucesso.`,
+                });
               }}
-              className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-[#f3f6fb] hover:bg-[#dfe8f4] text-[#0f172a] text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer self-start lg:self-auto whitespace-normal text-center"
-            >
-              <Trash2 className="w-3.5 h-3.5 shrink-0" />
-              <span>Limpar Lista</span>
-            </button>
-          )}
+            />
+
+            {rows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setParsedFiles([]);
+                  setRows([]);
+                  setFeedback(null);
+                }}
+                className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-[#f3f6fb] hover:bg-[#dfe8f4] text-[#0f172a] text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-normal text-center"
+              >
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Limpar Lista</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Zona de Arraste & Solte .HTM */}

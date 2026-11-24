@@ -37,6 +37,9 @@ import {
 import { StudentAvatar } from './StudentAvatar';
 import { ModalPortal } from './ui/ModalPortal';
 import { PaginationBar } from './ui/PaginationBar';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildBolsaFamiliaNominalReport } from '../utils/reportBuilders';
 import { buildWhatsAppLinksFromPhoneString } from './VisualizarPdfNominalModal';
 import { findStudentSiblings } from '../utils/siblingDetection';
 import {
@@ -687,14 +690,30 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleExportXLS}
-              className="min-h-[40px] px-3.5 rounded-2xl bg-[#14428c] hover:bg-[#0f3370] text-white font-semibold text-xs sm:text-[13px] tracking-[-0.01em] flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
-            >
-              <Download className="w-[18px] h-[18px]" />
-              <span>Excel</span>
-            </button>
+            <ExportFormatButton
+              label="Exportar Lista"
+              variant="primary"
+              disabled={groupedByClass.length === 0}
+              onExport={async (format) => {
+                if (groupedByClass.length === 0) {
+                  showToast('Nenhum estudante listado no filtro atual para exportar.');
+                  return;
+                }
+                if (format === 'xls') {
+                  await handleExportXLS();
+                  return;
+                }
+                const orderedRows = groupedByClass.flatMap((g) => g.rows);
+                const report = buildBolsaFamiliaNominalReport({
+                  rows: orderedRows,
+                  bimesterId: currentBimester.id,
+                  bimesterLabel: currentBimester.label,
+                  bimesterShortLabel: currentBimester.shortLabel,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                showToast(`Arquivo ${fileName} exportado com sucesso (${orderedRows.length} estudantes).`);
+              }}
+            />
             <button
               type="button"
               onClick={() => window.print()}

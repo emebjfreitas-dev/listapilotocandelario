@@ -21,6 +21,9 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { SFSymbol } from './ui/SFSymbol';
 import { triggerMenuHaptic } from '../utils/haptics';
 import { toast } from 'sonner';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildHomeSchoolOverviewReport } from '../utils/reportBuilders';
 import {
   ResponsiveContainer,
   BarChart,
@@ -501,6 +504,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto min-w-0 shrink-0">
+            <ExportFormatButton
+              label="Exportar Panorama"
+              variant="secondary"
+              onExport={async (format) => {
+                const report = buildHomeSchoolOverviewReport({
+                  classes: visibleBaseClasses,
+                  schoolYear: activeSchoolYear,
+                  activeStudents: schoolStats.activeStudents,
+                  aeeCount: schoolStats.aeeCount,
+                  avgPresence: schoolStats.avgPresence,
+                  criticalConsecutiveCount: schoolStats.criticalConsecutiveCount,
+                  missingFichasTotal: missingFichasSummary.totalMissing,
+                  userName,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                toast.success(`Arquivo ${fileName} baixado com sucesso!`);
+              }}
+            />
+
             {canLaunchAttendance ? (
               <motion.button
                 type="button"

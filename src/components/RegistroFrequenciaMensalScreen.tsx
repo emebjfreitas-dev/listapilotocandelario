@@ -23,6 +23,9 @@ import { triggerMenuHaptic } from '../utils/haptics';
 import { SyncQueueManager, SyncQueueManagerSnapshot } from '../services/syncQueueManager';
 import { StudentAvatar } from './StudentAvatar';
 import { PaginationBar } from './ui/PaginationBar';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildMonthlyAttendanceReport } from '../utils/reportBuilders';
 
 interface RegistroFrequenciaMensalScreenProps {
   classGroup: ClassGroup;
@@ -691,8 +694,23 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
             </div>
           </div>
 
-          {/* Direita: Indicador Estável Local + Nuvem (Fonte Branca Obrigatória) */}
-          <div className="flex items-center gap-2 shrink-0 self-start">
+          {/* Direita: Exportação + Indicador Estável Local + Nuvem (Fonte Branca Obrigatória) */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
+            <ExportFormatButton
+              label="Baixar Mapa"
+              variant="secondary"
+              onExport={async (format) => {
+                const report = buildMonthlyAttendanceReport({
+                  classGroup,
+                  students: displayedStudents,
+                  monthName: selectedMonthName,
+                  diasLetivosMes,
+                  minLegalPresence,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                toast.success(`Mapa de frequência ${fileName} baixado!`);
+              }}
+            />
             {!syncSnapshot.isOnline ? (
               <div
                 data-status="warning"

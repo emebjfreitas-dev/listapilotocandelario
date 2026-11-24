@@ -33,6 +33,13 @@ import {
 import { SyncStatusSnapshot } from '../services/firebaseSync';
 import { StudentAvatar } from './StudentAvatar';
 import { CustomSelect } from './CustomSelect';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import {
+  buildAuthorizedUsersReport,
+  buildOfficialMatrixReport,
+  buildSecurityAuditReport,
+} from '../utils/reportBuilders';
 
 const AdminArrasteFotosModal = React.lazy(() =>
   import('./AdminArrasteFotosModal').then((m) => ({ default: m.AdminArrasteFotosModal }))
@@ -2059,17 +2066,20 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      exportOfficialMatrixToXLS(classes, authorizedUsers);
-                      triggerFeedback('success', 'Arquivo do Quadro Oficial (.xls) baixado.');
+                  <ExportFormatButton
+                    label="Exportar Quadro"
+                    variant="secondary"
+                    onExport={async (format) => {
+                      if (format === 'xls') {
+                        exportOfficialMatrixToXLS(classes, authorizedUsers);
+                        triggerFeedback('success', 'Arquivo do Quadro Oficial (.xls) baixado.');
+                        return;
+                      }
+                      const report = buildOfficialMatrixReport(classes, authorizedUsers);
+                      const fileName = await exportUniversalReport(report, format);
+                      triggerFeedback('success', `Quadro Oficial ${fileName} baixado com sucesso.`);
                     }}
-                    className="min-h-[40px] px-3 rounded-xl bg-[#f3f6fb] hover:bg-[#dfe8f4] text-[#0f172a] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-                  >
-                    <Download className="w-3.5 h-3.5 shrink-0" />
-                    <span>Baixar XLS</span>
-                  </button>
+                  />
 
                   {canManage && (
                     <button
@@ -2969,6 +2979,21 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                       { value: 'email_asc', label: 'E-mail (A–Z)' },
                       { value: 'access_desc', label: 'Mais acessos' },
                     ]}
+                  />
+
+                  <ExportFormatButton
+                    label="Exportar Contas"
+                    variant="secondary"
+                    disabled={filteredUsers.length === 0}
+                    onExport={async (format) => {
+                      const filterLabel =
+                        roleFilter === 'all'
+                          ? `Todos os perfis (${statusFilter})`
+                          : `Perfil ${roleFilter.toUpperCase()} (${statusFilter})`;
+                      const report = buildAuthorizedUsersReport(filteredUsers, filterLabel);
+                      const fileName = await exportUniversalReport(report, format);
+                      triggerFeedback('success', `Relação de contas ${fileName} baixada.`);
+                    }}
                   />
 
                   {canManage && (
@@ -3911,14 +3936,31 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleExportSecurityAudit}
-                  className="min-h-[40px] px-4 rounded-xl bg-[#14428c] hover:bg-[#0f3370] text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Exportar Auditoria (.CSV)</span>
-                </button>
+                <ExportFormatButton
+                  label="Exportar Auditoria"
+                  variant="primary"
+                  includeCsv
+                  onExport={async (format) => {
+                    if (format === 'csv') {
+                      handleExportSecurityAudit();
+                      return;
+                    }
+                    const report = buildSecurityAuditReport(filteredSecurityLogs);
+                    const fileName = await exportUniversalReport(report, format);
+                    const newEntry = addSecurityAuditLog({
+                      userEmail: currentUserEmail,
+                      userName: 'Administrador Escolar',
+                      userRole: 'admin',
+                      eventType: 'STUDENT_DATA_EXPORTED',
+                      actionTitle: `Relatório de Auditoria LGPD Exportado (.${format.toUpperCase()})`,
+                      details: `Download completo da trilha de auditoria em ${fileName}.`,
+                      targetResource: 'Auditoria de Segurança',
+                      severity: 'info',
+                    });
+                    setSecurityLogs((prev) => [newEntry, ...prev]);
+                    triggerFeedback('success', `Relatório de Auditoria ${fileName} baixado com sucesso.`);
+                  }}
+                />
 
                 {canManage && (
                   <div className="px-3.5 py-2 rounded-xl bg-[#eef3f9] inline-flex items-center gap-2">

@@ -59,6 +59,16 @@ import {
   validateFcmConfigPayload,
   validateFcmSendWindowAlertPayload,
 } from './serverValidation';
+import {
+  buildDocxBytes,
+  buildPdfBytes,
+  buildWorkbookBytes,
+  buildCsvString,
+  toWinAnsiSafeText,
+  sanitizeSpreadsheetCell,
+  UniversalExportReport,
+} from './universalExport';
+import { isStaticHostname } from '../services/apiEnvironment';
 import { AuthorizedUser, ClassGroup, Student } from '../types';
 
 console.log('Iniciando suíte de validação de produção — Lista Piloto 2027...');
@@ -664,5 +674,77 @@ assert.deepEqual(
   'Turma de destino da professora remanejada deve incluir seu e-mail'
 );
 
-console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, expiração, HTM, validação de servidor e regras MEC passaram com sucesso!');
+// 15. Validação do Motor Universal de Exportação (Word .docx, Excel .xlsx/.xls, PDF .pdf, CSV .csv)
+const sampleWideHeaders = Array.from({ length: 14 }, (_, i) => `Col_${i + 1}`);
+const sampleWideRow = sampleWideHeaders.map((_, i) =>
+  i === 1 ? 'JOÃO PEDRO DA SILVA ≥60% ≤75% → ✓ ⚠️' : `Valor_${i + 1}`
+);
+
+const universalExportFixture: UniversalExportReport = {
+  fileNameBase: 'Relatorio_Teste_Candelario_2027',
+  title: 'Relatório de Frequência — Turma Teste',
+  subtitle: 'Verificação completa com acentuação: Ação, Frequência, Conceição ≥60%',
+  orientation: 'landscape',
+  metadata: [
+    { label: 'Ano Letivo', value: '2027' },
+    { label: 'Unidade', value: 'EMEB Candelário' },
+  ],
+  summaryMetrics: [
+    { label: 'Ativos', value: '25', detail: '100% conferidos' },
+    { label: 'Presença', value: '94%', detail: 'Acima da meta' },
+  ],
+  sheets: [
+    {
+      sheetName: 'Mapa_Frequencia',
+      sectionTitle: 'Lançamento Nominal',
+      headers: sampleWideHeaders,
+      rows: [sampleWideRow, sampleWideHeaders.map((_, i) => (i === 0 ? '=SUM(A1:A5)' : `Linha2_${i}`))],
+    },
+  ],
+};
+
+// 15a. Sanitização WinAnsi para PDF e proteção contra Formula Injection em planilhas
+assert.equal(toWinAnsiSafeText('≥60% ≤75% → ✓'), '>=60% <=75% -> OK');
+assert.equal(sanitizeSpreadsheetCell('=SUM(A1:A5)'), "'=SUM(A1:A5)");
+assert.equal(sanitizeSpreadsheetCell('+CMD'), "'+CMD");
+
+// 15b. Word (.docx) OOXML ZIP válido com acentos UTF-8 preservados
+const docxBytes = buildDocxBytes(universalExportFixture);
+assert.equal(docxBytes[0], 0x50, 'DOCX deve iniciar com assinatura ZIP P');
+assert.equal(docxBytes[1], 0x4b, 'DOCX deve iniciar com assinatura ZIP K');
+assert.equal(docxBytes[2], 0x03);
+assert.equal(docxBytes[3], 0x04);
+const docxDecodedText = new TextDecoder('utf-8').decode(docxBytes);
+assert.ok(docxDecodedText.includes('word/document.xml'), 'DOCX deve conter word/document.xml');
+assert.ok(docxDecodedText.includes('[Content_Types].xml'), 'DOCX deve conter [Content_Types].xml');
+assert.ok(docxDecodedText.includes('Frequência'), 'DOCX deve preservar acentuação UTF-8');
+
+// 15c. Excel (.xlsx e .xls) com aba de dados e aba Resumo + proteção contra fórmulas
+const xlsxBytes = await buildWorkbookBytes(universalExportFixture, 'xlsx');
+assert.equal(xlsxBytes[0], 0x50, 'XLSX deve iniciar com assinatura ZIP PK');
+assert.equal(xlsxBytes[1], 0x4b);
+const xlsBytes = await buildWorkbookBytes(universalExportFixture, 'xls');
+assert.equal(xlsBytes[0], 0xd0, 'XLS BIFF8 deve iniciar com assinatura OLE2 0xD0');
+assert.equal(xlsBytes[1], 0xcf, 'XLS BIFF8 deve iniciar com assinatura OLE2 0xCF');
+
+// 15d. PDF (.pdf) multipágina com particionamento de colunas largas (>11 colunas) sem erro WinAnsi
+const pdfBytes = await buildPdfBytes(universalExportFixture);
+const pdfMagic = new TextDecoder('ascii').decode(pdfBytes.slice(0, 5));
+assert.equal(pdfMagic, '%PDF-', 'PDF deve iniciar com cabeçalho %PDF-');
+assert.ok(pdfBytes.length > 1000, 'PDF gerado deve conter stream de conteúdo válido');
+
+// 15e. CSV UTF-8 BOM com escape de fórmula
+const csvText = buildCsvString(universalExportFixture);
+assert.ok(csvText.startsWith('\uFEFF'), 'CSV deve incluir UTF-8 BOM para Excel PT-BR');
+assert.ok(csvText.includes("'=SUM(A1:A5)"), 'CSV deve neutralizar injeção de fórmula');
+
+// 16. Validação de detecção de hospedagem estática (Firebase Hosting & GitHub Pages)
+assert.equal(isStaticHostname('listapiloto2027.web.app', 'https:'), true);
+assert.equal(isStaticHostname('listapiloto2027.firebaseapp.com', 'https:'), true);
+assert.equal(isStaticHostname('emebjfreitas-dev.github.io', 'https:'), true);
+assert.equal(isStaticHostname('localhost', 'http:'), false);
+assert.equal(isStaticHostname('ais-dev-nzv6xtsaejmfs7dugbhwbw-49671311424.us-east1.run.app', 'https:'), false);
+
+console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF e Firebase Hosting passaram com sucesso!');
+
 

@@ -15,6 +15,10 @@ import { buildWhatsAppLinksFromPhoneString } from './VisualizarPdfNominalModal';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { ModalPortal } from './ui/ModalPortal';
 import { PaginationBar } from './ui/PaginationBar';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildMultiStudentFamiliesReport } from '../utils/reportBuilders';
+import { toast } from 'sonner';
 import {
   Download,
   ExternalLink,
@@ -281,14 +285,26 @@ export const FamiliasMultiplosAlunosView: React.FC<FamiliasMultiplosAlunosViewPr
           </div>
 
           {filteredFamilies.length > 0 && (
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              className="w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-950 font-semibold text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0"
-            >
-              <Download className="w-4 h-4" />
-              <span>Exportar Relação (.csv)</span>
-            </button>
+            <ExportFormatButton
+              label="Exportar Relação"
+              variant="secondary"
+              includeCsv
+              onExport={async (format) => {
+                if (format === 'csv') {
+                  handleExportCsv();
+                  toast.success('Relação de famílias exportada (.CSV)!');
+                  return;
+                }
+                const report = buildMultiStudentFamiliesReport({
+                  families: filteredFamilies,
+                  totalLinkedStudents: stats.totalLinkedStudents,
+                  multiClassFamilies: stats.multiClassFamilies,
+                  familiesWithAlerts: stats.familiesWithAlerts,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                toast.success(`Arquivo ${fileName} baixado com sucesso!`);
+              }}
+            />
           )}
         </div>
 

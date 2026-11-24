@@ -41,6 +41,9 @@ import {
   X,
 } from 'lucide-react';
 import { IndexedDbPhotoStorageModal } from './IndexedDbPhotoStorageModal';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildDiagnosticsReport } from '../utils/reportBuilders';
 
 interface DiagnosticoBancoDadosScreenProps {
   classes: ClassGroup[];
@@ -649,14 +652,33 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
               <span>Cache Fotos (IndexedDB)</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              className="min-w-0 min-h-[40px] px-3.5 py-2 rounded-xl bg-[#14428c] hover:bg-[#0f3370] text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors duration-100 whitespace-normal text-center"
-            >
-              <Download className="w-3.5 h-3.5 shrink-0" />
-              <span>Exportar CSV</span>
-            </button>
+            <ExportFormatButton
+              label="Exportar Relatório"
+              variant="primary"
+              includeCsv
+              onExport={async (format) => {
+                if (format === 'csv') {
+                  handleExportCsv();
+                  setFeedback({
+                    type: 'success',
+                    text: 'Relatório técnico de diagnóstico exportado em .CSV.',
+                  });
+                  return;
+                }
+                const report = buildDiagnosticsReport({
+                  issues: filteredIssues,
+                  healthScore: baseReport.scorePercentage,
+                  classesCount: classes.length,
+                  activeStudentsCount: structuralAnalysis.activeStudents,
+                  aeeCount: structuralAnalysis.aeeCount,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                setFeedback({
+                  type: 'success',
+                  text: `Relatório de diagnóstico ${fileName} baixado com sucesso.`,
+                });
+              }}
+            />
           </div>
         </div>
 

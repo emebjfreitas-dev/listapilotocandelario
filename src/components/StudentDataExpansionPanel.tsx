@@ -25,6 +25,10 @@ import {
 } from 'lucide-react';
 import { StudentSiblingsCard } from './StudentSiblingsCard';
 import { StudentAvatar } from './StudentAvatar';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildStudentIndividualReport } from '../utils/reportBuilders';
+import { toast } from 'sonner';
 
 interface StudentDataExpansionPanelProps {
   student: Student;
@@ -271,6 +275,20 @@ export const StudentDataExpansionPanel: React.FC<StudentDataExpansionPanelProps>
               <span>{hasPdf ? 'PDF' : 'Enviar PDF'}</span>
             </button>
           )}
+
+          <ExportFormatButton
+            label="Baixar"
+            variant="compact"
+            onExport={async (format) => {
+              const report = buildStudentIndividualReport({
+                student,
+                classGroup,
+                diasLetivosMes: effectiveDiasLetivos,
+              });
+              const fileName = await exportUniversalReport(report, format);
+              toast.success(`Ficha ${fileName} baixada com sucesso!`);
+            }}
+          />
 
           <button
             type="button"

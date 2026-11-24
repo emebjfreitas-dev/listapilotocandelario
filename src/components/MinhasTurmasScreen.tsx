@@ -13,6 +13,10 @@ import {
 import { getStoredOfficialCalendarConfig } from '../services/db';
 import { PaginationBar } from './ui/PaginationBar';
 import { formatFaltas } from '../utils/attendanceAbbreviations';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildTurmasOverviewReport } from '../utils/reportBuilders';
+import { toast } from 'sonner';
 
 interface MinhasTurmasScreenProps {
   classes: ClassGroup[];
@@ -141,6 +145,22 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto min-w-0 shrink-0">
+            <ExportFormatButton
+              label="Exportar Turmas"
+              variant="secondary"
+              disabled={filteredClasses.length === 0}
+              onExport={async (format) => {
+                const report = buildTurmasOverviewReport({
+                  classes: filteredClasses,
+                  schoolYear: activeSchoolYear,
+                  shiftFilterLabel: selectedShift === 'Todos' ? 'Todos os turnos' : selectedShift,
+                  searchTerm,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                toast.success(`Arquivo ${fileName} baixado com sucesso!`);
+              }}
+            />
+
             {userRole === 'admin' && (onNavigateToAcessos || onOpenConfigDaysModal) && (
               <button
                 onClick={onNavigateToAcessos || onOpenConfigDaysModal}

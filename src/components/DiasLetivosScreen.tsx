@@ -53,6 +53,9 @@ import {
   pullOfficialCalendarFromServer,
   pullSharedSchoolStateFromServer,
 } from '../services/db';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildCalendar200DaysReport } from '../utils/reportBuilders';
 import { SCHOOL_NAME } from '../data/mockData';
 import {
   getGoogleSheetsSyncFrequency,
@@ -748,6 +751,25 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
               <option value={120}>Sync: 120 min</option>
             </select>
 
+            <ExportFormatButton
+              label="Exportar Calendário"
+              variant="secondary"
+              includeCsv
+              disabled={parsedResult.calendarDays.length === 0}
+              onExport={async (format) => {
+                if (format === 'csv') {
+                  handleExportCsv();
+                  return;
+                }
+                const report = buildCalendar200DaysReport({
+                  year: selectedYear,
+                  calendarDays: parsedResult.calendarDays,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                toast.success(`Calendário ${fileName} exportado com sucesso!`);
+              }}
+            />
+
             <button
               type="button"
               onClick={handleManualSyncTrigger}
@@ -1249,14 +1271,24 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
                   <span>Copiar Datas</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleExportCsv}
-                  className="min-h-[36px] px-3 rounded-xl bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-900 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Exportar CSV</span>
-                </button>
+                <ExportFormatButton
+                  label="Exportar Calendário"
+                  variant="secondary"
+                  includeCsv
+                  disabled={parsedResult.calendarDays.length === 0}
+                  onExport={async (format) => {
+                    if (format === 'csv') {
+                      handleExportCsv();
+                      return;
+                    }
+                    const report = buildCalendar200DaysReport({
+                      year: selectedYear,
+                      calendarDays: parsedResult.calendarDays,
+                    });
+                    const fileName = await exportUniversalReport(report, format);
+                    toast.success(`Calendário ${fileName} exportado com sucesso!`);
+                  }}
+                />
 
                 {isAdmin && rawDatesInput.trim().length > 0 && (
                   confirmClearInput ? (

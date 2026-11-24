@@ -27,6 +27,10 @@ import {
 } from '../services/db';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { ModalPortal } from './ui/ModalPortal';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildStudentIndividualReport } from '../utils/reportBuilders';
+import { toast } from 'sonner';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -1615,6 +1619,45 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
             )}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto sm:ml-auto">
+            <ExportFormatButton
+              label="Baixar Ficha"
+              variant="secondary"
+              onExport={async (format) => {
+                const storedClasses = getStoredClasses();
+                const matchedCls =
+                  storedClasses.find(
+                    (c) =>
+                      c.name === className ||
+                      c.name === draft.turma ||
+                      c.students.some((s) => s.id === draft.id)
+                  ) || {
+                    id: 'turma-individual',
+                    name: className,
+                    grade: className.startsWith('GRUPO') ? 'Ed. Infantil' : 'Ens. Fundamental',
+                    shift: 'Turno Manhã',
+                    room: '',
+                    teacherName: '',
+                    totalStudents: 1,
+                    classesHeld: diasLetivosMes,
+                    classesPlanned: 200,
+                    presenceRate: 100,
+                    statusText: 'Ativa',
+                    isPending: false,
+                    monthlyAbsences: draft.totalAbsencesMonth || 0,
+                    lastUpdate: '',
+                    weeklyPerformance: [],
+                    pedagogicalNotes: '',
+                    students: [draft],
+                  };
+                const report = buildStudentIndividualReport({
+                  student: draft,
+                  classGroup: matchedCls,
+                  diasLetivosMes,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                toast.success(`Ficha ${fileName} baixada com sucesso!`);
+              }}
+            />
             <button
               type="button"
               onClick={onClose}

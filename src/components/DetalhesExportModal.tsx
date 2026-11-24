@@ -33,12 +33,12 @@ interface DetalhesExportModalProps {
   exportSortBy: ClassExportSortOrder;
   exportStatusFilter: ClassExportStatusFilter;
   includeSummarySheet: boolean;
-  exportFileFormat: 'xls' | 'xlsx';
+  exportFileFormat: 'xls' | 'xlsx' | 'docx' | 'pdf';
   onSaveSelectedColumns: (nextCols: string[]) => void;
   onChangeSortBy: (next: ClassExportSortOrder) => void;
   onChangeStatusFilter: (next: ClassExportStatusFilter) => void;
   onChangeIncludeSummarySheet: (next: boolean) => void;
-  onChangeFileFormat: (next: 'xls' | 'xlsx') => void;
+  onChangeFileFormat: (next: 'xls' | 'xlsx' | 'docx' | 'pdf') => void;
   onExecuteDownload: () => void;
   onClose: () => void;
 }
@@ -307,11 +307,32 @@ export const DetalhesExportModal: React.FC<DetalhesExportModalProps> = ({
               <label className="text-[11px] font-semibold uppercase tracking-[0.03em] text-slate-700 block">
                 Formato
               </label>
-              <div className="ios-segmented w-full flex">
+              <div className="ios-segmented w-full grid grid-cols-4 gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => onChangeFileFormat('docx')}
+                  title="Microsoft Word (.docx)"
+                  className={`ios-segmented-item text-center ${
+                    exportFileFormat === 'docx' ? 'ios-segmented-item-active' : ''
+                  }`}
+                >
+                  .DOCX
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeFileFormat('xlsx')}
+                  title="Microsoft Excel (.xlsx)"
+                  className={`ios-segmented-item text-center ${
+                    exportFileFormat === 'xlsx' ? 'ios-segmented-item-active' : ''
+                  }`}
+                >
+                  .XLSX
+                </button>
                 <button
                   type="button"
                   onClick={() => onChangeFileFormat('xls')}
-                  className={`flex-1 ios-segmented-item text-center ${
+                  title="Excel Clássico (.xls)"
+                  className={`ios-segmented-item text-center ${
                     exportFileFormat === 'xls' ? 'ios-segmented-item-active' : ''
                   }`}
                 >
@@ -319,19 +340,20 @@ export const DetalhesExportModal: React.FC<DetalhesExportModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onChangeFileFormat('xlsx')}
-                  className={`flex-1 ios-segmented-item text-center ${
-                    exportFileFormat === 'xlsx' ? 'ios-segmented-item-active' : ''
+                  onClick={() => onChangeFileFormat('pdf')}
+                  title="Documento PDF (.pdf)"
+                  className={`ios-segmented-item text-center ${
+                    exportFileFormat === 'pdf' ? 'ios-segmented-item-active' : ''
                   }`}
                 >
-                  .XLSX
+                  .PDF
                 </button>
               </div>
             </div>
 
             <div className="bg-white rounded-2xl p-3.5 flex items-center justify-between gap-2 shadow-2xs">
               <div>
-                <span className="text-[13px] font-semibold text-slate-950 block">Aba Resumo</span>
+                <span className="text-[13px] font-semibold text-slate-950 block">Incluir Resumo</span>
                 <span className="text-[12px] text-slate-700 block">
                   Totais e presença da turma
                 </span>

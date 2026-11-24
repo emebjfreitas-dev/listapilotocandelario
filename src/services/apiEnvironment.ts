@@ -11,20 +11,29 @@ let probedBackend = false;
 let backendAvailable = false;
 
 /**
- * Checks if the current origin is a static host like GitHub Pages
+ * Checks if a hostname/protocol represents static hosting without the Express backend
  */
-export const isStaticHosting = (): boolean => {
-  if (typeof window === 'undefined') return true;
-  const host = window.location.hostname.toLowerCase();
+export const isStaticHostname = (hostname: string, protocol: string = 'https:'): boolean => {
+  const host = String(hostname || '').toLowerCase();
   if (
     host.includes('github.io') ||
     host.endsWith('github.dev') ||
     host.includes('pages.dev') ||
-    window.location.protocol === 'file:'
+    host.endsWith('.web.app') ||
+    host.endsWith('.firebaseapp.com') ||
+    protocol === 'file:'
   ) {
     return true;
   }
   return false;
+};
+
+/**
+ * Checks if the current origin is a static host like GitHub Pages or Firebase Hosting
+ */
+export const isStaticHosting = (): boolean => {
+  if (typeof window === 'undefined') return true;
+  return isStaticHostname(window.location.hostname, window.location.protocol);
 };
 
 /**

@@ -19,6 +19,9 @@ import { buildWhatsAppLinksFromPhoneString } from './VisualizarPdfNominalModal';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { ModalPortal } from './ui/ModalPortal';
 import { PaginationBar } from './ui/PaginationBar';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildConsecutiveAbsencesReport } from '../utils/reportBuilders';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -861,8 +864,34 @@ export const FaltasConsecutivasScreen: React.FC<FaltasConsecutivasScreenProps> =
             </p>
           </div>
 
-          {/* Escopo de turmas + Botão do Modal de Famílias com Múltiplos Alunos */}
+          {/* Escopo de turmas + Exportação + Botão do Modal de Famílias com Múltiplos Alunos */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <ExportFormatButton
+              label="Exportar Busca Ativa"
+              variant="secondary"
+              disabled={filteredEntries.length === 0}
+              onExport={async (format) => {
+                const scopeLabel = !isPeb1 && viewAllClassesMode
+                  ? `Todas as turmas (${availableClasses.length})`
+                  : classGroup.name;
+                const filterLabel =
+                  filterMode === 'aguardando_feedback'
+                    ? 'Aguardando contato'
+                    : filterMode === 'com_feedback'
+                    ? 'Com devolutiva'
+                    : filterMode === 'com_ocorrencia'
+                    ? 'Com solicitações'
+                    : 'Todos os estudantes';
+                const report = buildConsecutiveAbsencesReport({
+                  entries: filteredEntries,
+                  scopeLabel,
+                  filterLabel,
+                });
+                const fileName = await exportUniversalReport(report, format);
+                toast.success(`Relatório ${fileName} baixado!`);
+              }}
+            />
+
             <button
               type="button"
               onClick={() => setIsFamiliesModalOpen(true)}

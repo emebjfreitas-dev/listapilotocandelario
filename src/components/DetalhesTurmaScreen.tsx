@@ -23,6 +23,10 @@ import { StudentDataExpansionPanel } from './StudentDataExpansionPanel';
 import { DetalhesExportModal } from './DetalhesExportModal';
 import { ModalPortal } from './ui/ModalPortal';
 import { PaginationBar } from './ui/PaginationBar';
+import { ExportFormatButton } from './ui/ExportFormatButton';
+import { exportUniversalReport } from '../utils/universalExport';
+import { buildMonthlyAttendanceReport } from '../utils/reportBuilders';
+import { getDefaultReferencePeriod } from '../utils/attendanceRules';
 import { buildWhatsAppLinksFromPhoneString } from './VisualizarPdfNominalModal';
 import { getStudentCumulativeOccurrences } from '../services/pushNotificationService';
 import { findStudentSiblings } from '../utils/siblingDetection';
@@ -1394,7 +1398,7 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
   const [exportStatusFilter, setExportStatusFilter] =
     useState<ClassExportStatusFilter>('all');
   const [includeSummarySheet, setIncludeSummarySheet] = useState<boolean>(true);
-  const [exportFileFormat, setExportFileFormat] = useState<'xls' | 'xlsx'>('xls');
+  const [exportFileFormat, setExportFileFormat] = useState<'xls' | 'xlsx' | 'docx' | 'pdf'>('xlsx');
   const [exportSuccessToast, setExportSuccessToast] = useState<string | null>(null);
 
   const saveSelectedColumns = (nextCols: string[]) => {
@@ -1431,6 +1435,22 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
   const orderedStudents = useMemo(() => {
     return [...classGroup.students].sort((a, b) => a.number - b.number);
   }, [classGroup.students]);
+
+  const handleQuickExportTurma = async (
+    format: 'docx' | 'xlsx' | 'xls' | 'pdf' | 'csv'
+  ) => {
+    const refPeriod = getDefaultReferencePeriod();
+    const report = buildMonthlyAttendanceReport({
+      classGroup,
+      students: orderedStudents,
+      monthName: refPeriod.monthName,
+      diasLetivosMes,
+      minLegalPresence,
+    });
+    const fileName = await exportUniversalReport(report, format);
+    setExportSuccessToast(`Arquivo ${fileName} baixado com sucesso!`);
+    window.setTimeout(() => setExportSuccessToast(null), 4000);
+  };
 
 
   // Complete Top Class Summary (Resumo da Alta da Turma: Ativos, Feminino, Masculino, Transferidos, Remanejados, Presença e Faltas)
@@ -1803,16 +1823,23 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
     return (
       <div className="flex flex-col w-full min-w-0 space-y-5 pb-16 animate-gentle-fade">
         <header className="space-y-3.5 min-w-0">
-          <div className="flex items-baseline justify-between gap-3 flex-wrap min-w-0 px-0.5">
+          <div className="flex items-center justify-between gap-3 flex-wrap min-w-0 px-0.5">
             <h1 className="text-[26px] sm:text-[30px] font-bold text-white tracking-[-0.028em] leading-[1.15] break-words">
               {classGroup.name}
             </h1>
-            <span className="text-[13px] font-semibold tracking-[-0.008em] text-slate-200 tabular-nums">
-              {searchStudent.trim()
-                ? `${filteredStudents.length} de ${orderedStudents.length} estudantes`
-                : `${orderedStudents.length} estudantes`}
-              {classGroup.shift ? ` · ${classGroup.shift.replace('Turno ', '')}` : ''}
-            </span>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-[13px] font-semibold tracking-[-0.008em] text-slate-200 tabular-nums">
+                {searchStudent.trim()
+                  ? `${filteredStudents.length} de ${orderedStudents.length} estudantes`
+                  : `${orderedStudents.length} estudantes`}
+                {classGroup.shift ? ` · ${classGroup.shift.replace('Turno ', '')}` : ''}
+              </span>
+              <ExportFormatButton
+                label="Baixar Turma"
+                variant="compact"
+                onExport={handleQuickExportTurma}
+              />
+            </div>
           </div>
 
           <div className="relative min-w-0">
@@ -2021,15 +2048,21 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
               </button>
             )}
 
-            {userRole === 'admin' && (
+            {userRole === 'admin' ? (
               <button
                 type="button"
                 onClick={() => setIsExportXlsModalOpen(true)}
                 className="w-full sm:w-auto min-h-[40px] py-2 px-3.5 rounded-2xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-colors"
               >
                 <Download className="w-[17px] h-[17px] text-[#475569] shrink-0" />
-                <span>Exportar .XLS</span>
+                <span>Word / Excel / PDF</span>
               </button>
+            ) : (
+              <ExportFormatButton
+                label="Exportar Lista"
+                variant="secondary"
+                onExport={handleQuickExportTurma}
+              />
             )}
           </div>
         </div>
