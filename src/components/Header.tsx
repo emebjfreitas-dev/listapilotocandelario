@@ -294,14 +294,14 @@ export const Header: React.FC<HeaderProps> = ({
       <header
         onTouchStart={handleHeaderTouchStart}
         onTouchEnd={handleHeaderTouchEnd}
-        className="fixed top-0 left-0 right-0 w-full z-40 pt-safe bg-[#081326]/95 backdrop-blur-2xl shadow-[0_1px_0_rgba(148,163,184,0.16),0_10px_28px_-6px_rgba(2,6,23,0.55)]"
+        className="fixed top-0 left-0 right-0 w-full z-40 pt-safe bg-white/96 backdrop-blur-2xl border-b border-slate-200/90 shadow-[0_4px_24px_rgba(15,23,42,0.06),0_1px_0_rgba(255,255,255,0.8)_inset]"
       >
         <div className="relative h-14 sm:h-16 px-3 sm:px-5 lg:px-6 max-w-[1600px] mx-auto flex items-center justify-between gap-2 lg:gap-4 xl:gap-6 min-w-0">
           {/* Indicador sutil de gesto deslizante no topo em telas touch */}
           {!isFullscreen && (
             <span
               aria-hidden="true"
-              className="sm:hidden pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-[3px] rounded-full bg-white/25"
+              className="sm:hidden pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-[3px] rounded-full bg-slate-300/80"
             />
           )}
 
@@ -310,10 +310,10 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             whileTap={tapAnimation}
             onClick={() => navigateTo('home')}
-            className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group select-none min-w-0 shrink text-left min-h-[44px]"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer group select-none min-w-0 shrink text-left min-h-[44px]"
             title="Ir para o Início"
           >
-            <span className="w-8 h-8 rounded-xl bg-white/95 p-0.5 flex items-center justify-center shrink-0 shadow-xs">
+            <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white shadow-[0_2px_10px_rgba(15,23,42,0.12)] p-1 flex items-center justify-center shrink-0 border border-slate-200 group-hover:scale-105 transition-transform">
               <img
                 src={APP_LOGO_URL}
                 alt="Brasão de Jundiaí"
@@ -322,13 +322,18 @@ export const Header: React.FC<HeaderProps> = ({
                   e.currentTarget.onerror = null;
                   e.currentTarget.src = APP_LOGO_FALLBACK_URL;
                 }}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain drop-shadow-xs"
               />
             </span>
-            <span className="text-[14px] sm:text-[14.5px] xl:text-[15.5px] font-semibold tracking-[-0.02em] text-white group-hover:text-blue-200 transition-colors truncate">
-              <span className="sm:hidden">Lista Piloto 2027</span>
-              <span className="hidden sm:inline">Lista Piloto Candelário 2027</span>
-            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[14px] sm:text-[15px] xl:text-[16px] font-bold tracking-[-0.02em] text-slate-900 group-hover:text-[#1649a8] transition-colors truncate leading-tight">
+                <span className="sm:hidden">Lista Piloto 2027</span>
+                <span className="hidden sm:inline">Lista Piloto Candelário 2027</span>
+              </span>
+              <span className="hidden md:block text-[10.5px] font-bold text-slate-700 tracking-wide uppercase">
+                Prefeitura de Jundiaí · EMEB J. Candelário
+              </span>
+            </div>
           </motion.button>
 
           {/* Zona 2: Navegação Principal Limpa com Ícones SF Symbols (lg+) */}
@@ -346,16 +351,16 @@ export const Header: React.FC<HeaderProps> = ({
                   aria-current={item.activeMatch ? 'page' : undefined}
                   className={`relative h-9 px-2.5 xl:px-3.5 rounded-xl text-[13px] xl:text-[13.5px] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                     item.activeMatch
-                      ? 'text-white font-semibold bg-[#1649a8] shadow-[0_4px_14px_rgba(22,73,168,0.45)] after:content-[""] after:absolute after:-bottom-1 after:inset-x-3 after:h-[2.5px] after:bg-sky-300 after:rounded-full'
-                      : 'text-slate-200 hover:text-white hover:bg-white/10 font-medium'
+                      ? 'text-white font-semibold bg-[#1649a8] shadow-[0_4px_14px_rgba(22,73,168,0.3)] after:content-[""] after:absolute after:-bottom-1 after:inset-x-3 after:h-[2.5px] after:bg-sky-400 after:rounded-full'
+                      : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 font-semibold'
                   }`}
                 >
                   <SFSymbol
                     name={item.symbolName}
                     filled={item.activeMatch}
                     size={19}
-                    weight={item.activeMatch ? 530 : 410}
-                    className={item.activeMatch ? 'text-white' : 'text-blue-200'}
+                    weight={item.activeMatch ? 530 : 450}
+                    className={item.activeMatch ? 'text-white' : 'text-[#1649a8]'}
                   />
                   <span>{item.label}</span>
                 </motion.button>
@@ -375,19 +380,19 @@ export const Header: React.FC<HeaderProps> = ({
                     aria-expanded={showAdminNavDropdown}
                     className={`relative h-9 px-2.5 xl:px-3.5 rounded-xl text-[13px] xl:text-[13.5px] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                       isAdminScreenActive || showAdminNavDropdown
-                        ? 'text-white font-semibold bg-[#1649a8] shadow-[0_4px_14px_rgba(22,73,168,0.45)] after:content-[""] after:absolute after:-bottom-1 after:inset-x-3 after:h-[2.5px] after:bg-sky-300 after:rounded-full'
-                        : 'text-slate-200 hover:text-white hover:bg-white/10 font-medium'
+                        ? 'text-white font-semibold bg-[#1649a8] shadow-[0_4px_14px_rgba(22,73,168,0.3)] after:content-[""] after:absolute after:-bottom-1 after:inset-x-3 after:h-[2.5px] after:bg-sky-400 after:rounded-full'
+                        : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 font-semibold'
                     }`}
                   >
                     <SFSymbol
                       name="tune"
                       filled={isAdminScreenActive || showAdminNavDropdown}
                       size={19}
-                      weight={isAdminScreenActive || showAdminNavDropdown ? 530 : 410}
+                      weight={isAdminScreenActive || showAdminNavDropdown ? 530 : 450}
                       className={
                         isAdminScreenActive || showAdminNavDropdown
                           ? 'text-white'
-                          : 'text-blue-200'
+                          : 'text-[#1649a8]'
                       }
                     />
                     <span>Gestão</span>
@@ -406,7 +411,7 @@ export const Header: React.FC<HeaderProps> = ({
                           ? 'rotate-180 text-white'
                           : isAdminScreenActive
                           ? 'text-white'
-                          : 'text-blue-200'
+                          : 'text-slate-600'
                       }`}
                     />
                   </motion.button>
@@ -560,8 +565,8 @@ export const Header: React.FC<HeaderProps> = ({
               }
               className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                 isFullscreen
-                  ? 'bg-[#1649a8] text-white shadow-[0_4px_14px_rgba(22,73,168,0.45)]'
-                  : 'bg-white/10 hover:bg-white/20 text-blue-200 hover:text-white'
+                  ? 'bg-[#1649a8] text-white shadow-[0_4px_14px_rgba(22,73,168,0.3)]'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 border border-slate-200/60'
               }`}
             >
               <SFSymbol
@@ -581,9 +586,9 @@ export const Header: React.FC<HeaderProps> = ({
                 }}
                 aria-label="Buscar aluno ou turma"
                 title="Buscar aluno ou turma (⌘K)"
-                className="h-9 w-9 xl:w-auto xl:px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-[13px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                className="h-9 w-9 xl:w-auto xl:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-[13px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 border border-slate-200/60"
               >
-                <SFSymbol name="search" size={19} weight={460} className="text-blue-200" />
+                <SFSymbol name="search" size={19} weight={480} className="text-[#1649a8]" />
                 <span className="hidden xl:inline">Buscar</span>
               </motion.button>
             )}
@@ -615,7 +620,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setShowAdminNavDropdown(false);
                 }}
                 aria-label="Menu do perfil e sair"
-                className="h-9 pl-1.5 pr-2 sm:pr-2.5 rounded-xl bg-white/10 hover:bg-white/20 flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                className="h-9 pl-1.5 pr-2 sm:pr-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0 border border-slate-200/60"
               >
                 <StudentAvatar
                   name={userName || userEmail || 'Educador'}
@@ -623,15 +628,15 @@ export const Header: React.FC<HeaderProps> = ({
                   expandableOnClick={false}
                   className="w-6 h-6 text-[11px] rounded-lg bg-[#1649a8] text-white"
                 />
-                <span className="hidden sm:inline text-[13px] font-semibold text-white max-w-[78px] truncate">
+                <span className="hidden sm:inline text-[13px] font-semibold text-slate-800 max-w-[78px] truncate">
                   {roleShortLabel}
                 </span>
                 <SFSymbol
                   name="keyboard_arrow_down"
                   size={17}
                   weight={480}
-                  className={`hidden sm:inline-flex text-blue-200 transition-transform duration-150 ${
-                    showProfileMenu ? 'rotate-180 text-white' : ''
+                  className={`hidden sm:inline-flex text-slate-600 transition-transform duration-150 ${
+                    showProfileMenu ? 'rotate-180 text-slate-900' : ''
                   }`}
                 />
               </motion.button>

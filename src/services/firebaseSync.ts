@@ -101,8 +101,7 @@ export const isFirestoreQuotaExceededError = (error: unknown): boolean => {
     code === 'resource-exhausted' ||
     msg.includes('resource-exhausted') ||
     msg.includes('Quota limit exceeded') ||
-    msg.includes('Quota exceeded') ||
-    msg.includes('Using maximum backoff delay to prevent overloading the backend')
+    msg.includes('Quota exceeded')
   );
 };
 
@@ -197,8 +196,7 @@ if (typeof window !== 'undefined') {
     if (
       text.includes('resource-exhausted') ||
       text.includes('Quota limit exceeded') ||
-      text.includes('Quota exceeded') ||
-      text.includes('Using maximum backoff delay to prevent overloading the backend')
+      text.includes('Quota exceeded')
     ) {
       markFirestoreQuotaExceeded(text);
       console.warn(

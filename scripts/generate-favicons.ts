@@ -3,9 +3,9 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 /**
- * Gera o SVG oficial da identidade visual do Lista Piloto (EMEB Candelário 2027)
- * com paleta Azul-Marinho Institucional (#081326 -> #1649a8), Ficha Escolar Branca
- * e Selo de Frequência/Chamada Esmeralda (#10b981 / #047857) + detalhe Dourado (#fbbf24).
+ * Gera o SVG oficial da identidade visual com o Brasão de Jundiaí de Alta Definição
+ * (EMEB Prof. Joaquim Candelário de Freitas 2027) com fundo Azul-Marinho Institucional
+ * (#060e1e -> #1649a8), anel dourado elegante e o Brasão Oficial centralizado.
  */
 function buildBrandSvg(options: {
   roundedCorners: boolean;
@@ -21,95 +21,57 @@ function buildBrandSvg(options: {
       ? `transform="translate(${cx}, ${cy}) scale(${scaleFactor}) translate(-${cx}, -${cy})"`
       : '';
 
+  const brasaoPath = path.resolve('public', 'brasao-jundiai.png');
+  const brasaoBase64 = fs.existsSync(brasaoPath)
+    ? `data:image/png;base64,${fs.readFileSync(brasaoPath).toString('base64')}`
+    : '';
+
   if (microDetail) {
     // Versão de altíssimo contraste otimizada para 16x16, 32x32 e 48x48
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bgMicro" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0b1f44" />
-      <stop offset="55%" stop-color="#14428c" />
-      <stop offset="100%" stop-color="#1d4ed8" />
-    </linearGradient>
-    <linearGradient id="checkMicro" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#10b981" />
-      <stop offset="100%" stop-color="#047857" />
+      <stop offset="0%" stop-color="#060e1e" />
+      <stop offset="100%" stop-color="#14428c" />
     </linearGradient>
   </defs>
   <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bgMicro)" />
-  <!-- Ficha / Lista Principal Simplificada -->
-  <rect x="96" y="88" width="280" height="336" rx="44" fill="#ffffff" />
-  <rect x="138" y="148" width="196" height="38" rx="19" fill="#14428c" />
-  <rect x="138" y="218" width="150" height="34" rx="17" fill="#93c5fd" />
-  <rect x="138" y="284" width="118" height="34" rx="17" fill="#cbd5e1" />
-  <!-- Selo Verde de Presença -->
-  <circle cx="356" cy="356" r="108" fill="#081326" />
-  <circle cx="356" cy="356" r="90" fill="url(#checkMicro)" />
-  <path d="M312 358 L344 390 L404 322" fill="none" stroke="#ffffff" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" />
+  ${brasaoBase64 ? `<image href="${brasaoBase64}" x="40" y="40" width="432" height="432" preserveAspectRatio="xMidYMid meet" />` : ''}
 </svg>`;
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="lpBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#081326" />
-      <stop offset="52%" stop-color="#0e3a8a" />
-      <stop offset="100%" stop-color="#1d4ed8" />
+      <stop offset="0%" stop-color="#060e1e" />
+      <stop offset="48%" stop-color="#0c2550" />
+      <stop offset="100%" stop-color="#1649a8" />
     </linearGradient>
-    <radialGradient id="lpGlow" cx="30%" cy="22%" r="72%">
-      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.28" />
-      <stop offset="100%" stop-color="#081326" stop-opacity="0" />
+    <radialGradient id="lpGlow" cx="35%" cy="25%" r="75%">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.32" />
+      <stop offset="100%" stop-color="#060e1e" stop-opacity="0" />
     </radialGradient>
-    <linearGradient id="lpCard" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="100%" stop-color="#eef4ff" />
+    <linearGradient id="goldRing" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
     </linearGradient>
-    <linearGradient id="lpBadge" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#10b981" />
-      <stop offset="100%" stop-color="#047857" />
-    </linearGradient>
-    <linearGradient id="lpGold" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#fbbf24" />
-      <stop offset="100%" stop-color="#f59e0b" />
-    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#020617" flood-opacity="0.45" />
+    </filter>
   </defs>
 
-  <!-- Fundo Azul-Marinho Institucional -->
+  <!-- Fundo Azul-Marinho Institucional com Brilho -->
   <rect x="0" y="0" width="512" height="512" rx="${clipRx}" fill="url(#lpBg)" />
   <rect x="0" y="0" width="512" height="512" rx="${clipRx}" fill="url(#lpGlow)" />
 
   <g ${transformAttr}>
-    <!-- Sombra suave da ficha de chamada -->
-    <rect x="114" y="106" width="268" height="324" rx="40" fill="#040b18" opacity="0.34" />
+    <!-- Círculo de Fundo Elegante com Borda Dourada / Anel Institucional -->
+    <circle cx="256" cy="256" r="208" fill="#ffffff" filter="url(#shadow)" />
+    <circle cx="256" cy="256" r="208" fill="none" stroke="url(#goldRing)" stroke-width="8" />
 
-    <!-- Ficha / Prancheta Institucional do Lista Piloto -->
-    <rect x="104" y="92" width="268" height="324" rx="40" fill="url(#lpCard)" />
-
-    <!-- Topo Cobalt da Ficha + Presilha Dourada -->
-    <path d="M104 132 C104 109.9 121.9 92 144 92 L332 92 C354.1 92 372 109.9 372 132 L372 162 L104 162 Z" fill="#14428c" />
-    <rect x="184" y="70" width="108" height="36" rx="18" fill="url(#lpGold)" />
-    <circle cx="238" cy="88" r="7" fill="#081326" />
-
-    <!-- Linhas da Lista Nominal & Indicadores -->
-    <circle cx="152" cy="212" r="14" fill="#1649a8" />
-    <rect x="182" y="200" width="144" height="24" rx="12" fill="#0f172a" opacity="0.88" />
-
-    <circle cx="152" cy="272" r="14" fill="#38bdf8" />
-    <rect x="182" y="260" width="124" height="24" rx="12" fill="#334155" opacity="0.72" />
-
-    <circle cx="152" cy="332" r="14" fill="#94a3b8" />
-    <rect x="182" y="320" width="96" height="24" rx="12" fill="#64748b" opacity="0.55" />
-
-    <!-- Selo de Frequência Confirmada (Esmeralda) -->
-    <circle cx="352" cy="352" r="88" fill="#0a1f47" />
-    <circle cx="352" cy="352" r="74" fill="url(#lpBadge)" />
-    <path
-      d="M316 354 L341 379 L392 324"
-      fill="none"
-      stroke="#ffffff"
-      stroke-width="22"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <!-- Brasão de Jundiaí Oficial Centralizado em Alta Definição -->
+    ${brasaoBase64 ? `<image href="${brasaoBase64}" x="76" y="76" width="360" height="360" preserveAspectRatio="xMidYMid meet" />` : ''}
   </g>
 </svg>`;
 }
@@ -125,7 +87,7 @@ async function generateFavicons() {
 
   fs.writeFileSync(path.join(publicDir, 'favicon.svg'), masterSvg, 'utf8');
 
-  console.log('Generating Lista Piloto favicons & Apple Touch / PWA PNG icons...');
+  console.log('Generating Lista Piloto favicons & Apple Touch / PWA PNG icons with Official Jundiaí Coat of Arms...');
 
   const microSizes = [16, 32, 48];
   const pngBuffers: Record<number, Buffer> = {};
@@ -165,7 +127,7 @@ async function generateFavicons() {
   for (const size of appleSizes) {
     const applePng = await sharp(Buffer.from(fullBleedSvg))
       .resize(size, size, { fit: 'cover' })
-      .flatten({ background: { r: 8, g: 19, b: 38 } })
+      .flatten({ background: { r: 6, g: 14, b: 30 } })
       .removeAlpha()
       .png({ compressionLevel: 9 })
       .toBuffer();
@@ -181,7 +143,7 @@ async function generateFavicons() {
   // Android Maskable Icon (512x512) — Safe zone ~78% centralizado em fundo azul-marinho opaco
   const pwaMaskableIcon = await sharp(Buffer.from(maskableSvg))
     .resize(512, 512, { fit: 'cover' })
-    .flatten({ background: { r: 8, g: 19, b: 38 } })
+    .flatten({ background: { r: 6, g: 14, b: 30 } })
     .removeAlpha()
     .png({ compressionLevel: 9 })
     .toBuffer();
