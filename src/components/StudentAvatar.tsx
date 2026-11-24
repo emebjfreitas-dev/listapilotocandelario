@@ -277,13 +277,16 @@ export const StudentAvatar: React.FC<StudentAvatarProps> = ({
   };
 
   const hasCustomSize = /\bw-/.test(className) || /\bh-/.test(className);
+  const hasCustomBg = /\bbg-/.test(className);
+  const hasCustomText = /\btext-(?!xs\b|sm\b|base\b|lg\b|xl\b|2xl\b|\[)/.test(className);
+  const hasCustomRounded = /\brounded-/.test(className);
 
   const sizeMap: Record<string, string> = {
-    xs: hasCustomSize ? 'text-xs rounded-xl' : 'w-9 h-9 text-xs rounded-xl',
-    sm: hasCustomSize ? 'text-sm rounded-2xl' : 'w-14 h-14 text-sm rounded-2xl',
-    md: hasCustomSize ? 'text-base rounded-2xl' : 'w-16 h-16 sm:w-20 sm:h-20 text-base rounded-2xl',
-    lg: hasCustomSize ? 'text-lg rounded-2xl' : 'w-20 h-20 sm:w-24 sm:h-24 text-lg rounded-2xl',
-    xl: hasCustomSize ? 'text-xl rounded-3xl' : 'w-24 h-24 sm:w-32 sm:h-32 text-xl rounded-3xl',
+    xs: `${hasCustomSize ? '' : 'w-9 h-9 '}text-xs ${hasCustomRounded ? '' : 'rounded-xl'}`,
+    sm: `${hasCustomSize ? '' : 'w-14 h-14 '}text-sm ${hasCustomRounded ? '' : 'rounded-2xl'}`,
+    md: `${hasCustomSize ? '' : 'w-16 h-16 sm:w-20 sm:h-20 '}text-base ${hasCustomRounded ? '' : 'rounded-2xl'}`,
+    lg: `${hasCustomSize ? '' : 'w-20 h-20 sm:w-24 sm:h-24 '}text-lg ${hasCustomRounded ? '' : 'rounded-2xl'}`,
+    xl: `${hasCustomSize ? '' : 'w-24 h-24 sm:w-32 sm:h-32 '}text-xl ${hasCustomRounded ? '' : 'rounded-3xl'}`,
   };
 
   const getInitials = (fullName: string) => {
@@ -364,13 +367,17 @@ export const StudentAvatar: React.FC<StudentAvatarProps> = ({
         }
         onClick={isInteractive ? handleAvatarClick : undefined}
         onKeyDown={isInteractive ? handleAvatarKeyDown : undefined}
-        className={`group relative shrink-0 overflow-hidden bg-[#eef3f9] text-slate-900 font-semibold flex items-center justify-center select-none shadow-[0_2px_8px_-2px_rgba(9,15,29,0.08)] ${
+        className={`group relative shrink-0 overflow-hidden ${
+          hasCustomBg ? '' : 'bg-[#e8eff9]'
+        } ${
+          hasCustomText ? '' : 'text-[#0f3370]'
+        } font-bold flex items-center justify-center select-none shadow-[0_2px_8px_-2px_rgba(9,15,29,0.08)] ${
           sizeMap[size]
         } ${
           canExpand
             ? 'cursor-zoom-in hover:shadow-[0_6px_16px_-4px_rgba(9,46,112,0.22)] hover:scale-[1.03] active:scale-[0.97] transition-all duration-200'
             : canClickUploadFallback
-            ? 'cursor-pointer hover:bg-[#e8f0fe] hover:text-[#0f3370] transition-all duration-200 active:scale-[0.97]'
+            ? 'cursor-pointer hover:bg-[#dce7f7] hover:text-[#081326] transition-all duration-200 active:scale-[0.97]'
             : ''
         } ${className}`}
       >

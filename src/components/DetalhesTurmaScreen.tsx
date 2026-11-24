@@ -145,7 +145,11 @@ const EstudanteCard: React.FC<EstudanteCardProps> = memo(({
   const consecDaysCount = latestConsecOcc ? latestConsecOcc.selectedDates.length : 0;
 
   const studentGenderInfo = getStudentGenderLabel(student);
-  const guardian1Info = resolveGuardianRelationshipInfo(student.filiacao1 || student.guardianName, 'filiacao1', student.notes);
+  const guardian1Info = resolveGuardianRelationshipInfo(
+    student.filiacao1 || student.guardianName,
+    'filiacao1',
+    student.notes
+  );
   const hasStudentPdf = Boolean(
     (student.fichaPdfDriveUrl && student.fichaPdfDriveUrl.trim().length > 0) ||
       (student.fichaPdfDriveId && student.fichaPdfDriveId.trim().length > 0)
@@ -154,22 +158,27 @@ const EstudanteCard: React.FC<EstudanteCardProps> = memo(({
     student.telefones || student.guardianPhone,
     student.name
   );
+  const hasGuardian1 = Boolean(
+    guardian1Info.cleanName &&
+      guardian1Info.cleanName.trim() !== '' &&
+      guardian1Info.cleanName.toLowerCase() !== 'não informado'
+  );
 
   return (
     <article
       onClick={() => onToggleExpand(student.id)}
-      className={`rounded-3xl p-4 sm:p-5 flex flex-col justify-between gap-3.5 cursor-pointer select-none transition-colors duration-100 min-w-0 ${
+      className={`rounded-3xl p-4 sm:p-5 flex flex-col justify-between gap-3 cursor-pointer select-none transition-colors duration-100 min-w-0 ${
         isExpanded ? '' : 'h-full'
       } ${cardSurfaceClasses}`}
     >
-      <div className="space-y-3 min-w-0">
-        <div className="flex items-start justify-between gap-2.5 min-w-0">
-          <div className="flex items-start gap-3.5 min-w-0 flex-1">
+      <div className="space-y-2.5 min-w-0">
+        <div className={`flex justify-between gap-3 min-w-0 ${isExpanded ? 'items-center' : 'items-start'}`}>
+          <div className={`flex gap-3 min-w-0 flex-1 ${isExpanded ? 'items-center' : 'items-start'}`}>
             <StudentAvatar
               student={student}
-              size={isExpanded ? 'xl' : 'lg'}
+              size={isExpanded ? 'md' : 'sm'}
               onUploadPhotoClick={onOpenPhotoModal ? () => onOpenPhotoModal(student) : undefined}
-              className="bg-[#eef3f9]"
+              className={isExpanded ? 'w-16 h-16 text-base' : 'w-14 h-14 text-sm'}
             />
 
             <div className="min-w-0 flex-1">
@@ -269,14 +278,16 @@ const EstudanteCard: React.FC<EstudanteCardProps> = memo(({
           />
         </div>
 
-        {(guardian1Info.cleanName || waList.length > 0) && (
+        {(hasGuardian1 || waList.length > 0) && (
           <div
             onClick={(e) => e.stopPropagation()}
             className="flex items-center justify-between gap-2 text-[12.5px] font-normal tracking-[-0.008em] text-[#475569] min-w-0"
           >
-            <span className="truncate min-w-0">
-              {guardian1Info.cleanName}
-            </span>
+            {hasGuardian1 ? (
+              <span className="truncate min-w-0">{guardian1Info.cleanName}</span>
+            ) : (
+              <span className="truncate min-w-0 text-slate-500">Contato da família</span>
+            )}
             {waList.length > 0 && (
               <a
                 href={waList[0].waUrl}
@@ -400,6 +411,12 @@ const LinhaEstudante: React.FC<LinhaEstudanteProps> = memo(({
       (student.fichaPdfDriveId && student.fichaPdfDriveId.trim().length > 0)
   );
 
+  const hasCompactGuardian1 = Boolean(
+    guardian1Info.cleanName &&
+      guardian1Info.cleanName.trim() !== '' &&
+      guardian1Info.cleanName.toLowerCase() !== 'não informado'
+  );
+
   return (
     <div
       onClick={() => onToggleExpand(student.id)}
@@ -417,9 +434,9 @@ const LinhaEstudante: React.FC<LinhaEstudanteProps> = memo(({
         <div className="flex items-center gap-3.5 min-w-0 flex-1">
           <StudentAvatar
             student={student}
-            size="lg"
+            size="sm"
             onUploadPhotoClick={onOpenPhotoModal ? () => onOpenPhotoModal(student) : undefined}
-            className="bg-[#eef3f9]"
+            className="w-14 h-14 text-sm"
           />
 
           <div className="min-w-0 flex-1">
@@ -463,18 +480,18 @@ const LinhaEstudante: React.FC<LinhaEstudanteProps> = memo(({
               )}
             </div>
             <span
-              className={`block font-semibold text-[17px] tracking-[-0.022em] leading-[1.24] break-words mt-0.5 ${
+              className={`block font-semibold text-[16px] sm:text-[17px] tracking-[-0.02em] leading-[1.24] break-words mt-0.5 ${
                 isNonActive ? 'text-slate-700' : 'text-slate-950'
               }`}
             >
               {student.name}
             </span>
-            {(guardian1Info.cleanName || student.telefones) && (
+            {(hasCompactGuardian1 || student.telefones) && (
               <div className="text-[12.5px] font-normal tracking-[-0.008em] text-[#475569] truncate leading-snug mt-0.5 min-w-0">
-                <span>{guardian1Info.cleanName}</span>
+                {hasCompactGuardian1 && <span>{guardian1Info.cleanName}</span>}
                 {student.telefones && (
                   <>
-                    <span aria-hidden="true"> · </span>
+                    {hasCompactGuardian1 && <span aria-hidden="true"> · </span>}
                     <span className="text-[#047857] tabular-nums font-medium">
                       {student.telefones}
                     </span>
@@ -937,12 +954,12 @@ const Peb1StudentCard: React.FC<Peb1StudentCardProps> = memo(({
         }}
         className="flex items-start justify-between gap-3 cursor-pointer select-none min-w-0"
       >
-        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+        <div className={`flex gap-3 min-w-0 flex-1 ${isExpanded ? 'items-center' : 'items-start'}`}>
           <StudentAvatar
             student={student}
-            size={isExpanded ? 'xl' : 'lg'}
+            size={isExpanded ? 'md' : 'sm'}
             onUploadPhotoClick={onOpenPhotoModal ? () => onOpenPhotoModal(student) : undefined}
-            className="bg-[#eef3f9]"
+            className={isExpanded ? 'w-16 h-16 text-base' : 'w-14 h-14 text-sm'}
           />
 
           <div className="min-w-0 flex-1">
@@ -1300,7 +1317,7 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
     height: typeof window !== 'undefined' ? window.innerHeight : 800,
   }));
 
-  const PAGE_SIZE = 16;
+  const PAGE_SIZE = 15;
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
@@ -1330,7 +1347,7 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
   const defaultVirtualViewportHeight = Math.max(460, viewportSize.height - 180);
   const peb1ColumnCount = viewportWidth >= 1280 ? 3 : viewportWidth >= 768 ? 2 : 1;
   const adminGridColumnCount =
-    viewportWidth >= 1280 ? 4 : viewportWidth >= 1024 ? 3 : viewportWidth >= 640 ? 2 : 1;
+    viewportWidth >= 1024 ? 3 : viewportWidth >= 640 ? 2 : 1;
 
   // Referências estáveis para callbacks externos evitando re-renderizações em massa durante scroll virtualizado
   const onOpenStudentGridRef = useRef(onOpenStudentGrid);
@@ -1566,8 +1583,7 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
           onOpenStudentPdf={stableOpenStudentPdf}
           onOpenStudentGrid={stableOpenStudentGrid}
           onOpenPhotoModal={onOpenPhotoModal}
-          onCollapse={() => setExpandedStudentId(null)}
-          showHeaderMeta={!isPeb1}
+          showHeaderMeta={false}
           familyFeedback={latestFeedback}
         />
       );
@@ -1579,7 +1595,42 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
       stableOpenStudentPdf,
       stableOpenStudentGrid,
       onOpenPhotoModal,
-      isPeb1,
+    ]
+  );
+
+  const renderTableStudentDetailedExpansion = useCallback(
+    (student: Student) => {
+      const occs = getStudentCumulativeOccurrences(student);
+      const latestWithFeedback = [...occs]
+        .reverse()
+        .find((o) => (o.familyFeedback || '').trim().length > 0);
+      const latestFeedback =
+        latestWithFeedback?.familyFeedback ||
+        student.consecutiveAbsenceAlert?.familyFeedback ||
+        undefined;
+
+      return (
+        <StudentDataExpansionPanel
+          student={student}
+          classGroup={classGroup}
+          diasLetivosMes={diasLetivosMes}
+          minLegalPresence={minLegalPresence}
+          onOpenStudentPdf={stableOpenStudentPdf}
+          onOpenStudentGrid={stableOpenStudentGrid}
+          onOpenPhotoModal={onOpenPhotoModal}
+          onCollapse={() => setExpandedStudentId(null)}
+          showHeaderMeta={true}
+          familyFeedback={latestFeedback}
+        />
+      );
+    },
+    [
+      classGroup,
+      diasLetivosMes,
+      minLegalPresence,
+      stableOpenStudentPdf,
+      stableOpenStudentGrid,
+      onOpenPhotoModal,
     ]
   );
 
@@ -2220,10 +2271,8 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
                         ? 'grid-cols-1'
                         : adminGridColumnCount === 2
                         ? 'grid-cols-2'
-                        : adminGridColumnCount === 3
-                        ? 'grid-cols-3'
-                        : 'grid-cols-4'
-                    } gap-3.5 items-start`}
+                        : 'grid-cols-3'
+                    } gap-3.5 ${row.isExpandedRow ? 'items-start' : 'items-stretch'}`}
                   >
                     {row.students.map((student) => (
                       <EstudanteCard
@@ -2380,7 +2429,7 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
                           onOpenStudentPdf={stableOpenStudentPdf}
                           onOpenPhotoModal={stableOpenPhotoModal}
                           showMissingPdfAction={userRole === 'admin'}
-                          renderStudentDetailedExpansion={renderStudentDetailedExpansion}
+                          renderStudentDetailedExpansion={renderTableStudentDetailedExpansion}
                         />
                       );
                     })}
