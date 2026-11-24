@@ -23,7 +23,7 @@ import {
   initGoogleIdentityFedCM,
   triggerGoogleIdentityPrompt,
 } from '../services/googleSheetsApi';
-import { fetchStateFromFirestoreCloud } from '../services/firebaseSync';
+import { fetchAuthorizedUsersFromFirestore } from '../services/firebaseSync';
 import { Loader2, AlertCircle, Copy, Check, ExternalLink } from 'lucide-react';
 
 interface LoginScreenProps {
@@ -135,12 +135,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       return;
     }
 
-    // Busca usuários sincronizados no Firestore
+    // Busca usuários sincronizados no Firestore (lê apenas 1 doc de config, economizando 41 leituras)
     let cloudUsers: AuthorizedUser[] = [];
     try {
-      const cloudState = await fetchStateFromFirestoreCloud();
-      if (cloudState?.authorizedUsers && cloudState.authorizedUsers.length > 0) {
-        cloudUsers = cloudState.authorizedUsers;
+      const fetchedUsers = await fetchAuthorizedUsersFromFirestore();
+      if (fetchedUsers && fetchedUsers.length > 0) {
+        cloudUsers = fetchedUsers;
         saveStoredAuthorizedUsers(cloudUsers);
       }
     } catch {

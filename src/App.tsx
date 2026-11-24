@@ -52,6 +52,7 @@ import {
   SyncStatusSnapshot,
   saveClassesToFirestoreCloud,
   fetchStateFromFirestoreCloud,
+  fetchAuthorizedUsersFromFirestore,
   beginBootIntegrityCheck,
   monitorFirestoreIntegrityOnBoot,
   shouldAllowRemoteClassesOverwrite,
@@ -870,11 +871,11 @@ export default function App() {
 
       if (!matched) {
         try {
-          const cloudState = await fetchStateFromFirestoreCloud();
-          if (cloudState?.authorizedUsers && cloudState.authorizedUsers.length > 0) {
-            saveStoredAuthorizedUsers(cloudState.authorizedUsers);
-            setAuthorizedUsers(cloudState.authorizedUsers);
-            currentPool = [...cloudState.authorizedUsers, ...INITIAL_AUTHORIZED_USERS];
+          const cloudUsers = await fetchAuthorizedUsersFromFirestore();
+          if (cloudUsers && cloudUsers.length > 0) {
+            saveStoredAuthorizedUsers(cloudUsers);
+            setAuthorizedUsers(cloudUsers);
+            currentPool = [...cloudUsers, ...INITIAL_AUTHORIZED_USERS];
             matched = findAuthorizedUserByEmail(authEmail, currentPool);
           }
         } catch {

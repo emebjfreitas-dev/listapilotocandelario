@@ -1,6 +1,6 @@
 /* Service Worker Oficial — EMEB Joaquim Candelário de Freitas (PWA Offline & Web Push) */
-const SW_VERSION = 'candelario-pwa-v9';
-const CACHE_NAME = 'candelario-offline-v9';
+const SW_VERSION = 'candelario-pwa-v10';
+const CACHE_NAME = 'candelario-offline-v10';
 
 const PRECACHE_ASSETS = [
   './',
