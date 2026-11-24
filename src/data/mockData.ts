@@ -1,0 +1,1453 @@
+import { ClassGroup, Student, GoogleSheetConfig, SheetRowData, SchoolDay, AuthorizedUser } from '../types';
+import { getStudentAttendanceMetrics, getStudentConsecutiveAlertInfo } from '../utils/attendanceRules';
+
+export const CITY_NAME = 'Prefeitura do Município de Jundiaí';
+export const SECRETARY_NAME = 'SME · Secretaria Municipal de Educação de Jundiaí';
+export const SCHOOL_NAME = 'EMEB Professor Joaquim Candelário de Freitas';
+export const INSTITUTIONAL_EMAIL_DOMAIN = '@educacao.jundiai.sp.gov.br';
+
+const formatDisplayNameFromEmail = (email: string): string => {
+  const prefix = email.split('@')[0] || '';
+  if (prefix === 'emebjfreitas') {
+    return 'Equipe Administrativa';
+  }
+  return prefix
+    .replace(/\d+/g, '')
+    .split('.')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+};
+
+export const OFFICIAL_WHITELISTED_EMAILS: string[] = [
+  'emebjfreitas@jundiai.sp.gov.br',
+  'emebjfreitas@educacao.jundiai.sp.gov.br',
+  'acacia.silva@educacao.jundiai.sp.gov.br',
+  'adilia.lourdes@educacao.jundiai.sp.gov.br',
+  'alessandra.costa@educacao.jundiai.sp.gov.br',
+  'aline.araujo@educacao.jundiai.sp.gov.br',
+  'amanda.storani@educacao.jundiai.sp.gov.br',
+  'ana.alvares@educacao.jundiai.sp.gov.br',
+  'ana.araujo19@educacao.jundiai.sp.gov.br',
+  'ana.boas@educacao.jundiai.sp.gov.br',
+  'ana.hermann@educacao.jundiai.sp.gov.br',
+  'ana.prado@educacao.jundiai.sp.gov.br',
+  'barbara.lima@educacao.jundiai.sp.gov.br',
+  'beatriz.silva09@educacao.jundiai.sp.gov.br',
+  'bianca.macedo@educacao.jundiai.sp.gov.br',
+  'bruna.maximiano@educacao.jundiai.sp.gov.br',
+  'camilo.lisboa@educacao.jundiai.sp.gov.br',
+  'carol.silva@educacao.jundiai.sp.gov.br',
+  'caroline.oliveira@educacao.jundiai.sp.gov.br',
+  'cleonice.batistela@educacao.jundiai.sp.gov.br',
+  'denis.braz@educacao.jundiai.sp.gov.br',
+  'denise.nicolau@educacao.jundiai.sp.gov.br',
+  'edmar.vinicius@educacao.jundiai.sp.gov.br',
+  'elaine.netto@educacao.jundiai.sp.gov.br',
+  'elaine.silva13@educacao.jundiai.sp.gov.br',
+  'erika.mori@educacao.jundiai.sp.gov.br',
+  'fabio.santos@educacao.jundiai.sp.gov.br',
+  'fernanda.aranha@educacao.jundiai.sp.gov.br',
+  'fernanda.borges@educacao.jundiai.sp.gov.br',
+  'gesica.piccolo@educacao.jundiai.sp.gov.br',
+  'giovana.rampin@educacao.jundiai.sp.gov.br',
+  'giovanna.ferreira@educacao.jundiai.sp.gov.br',
+  'giulia.patez@educacao.jundiai.sp.gov.br',
+  'helena.ferraz@educacao.jundiai.sp.gov.br',
+  'iara.villela@educacao.jundiai.sp.gov.br',
+  'isabel.zanchin@educacao.jundiai.sp.gov.br',
+  'isabella.correa@educacao.jundiai.sp.gov.br',
+  'joana.leopoldino@educacao.jundiai.sp.gov.br',
+  'karen.merlim@educacao.jundiai.sp.gov.br',
+  'karina.trientini@educacao.jundiai.sp.gov.br',
+  'layla.rocha@educacao.jundiai.sp.gov.br',
+  'liana.poiani@educacao.jundiai.sp.gov.br',
+  'lilian.gomes@educacao.jundiai.sp.gov.br',
+  'lilian.rizzi@educacao.jundiai.sp.gov.br',
+  'luana.mezavila@educacao.jundiai.sp.gov.br',
+  'lucimeire.perobelli@educacao.jundiai.sp.gov.br',
+  'luiza.kabata@educacao.jundiai.sp.gov.br',
+  'lygea.ramos@educacao.jundiai.sp.gov.br',
+  'marcelo.aguiar@educacao.jundiai.sp.gov.br',
+  'marcos.fernandes@educacao.jundiai.sp.gov.br',
+  'maria.almeida16@educacao.jundiai.sp.gov.br',
+  'maria.ferreira@educacao.jundiai.sp.gov.br',
+  'maria.julia@educacao.jundiai.sp.gov.br',
+  'mariana.cristina@educacao.jundiai.sp.gov.br',
+  'mariane.santos@educacao.jundiai.sp.gov.br',
+  'marina.petraquim@educacao.jundiai.sp.gov.br',
+  'monica.iamonti@educacao.jundiai.sp.gov.br',
+  'patricia.araujo@educacao.jundiai.sp.gov.br',
+  'pedro.rosa@educacao.jundiai.sp.gov.br',
+  'priscila.damasceno@educacao.jundiai.sp.gov.br',
+  'rafaela.gobbi@educacao.jundiai.sp.gov.br',
+  'rita.aparecida@educacao.jundiai.sp.gov.br',
+  'roberta.saldanha@educacao.jundiai.sp.gov.br',
+  'rosangela.paula@educacao.jundiai.sp.gov.br',
+  'sandra.furlan@educacao.jundiai.sp.gov.br',
+  'silvia.aguiar@educacao.jundiai.sp.gov.br',
+  'silvia.restino@educacao.jundiai.sp.gov.br',
+  'simone.souza@educacao.jundiai.sp.gov.br',
+  'sophia.zaros@educacao.jundiai.sp.gov.br',
+  'stella.ferrari@educacao.jundiai.sp.gov.br',
+  'tais.buzetto@educacao.jundiai.sp.gov.br',
+  'vanessa.santos@educacao.jundiai.sp.gov.br',
+  'viviane.guidi@educacao.jundiai.sp.gov.br',
+  'yuri.nicholas@educacao.jundiai.sp.gov.br',
+];
+
+import { type OfficialMatrixRow, OFFICIAL_SCHOOL_MATRIX_2027 } from './officialMatrix2027';
+export { type OfficialMatrixRow, OFFICIAL_SCHOOL_MATRIX_2027 };
+
+export const PEB2_SPECIALISTS_BY_EMAIL: Record<
+  string,
+  {
+    fullName: string;
+    firstName: string;
+    pronoun: string;
+    subject: 'ARTE' | 'EDUCAÇÃO FÍSICA' | 'LÍNGUA INGLESA';
+  }
+> = {
+  'yuri.nicholas@educacao.jundiai.sp.gov.br': {
+    fullName: 'YURI NICHOLAS TOFFANETTO',
+    firstName: 'YURI NICHOLAS',
+    pronoun: 'PROFESSOR',
+    subject: 'ARTE',
+  },
+  'sophia.zaros@educacao.jundiai.sp.gov.br': {
+    fullName: 'SOPHIA WOLF ZAROS',
+    firstName: 'SOPHIA',
+    pronoun: 'PROFESSORA',
+    subject: 'ARTE',
+  },
+  'stella.ferrari@educacao.jundiai.sp.gov.br': {
+    fullName: 'STELLA MARIS PRADO COSTA FERRARI',
+    firstName: 'STELLA MARIS',
+    pronoun: 'PROFESSORA',
+    subject: 'EDUCAÇÃO FÍSICA',
+  },
+  'acacia.silva@educacao.jundiai.sp.gov.br': {
+    fullName: 'ACÁCIA FERNANDES DE ALBUQUERQUE DA SILVA',
+    firstName: 'ACÁCIA',
+    pronoun: 'PROFESSORA',
+    subject: 'EDUCAÇÃO FÍSICA',
+  },
+  'pedro.rosa@educacao.jundiai.sp.gov.br': {
+    fullName: 'PEDRO HENRIQUE DA ROSA',
+    firstName: 'PEDRO HENRIQUE',
+    pronoun: 'PROFESSOR',
+    subject: 'EDUCAÇÃO FÍSICA',
+  },
+  'fernanda.aranha@educacao.jundiai.sp.gov.br': {
+    fullName: 'FERNANDA MIHO WATANABE ARANHA',
+    firstName: 'FERNANDA MIHO',
+    pronoun: 'PROFESSORA',
+    subject: 'EDUCAÇÃO FÍSICA',
+  },
+  'elaine.silva13@educacao.jundiai.sp.gov.br': {
+    fullName: 'ELAINE CRISTINA DA SILVA',
+    firstName: 'ELAINE CRISTINA',
+    pronoun: 'PROFESSORA',
+    subject: 'LÍNGUA INGLESA',
+  },
+  'giovanna.ferreira@educacao.jundiai.sp.gov.br': {
+    fullName: 'GIOVANNA CHAGAS FERREIRA',
+    firstName: 'GIOVANNA',
+    pronoun: 'PROFESSORA',
+    subject: 'LÍNGUA INGLESA',
+  },
+  'lygea.ramos@educacao.jundiai.sp.gov.br': {
+    fullName: 'LYGEA DE SOUZA RAMOS',
+    firstName: 'LYGEA',
+    pronoun: 'PROFESSORA',
+    subject: 'LÍNGUA INGLESA',
+  },
+  'alessandra.costa@educacao.jundiai.sp.gov.br': {
+    fullName: 'ALESSANDRA ISCARO COSTA',
+    firstName: 'ALESSANDRA',
+    pronoun: 'PROFESSORA',
+    subject: 'LÍNGUA INGLESA',
+  },
+};
+
+export const INITIAL_AUTHORIZED_USERS: AuthorizedUser[] = Array.from(
+  new Set(OFFICIAL_WHITELISTED_EMAILS.map((e) => e.trim().toLowerCase()))
+).map((email, idx) => {
+  const isAdminAccount = email.startsWith('emebjfreitas@');
+  if (isAdminAccount) {
+    return {
+      id: `usr-official-${idx + 1}`,
+      email,
+      name: formatDisplayNameFromEmail(email),
+      role: 'admin',
+      teacherRoleType: 'admin',
+      pronoun: 'DIREÇÃO',
+      firstName: 'DIREÇÃO',
+      subjectName: 'GESTÃO / ADMIN',
+      assignedClassId: 'all',
+      assignedClassIds: ['all'],
+      assignedClassName: 'Todas as 40 Turmas (Acesso Pleno)',
+      assignedClassNames: ['Todas as 40 Turmas (Acesso Pleno)'],
+      active: true,
+      createdAt: '02/02/2027',
+    };
+  }
+
+  // 1) Check if this email is a Regente PEB I in OFFICIAL_SCHOOL_MATRIX_2027
+  const regenteMatches = OFFICIAL_SCHOOL_MATRIX_2027.filter(
+    (m) => m.teacherEmail.trim().toLowerCase() === email
+  );
+  if (regenteMatches.length > 0) {
+    const primary = regenteMatches[0];
+    const classIds = regenteMatches.map((m) => m.id);
+    const classNames = regenteMatches.map(
+      (m) => `${m.name} (${m.periodo === 'MANHÃ' ? 'Manhã' : 'Tarde'})`
+    );
+    return {
+      id: `usr-official-${idx + 1}`,
+      email,
+      name: `${primary.pronoun === 'PROFESSOR' ? 'Prof.' : 'Profª.'} ${primary.teacherName}`,
+      role: 'usuario',
+      teacherRoleType: 'peb1',
+      pronoun: primary.pronoun,
+      firstName: primary.teacherFirstName,
+      subjectName: 'REGENTE PEB I',
+      assignedClassId: primary.id,
+      assignedClassIds: classIds,
+      assignedClassName: classNames.join(' + '),
+      assignedClassNames: classNames,
+      active: true,
+      createdAt: '03/02/2027',
+    };
+  }
+
+  // 2) Check if this email is an official PEB II Specialist (Arte, Educação Física, Língua Inglesa)
+  const specialist = PEB2_SPECIALISTS_BY_EMAIL[email];
+  if (specialist) {
+    const specialistClasses = OFFICIAL_SCHOOL_MATRIX_2027.filter(
+      (m) =>
+        m.artTeacher === specialist.fullName ||
+        m.peTeacher === specialist.fullName ||
+        m.englishTeacher === specialist.fullName
+    );
+    const abrevList = specialistClasses.map((m) => m.turmaAbrev).join(', ');
+    return {
+      id: `usr-official-${idx + 1}`,
+      email,
+      name: `${specialist.pronoun === 'PROFESSOR' ? 'Prof.' : 'Profª.'} ${specialist.fullName}`,
+      role: 'peb2',
+      teacherRoleType: 'peb2',
+      pronoun: specialist.pronoun,
+      firstName: specialist.firstName,
+      subjectName: specialist.subject,
+      assignedClassId: 'all',
+      assignedClassIds: ['all'],
+      assignedClassName: `PEB II (${specialist.subject}) • ${specialistClasses.length} Turmas (${abrevList})`,
+      assignedClassNames: [`PEB II (${specialist.subject})`],
+      active: true,
+      createdAt: '03/02/2027',
+    };
+  }
+
+  // 3) Remaining authorized institutional educators (Equipe Pedagógica / Apoio / PEB II)
+  return {
+    id: `usr-official-${idx + 1}`,
+    email,
+    name: `Prof(a). ${formatDisplayNameFromEmail(email).toUpperCase()}`,
+    role: 'peb2',
+    teacherRoleType: 'apoio',
+    pronoun: 'PROFESSOR(A)',
+    firstName: formatDisplayNameFromEmail(email).split(' ')[0]?.toUpperCase() || 'DOCENTE',
+    assignedClassId: 'all',
+    assignedClassIds: ['all'],
+    assignedClassName: 'Todas as Turmas (Consulta / Apoio Pedagógico)',
+    assignedClassNames: ['Todas as Turmas (Consulta / Apoio Pedagógico)'],
+    active: true,
+    createdAt: '03/02/2027',
+  };
+});
+
+const APP_BASE_URL =
+  (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
+export const APP_LOGO_URL = `${APP_BASE_URL}favicon.svg`;
+export const APP_LOGO_FALLBACK_URL = `${APP_BASE_URL}pwa-192x192.png`;
+export const SCHOOL_PATRON_WATERMARK_URL =
+  'https://live.staticflickr.com/65535/51747624614_48845297df_b.jpg';
+
+export const SCHOOL_WATERMARK_GALLERY: string[] = [
+  'https://jundiai.sp.gov.br/noticias/wp-content/uploads/sites/32/2024/12/candelario-1-1536x1024.jpg',
+  'https://jundiai.sp.gov.br/noticias/wp-content/uploads/sites/32/2022/07/inauguracao_emeb_candelario_de_freitas-404.jpg',
+  'https://jundiai.sp.gov.br/noticias/wp-content/uploads/sites/32/2023/05/parque_naturalizado_emeb_candelario_de_freitas_pa-3-1536x1024.jpg',
+  'https://jundiai.sp.gov.br/noticias/wp-content/uploads/sites/32/2021/11/grafite-emeb-candelario-77.jpg',
+  'https://jundiai.sp.gov.br/noticias/wp-content/uploads/sites/32/2022/07/alunos-emeb-candelario-em-aula-de-chromebooks-laboratorio-maker_c_-27.jpg',
+  'https://jundiai.sp.gov.br/noticias/wp-content/uploads/sites/32/2023/05/espaco-maker-fablab-emeb-candelario-formacao-alunos-para-uso-dos-chromebooks_fm_-4-1536x1024.jpg',
+  'https://live.staticflickr.com/65535/51747624614_48845297df_b.jpg',
+  `${APP_BASE_URL}escola-candelario.jpg`,
+];
+
+export const TEACHER_AVATAR_URL = 'https://lh3.googleusercontent.com/aida-public/AB6AXuD1tNB8f_YzRDEnOX7J-c3VPCSR3ojnGgdR5a2C4rW2hVcV660D4e5OWn63fjSZK5KQ4g_yWHlJoeOx5KEvQt593NNKaIQrl5O6nr3nZQv4gi2FC7TNoRqsU30o2GhNtBb5wK00uLoqwqm3e_2gjJp_gVfrvPkEi3zNpz-o-Xq0RYzfFlB5HQCeT-3OSYttOQz1KQPUGHkJv-v7s6FQHQleuYLnJHtRcjgsw6Gkt0P6zsimskCx0x2m';
+
+// Links Oficiais Padrão (Editáveis pelo Administrador para usar sua própria Planilha e Pasta Drive)
+export const DEFAULT_GOOGLE_SHEET_URL =
+  'https://docs.google.com/spreadsheets/create';
+export const DEFAULT_GOOGLE_DRIVE_PHOTOS_URL =
+  'https://drive.google.com/drive/my-drive';
+
+// Dias letivos oficiais por mês no Calendário SME Jundiaí 2027 (Soma Exata = 200 Dias Letivos Anuais)
+export const MONTHLY_SCHOOL_DAYS_2027: Array<{ month: string; monthNumber: number; schoolDays: number }> = [
+  { month: 'Fevereiro', monthNumber: 2, schoolDays: 16 },
+  { month: 'Março', monthNumber: 3, schoolDays: 22 },
+  { month: 'Abril', monthNumber: 4, schoolDays: 20 },
+  { month: 'Maio', monthNumber: 5, schoolDays: 20 },
+  { month: 'Junho', monthNumber: 6, schoolDays: 20 },
+  { month: 'Julho', monthNumber: 7, schoolDays: 10 },
+  { month: 'Agosto', monthNumber: 8, schoolDays: 22 },
+  { month: 'Setembro', monthNumber: 9, schoolDays: 20 },
+  { month: 'Outubro', monthNumber: 10, schoolDays: 20 },
+  { month: 'Novembro', monthNumber: 11, schoolDays: 18 },
+  { month: 'Dezembro', monthNumber: 12, schoolDays: 12 },
+];
+
+export const TOTAL_ANNUAL_SCHOOL_DAYS = 200;
+
+export const getDefaultMonthlySchoolDaysMap = (): Record<string, number> => {
+  const map: Record<string, number> = {};
+  MONTHLY_SCHOOL_DAYS_2027.forEach((m) => {
+    map[m.month] = m.schoolDays;
+  });
+  return map;
+};
+
+export const getClassSchoolDaysForMonth = (cls: ClassGroup, monthName: string): number => {
+  if (cls.monthlySchoolDays && typeof cls.monthlySchoolDays[monthName] === 'number') {
+    return cls.monthlySchoolDays[monthName];
+  }
+  const found = MONTHLY_SCHOOL_DAYS_2027.find((m) => m.month === monthName);
+  return found ? found.schoolDays : cls.classesHeld || 20;
+};
+
+// Official School Calendar for October 2027 (20 dias letivos: 19 dias regulares + 1 sábado letivo)
+export const OFFICIAL_OCTOBER_DAYS: SchoolDay[] = [
+  { id: 'd01', date: '01/10/2027', dayOfWeek: 'Sexta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd02', date: '02/10/2027', dayOfWeek: 'Sábado', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+  { id: 'd03', date: '03/10/2027', dayOfWeek: 'Domingo', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+  { id: 'd04', date: '04/10/2027', dayOfWeek: 'Segunda-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd05', date: '05/10/2027', dayOfWeek: 'Terça-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd06', date: '06/10/2027', dayOfWeek: 'Quarta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd07', date: '07/10/2027', dayOfWeek: 'Quinta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd08', date: '08/10/2027', dayOfWeek: 'Sexta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd09', date: '09/10/2027', dayOfWeek: 'Sábado', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+  { id: 'd10', date: '10/10/2027', dayOfWeek: 'Domingo', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+  { id: 'd11', date: '11/10/2027', dayOfWeek: 'Segunda-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular (Antecipação Letiva SME)' },
+  { id: 'd12', date: '12/10/2027', dayOfWeek: 'Terça-feira', month: 'Outubro', type: 'feriado', description: 'Nossa Senhora Aparecida / Dia das Crianças (Feriado Nacional)' },
+  { id: 'd13', date: '13/10/2027', dayOfWeek: 'Quarta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd14', date: '14/10/2027', dayOfWeek: 'Quinta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd15', date: '15/10/2027', dayOfWeek: 'Sexta-feira', month: 'Outubro', type: 'feriado', description: 'Dia do Professor (Recesso Escolar SME Jundiaí)' },
+  { id: 'd16', date: '16/10/2027', dayOfWeek: 'Sábado', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+  { id: 'd17', date: '17/10/2027', dayOfWeek: 'Domingo', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+  { id: 'd18', date: '18/10/2027', dayOfWeek: 'Segunda-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd19', date: '19/10/2027', dayOfWeek: 'Terça-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd20', date: '20/10/2027', dayOfWeek: 'Quarta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd21', date: '21/10/2027', dayOfWeek: 'Quinta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd22', date: '22/10/2027', dayOfWeek: 'Sexta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd23', date: '23/10/2027', dayOfWeek: 'Sábado', month: 'Outubro', type: 'sabado_letivo', description: 'Sábado Letivo Temático - Feira de Ciências e Família' },
+  { id: 'd24', date: '24/10/2027', dayOfWeek: 'Domingo', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+  { id: 'd25', date: '25/10/2027', dayOfWeek: 'Segunda-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd26', date: '26/10/2027', dayOfWeek: 'Terça-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd27', date: '27/10/2027', dayOfWeek: 'Quarta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd28', date: '28/10/2027', dayOfWeek: 'Quinta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular (Atividade Pedagógica Letiva)' },
+  { id: 'd29', date: '29/10/2027', dayOfWeek: 'Sexta-feira', month: 'Outubro', type: 'dia_letivo', description: 'Aula Regular' },
+  { id: 'd30', date: '30/10/2027', dayOfWeek: 'Sábado', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+  { id: 'd31', date: '31/10/2027', dayOfWeek: 'Domingo', month: 'Outubro', type: 'recesso', description: 'Fim de semana' },
+];
+
+// Exact Real Students for G4A from user specification:
+export const REAL_G4A_STUDENTS: Student[] = [
+  {
+    id: 'g4a-s1',
+    number: 1,
+    name: 'ALICE DE BARROS PIRES',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 1,
+    estudante: 'ALICE DE BARROS PIRES',
+    ra: '123667009',
+    digRa: '7',
+    ufRa: 'SP',
+    dataNascimento: '15/07/2021',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'CARLA ANDRESSA DE OLIVEIRA SINIGALIA [3C] ● JUNDIAI/SP',
+    idade: '5 ANOS, 2 MESES E 17 DIAS',
+    arquivo: '10164',
+    filiacao1: 'TACIANE GEIELI DE BARROS PIRES',
+    filiacao2: 'DANIEL PEDROSO PIRES',
+    genero: 'FEMININO',
+    tipoSanguineo: 'O+',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '594.965.888-40',
+    cep: '13.214-203',
+    logradouro: 'RUA SAO MANOEL',
+    numeroResidencia: '69',
+    complemento: 'CASA 02',
+    bairro: 'JARDIM SHANGAI',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'alice.pires@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'TACIANE GEIELI DE BARROS PIRES',
+    guardianPhone: '(11) 98765-4321',
+    status: 'present',
+    totalAbsencesMonth: 0,
+    justifiedAbsences: 0,
+    initials: 'AP',
+  },
+  {
+    id: 'g4a-s2',
+    number: 2,
+    name: 'ANA LIVIA ANTUNES DE BARROS',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 2,
+    estudante: 'ANA LIVIA ANTUNES DE BARROS',
+    ra: '124891639',
+    digRa: '6',
+    ufRa: 'SP',
+    dataNascimento: '24/02/2022',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'CARLA ANDRESSA DE OLIVEIRA SINIGALIA [3B] ● JUNDIAI/SP',
+    idade: '4 ANOS, 7 MESES E 8 DIAS',
+    arquivo: '10168',
+    filiacao1: 'JOCIANE ANTUNES DE SOUZA',
+    filiacao2: 'SIVANILSON FERREIRA DE BARROS',
+    genero: 'FEMININO',
+    tipoSanguineo: 'A-',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '600.900.918-92',
+    cep: '13.214-390',
+    logradouro: 'RUA DOUTOR BENEDITO STORANE NETO',
+    numeroResidencia: '207',
+    bairro: 'CIDADE SANTOS DUMONT',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'ana.antunes@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'JOCIANE ANTUNES DE SOUZA',
+    guardianPhone: '(11) 97654-3210',
+    status: 'present',
+    totalAbsencesMonth: 1,
+    justifiedAbsences: 0,
+    initials: 'AB',
+  },
+  {
+    id: 'g4a-s3',
+    number: 3,
+    name: 'ARTUR FROES BOSCHINI',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 3,
+    estudante: 'ARTUR FROES BOSCHINI',
+    ra: '123128103',
+    digRa: '0',
+    ufRa: 'SP',
+    dataNascimento: '18/05/2021',
+    deficiencia: 'AUTISTA INFANTIL',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'CARLA ANDRESSA DE OLIVEIRA SINIGALIA [3B] ● JUNDIAI/SP',
+    idade: '5 ANOS, 4 MESES E 14 DIAS',
+    arquivo: '10175',
+    filiacao1: 'MONICA DE LIMA FROES BOSCHINI',
+    filiacao2: 'ROGERIO BOSCHINI',
+    genero: 'MASCULINO',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '593.656.248-43',
+    cep: '13.214-220',
+    logradouro: 'RUA DOUTOR CANDIDO MOJOLA',
+    numeroResidencia: '849',
+    complemento: 'BL 10 AP 202',
+    bairro: 'JARDIM BUFALO',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'artur.boschini@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'MONICA DE LIMA FROES BOSCHINI',
+    guardianPhone: '(11) 96543-2109',
+    status: 'present',
+    totalAbsencesMonth: 0,
+    justifiedAbsences: 0,
+    initials: 'AB',
+  },
+  {
+    id: 'g4a-s4',
+    number: 4,
+    name: 'BRAYAN HENRIQUE ARAUJO OLIVEIRA',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 4,
+    estudante: 'BRAYAN HENRIQUE ARAUJO OLIVEIRA',
+    ra: '124558223',
+    digRa: '9',
+    ufRa: 'SP',
+    dataNascimento: '26/05/2021',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'JARDIM ESCOLA [3B] ● JUNDIAI/SP',
+    idade: '5 ANOS, 4 MESES E 6 DIAS',
+    arquivo: '10178',
+    filiacao1: 'ANTONIO ARAUJO DOS SANTOS NETO',
+    filiacao2: 'FABRICIA OLIVEIRA',
+    genero: 'MASCULINO',
+    racaCor: 'PARDA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '593.831.978-11',
+    cep: '13.214-390',
+    logradouro: 'RUA DOUTOR BENEDITO STORANE NETO',
+    numeroResidencia: '208',
+    complemento: 'CASA',
+    bairro: 'CIDADE SANTOS DUMONT',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'brayan.araujo@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'FABRICIA OLIVEIRA',
+    guardianPhone: '(11) 95432-1098',
+    status: 'absent',
+    totalAbsencesMonth: 3,
+    justifiedAbsences: 0,
+    consecutiveAbsenceAlert: {
+      active: true,
+      selectedDates: ['26/10', '27/10', '28/10'],
+      reportedAt: '28/10/2027 às 08:40',
+      familyFeedback: 'Mãe informou resfriado; retorna na segunda-feira.',
+      occurrences: [
+        {
+          id: 'occ-g4a-s4-3d',
+          sequenceNumber: 1,
+          selectedDates: ['26/10', '27/10', '28/10'],
+          reportedAt: '28/10/2027 às 08:40',
+          familyFeedback: 'Mãe informou resfriado; retorna na segunda-feira.',
+          monthLabel: 'Outubro/2027',
+        },
+      ],
+    },
+    initials: 'BO',
+  },
+  {
+    id: 'g4a-s5',
+    number: 5,
+    name: 'DAVI YUGO KUBOTSU',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 5,
+    estudante: 'DAVI YUGO KUBOTSU',
+    ra: '126110940',
+    digRa: '5',
+    ufRa: 'SP',
+    dataNascimento: '09/02/2022',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '23/02/2026',
+    procedenciaEscolar: 'JOAQUIM CANDELARIO DE FREITAS [G4B] ● JUNDIAI/SP',
+    irmaos: 'SIMON YUTO KUBOTSU [3C - MANHÃ]',
+    idade: '4 ANOS, 7 MESES E 23 DIAS',
+    arquivo: '10183',
+    filiacao1: 'REBECA SILVA KUBOTSU',
+    filiacao2: 'MARCELO KUBOTSU',
+    genero: 'MASCULINO',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '600.391.488-23',
+    cep: '13.214-120',
+    logradouro: 'RUA ANTONIO MAXIMILIANO DE ALMEIDA',
+    numeroResidencia: '297',
+    bairro: 'CIDADE LUIZA',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'davi.kubotsu@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'REBECA SILVA KUBOTSU',
+    guardianPhone: '(11) 94321-0987',
+    status: 'present',
+    totalAbsencesMonth: 0,
+    justifiedAbsences: 0,
+    initials: 'DK',
+  },
+  {
+    id: 'g4a-s6',
+    number: 6,
+    name: 'ELOA VITORIA RIBEIRO DE BARROS',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 6,
+    estudante: 'ELOA VITORIA RIBEIRO DE BARROS',
+    ra: '125038516',
+    digRa: '7',
+    ufRa: 'SP',
+    dataNascimento: '03/11/2021',
+    deficiencia: 'AUTISTA INFANTIL',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'CARLA ANDRESSA DE OLIVEIRA SINIGALIA [3A] ● JUNDIAI/SP',
+    idade: '4 ANOS, 10 MESES E 29 DIAS',
+    arquivo: '10184',
+    filiacao1: 'ALINE VILLANOVA RIBEIRO',
+    filiacao2: 'CLAYTON APARECIDO DE BARROS',
+    genero: 'FEMININO',
+    tipoSanguineo: 'A+',
+    racaCor: 'PRETA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '597.876.188-43',
+    cep: '13.214-362',
+    logradouro: 'RUA ENERCIO LAZARINE',
+    numeroResidencia: '90',
+    bairro: 'CIDADE SANTOS DUMONT',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'eloa.barros@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'ALINE VILLANOVA RIBEIRO',
+    guardianPhone: '(11) 93210-9876',
+    status: 'present',
+    totalAbsencesMonth: 1,
+    justifiedAbsences: 0,
+    initials: 'EB',
+  },
+  {
+    id: 'g4a-s7',
+    number: 7,
+    name: 'GAEL SILVA DOS SANTOS',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 7,
+    estudante: 'GAEL SILVA DOS SANTOS',
+    ra: '124085494',
+    digRa: '8',
+    ufRa: 'SP',
+    dataNascimento: '19/03/2022',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'CARLA ANDRESSA DE OLIVEIRA SINIGALIA [3A] ● JUNDIAI/SP',
+    idade: '4 ANOS, 6 MESES E 13 DIAS',
+    arquivo: '10193',
+    filiacao1: 'JENYFER SILVA DE OLIVEIRA',
+    filiacao2: 'RONEI ALVES DOS SANTOS',
+    genero: 'MASCULINO',
+    tipoSanguineo: 'A+',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cep: '13.214-101',
+    logradouro: 'RUA ITIRAPINA',
+    numeroResidencia: '1609',
+    bairro: 'CIDADE LUIZA',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    telefones: '(11) 97508-3672 / (11) 99760-2481',
+    emailMunicipal: 'gael.santos19@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'JENYFER SILVA DE OLIVEIRA',
+    guardianPhone: '(11) 97508-3672',
+    status: 'absent',
+    totalAbsencesMonth: 5,
+    justifiedAbsences: 0,
+    consecutiveAbsenceAlert: {
+      active: true,
+      selectedDates: ['22/10', '25/10', '26/10', '27/10', '28/10'],
+      reportedAt: '28/10/2027 às 09:15',
+      occurrences: [
+        {
+          id: 'occ-g4a-s7-5d',
+          sequenceNumber: 1,
+          selectedDates: ['22/10', '25/10', '26/10', '27/10', '28/10'],
+          reportedAt: '28/10/2027 às 09:15',
+          monthLabel: 'Outubro/2027',
+        },
+      ],
+    },
+    alert: 'Atenção: 5 faltas seguidas',
+    initials: 'GS',
+  },
+  {
+    id: 'g4a-s8',
+    number: 8,
+    name: 'HELENA SOUZA FERREIRA',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 8,
+    estudante: 'HELENA SOUZA FERREIRA',
+    ra: '123286918',
+    digRa: '1',
+    ufRa: 'SP',
+    dataNascimento: '13/05/2021',
+    situacao: 'BXTR',
+    dataMovimentacao: '27/02/2026',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'APRENDIZADO DOM JOSE GASPAR [3A] ● JUNDIAI/SP',
+    idade: '5 ANOS, 4 MESES E 19 DIAS',
+    arquivo: '10198',
+    filiacao1: 'GASTAO FERREIRA',
+    filiacao2: 'VANESSA DE SOUZA PEREIRA',
+    genero: 'FEMININO',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '593.618.818-33',
+    cep: '13.214-065',
+    logradouro: 'RUA ITIRAPINA',
+    numeroResidencia: '690',
+    complemento: 'T1 AP 26',
+    bairro: 'VILA LACERDA',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    telefones: '(11) 94623-3400 / (11) 95557-3682',
+    emailMunicipal: 'helena.ferreira13@aluno.educacao.jundiai.sp.gov.br',
+    sucessaoEscolar: 'DIVINA PROVIDENCIA ESCOLA [G4] ● JUNDIAI/SP | BXTR',
+    guardianName: 'VANESSA DE SOUZA PEREIRA',
+    guardianPhone: '(11) 94623-3400',
+    status: 'present',
+    totalAbsencesMonth: 0,
+    justifiedAbsences: 0,
+    initials: 'HF',
+  },
+  {
+    id: 'g4a-s9',
+    number: 9,
+    name: 'HENRY MIGUEL ADORNO DE ASSIS',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 9,
+    estudante: 'HENRY MIGUEL ADORNO DE ASSIS',
+    ra: '126119001',
+    digRa: '4',
+    ufRa: 'SP',
+    dataNascimento: '26/11/2021',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    irmaos: 'LORENA ADORNO DE ASSIS [2B - MANHÃ]',
+    idade: '4 ANOS, 10 MESES E 6 DIAS',
+    arquivo: '10200',
+    filiacao1: 'BRUNA CRISTINA ADORNO DE ASSIS',
+    filiacao2: 'REGINALDO BENEDITO DE ASSIS',
+    genero: 'MASCULINO',
+    tipoSanguineo: 'O+',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '598.434.458-05',
+    cartaoSus: '708 7041 0421 6198',
+    cep: '13.214-680',
+    logradouro: 'RUA UCILLA LORENCINI TAFARELLO',
+    numeroResidencia: '151',
+    complemento: 'BL A6 - APTO 16',
+    bairro: 'RESIDENCIAL TERRA DA UVA',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'henry.assis@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'BRUNA CRISTINA ADORNO DE ASSIS',
+    guardianPhone: '(11) 98777-2233',
+    status: 'present',
+    totalAbsencesMonth: 1,
+    justifiedAbsences: 0,
+    initials: 'HA',
+  },
+  {
+    id: 'g4a-s10',
+    number: 10,
+    name: 'JADE LETICIA ALVES DA SILVEIRA',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 10,
+    estudante: 'JADE LETICIA ALVES DA SILVEIRA',
+    ra: '124631282',
+    digRa: '7',
+    ufRa: 'SP',
+    dataNascimento: '12/09/2021',
+    situacao: 'BXTR',
+    dataMovimentacao: '14/04/2026',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'MEU PRIMEIRO PASSO ESCOLA DE EDUCACAO INFANTIL [G5]',
+    idade: '5 ANOS E 20 DIAS',
+    arquivo: '10203',
+    filiacao1: 'TRACY TAKAHACHY ALVES DE OLIVEIRA',
+    filiacao2: 'MARCOS ALVES DA SILVEIRA',
+    genero: 'FEMININO',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'MOSSORO - SP',
+    cpf: '178.208.174-70',
+    cep: '13.214-370',
+    logradouro: 'RUA PALMIRA CERVI BARBARO',
+    numeroResidencia: '505',
+    complemento: 'CASA 2',
+    bairro: 'CIDADE SANTOS DUMONT',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'jade.silveira@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'TRACY TAKAHACHY ALVES DE OLIVEIRA',
+    guardianPhone: '(11) 98666-3344',
+    status: 'present',
+    totalAbsencesMonth: 0,
+    justifiedAbsences: 0,
+    initials: 'JS',
+  },
+  {
+    id: 'g4a-s11',
+    number: 11,
+    name: 'JOAO MIGUEL LEAL',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 11,
+    estudante: 'JOAO MIGUEL LEAL',
+    ra: '124681606',
+    digRa: '4',
+    ufRa: 'SP',
+    dataNascimento: '15/05/2021',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'MEU PRIMEIRO PASSO ESCOLA DE EDUCACAO INFANTIL [G5]',
+    irmaos: 'GIULIA ANTONELLA LEAL [5B - MANHÃ]',
+    idade: '5 ANOS, 4 MESES E 17 DIAS',
+    arquivo: '10141',
+    filiacao1: 'MONIQUE DE MELO AGUIAR',
+    filiacao2: 'CESAR APARECIDO LEAL',
+    genero: 'MASCULINO',
+    tipoSanguineo: 'B+',
+    racaCor: 'PRETA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '593.590.768-21',
+    cep: '13.214-350',
+    logradouro: 'RUA GUARANESIA',
+    numeroResidencia: '125',
+    bairro: 'CIDADE SANTOS DUMONT',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    telefones: '(11) 94964-9844 / (11) 98296-6682',
+    emailMunicipal: 'joao.leal@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'MONIQUE DE MELO AGUIAR',
+    guardianPhone: '(11) 94964-9844',
+    status: 'absent',
+    totalAbsencesMonth: 10,
+    justifiedAbsences: 0,
+    consecutiveAbsenceAlert: {
+      active: true,
+      selectedDates: ['14/10', '18/10', '19/10', '20/10', '21/10', '22/10', '25/10', '26/10', '27/10', '28/10'],
+      reportedAt: '28/10/2027 às 09:50',
+      occurrences: [
+        {
+          id: 'occ-g4a-s11-10d',
+          sequenceNumber: 1,
+          selectedDates: ['14/10', '18/10', '19/10', '20/10', '21/10', '22/10', '25/10', '26/10', '27/10', '28/10'],
+          reportedAt: '28/10/2027 às 09:50',
+          monthLabel: 'Outubro/2027',
+        },
+      ],
+    },
+    alert: 'Crítico: 10 faltas consecutivas',
+    initials: 'JL',
+  },
+  {
+    id: 'g4a-s12',
+    number: 12,
+    name: 'MALU DE MELO MOTTA',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 12,
+    estudante: 'MALU DE MELO MOTTA',
+    ra: '124272932',
+    digRa: 'X',
+    ufRa: 'SP',
+    dataNascimento: '25/01/2022',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'CARLA ANDRESSA DE OLIVEIRA SINIGALIA [3C] ● JUNDIAI/SP',
+    idade: '4 ANOS, 8 MESES E 7 DIAS',
+    arquivo: '10217',
+    filiacao1: 'JOYCE CRISTINA SILVA',
+    filiacao2: 'CHRISTIAN DE MELO MOTTA',
+    genero: 'FEMININO',
+    tipoSanguineo: 'B+',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '599.913.888-42',
+    cep: '13.214-220',
+    logradouro: 'RUA DOUTOR CANDIDO MOJOLA',
+    numeroResidencia: '1017',
+    bairro: 'JARDIM BUFALO',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'malu.motta@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'JOYCE CRISTINA SILVA',
+    guardianPhone: '(11) 98444-5566',
+    status: 'present',
+    totalAbsencesMonth: 1,
+    justifiedAbsences: 0,
+    initials: 'MM',
+  },
+  {
+    id: 'g4a-s13',
+    number: 13,
+    name: 'MARIA CLARA VIEIRA DA SILVA',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 13,
+    estudante: 'MARIA CLARA VIEIRA DA SILVA',
+    ra: '123528501',
+    digRa: '7',
+    ufRa: 'SP',
+    dataNascimento: '07/05/2021',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'MAE MEIMEI CRECHE [2B] ● JUNDIAI/SP',
+    idade: '5 ANOS, 4 MESES E 25 DIAS',
+    arquivo: '10221',
+    filiacao1: 'PAULO DOS SANTOS SILVA',
+    filiacao2: 'JAYNE VIEIRA DA SILVA',
+    genero: 'FEMININO',
+    racaCor: 'NAO DECLARADA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '593.403.018-38',
+    cep: '13.214-304',
+    logradouro: 'RUA PROFESSORA GERALDA BERTHOLA FACCA',
+    numeroResidencia: '254',
+    bairro: 'VILA HORTOLANDIA',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'maria.silva0705@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'JAYNE VIEIRA DA SILVA',
+    guardianPhone: '(11) 98333-6677',
+    status: 'present',
+    totalAbsencesMonth: 0,
+    justifiedAbsences: 0,
+    initials: 'MS',
+  },
+  {
+    id: 'g4a-s14',
+    number: 14,
+    name: 'MARIA JULIA LIMA DA SILVA',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 14,
+    estudante: 'MARIA JULIA LIMA DA SILVA',
+    ra: '124891814',
+    digRa: '9',
+    ufRa: 'SP',
+    dataNascimento: '26/06/2021',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    procedenciaEscolar: 'CARLA ANDRESSA DE OLIVEIRA SINIGALIA [3B] ● JUNDIAI/SP',
+    idade: '5 ANOS, 3 MESES E 6 DIAS',
+    arquivo: '10223',
+    filiacao1: 'HORTENCIA FARIAS DA SILVA',
+    filiacao2: 'DEYVISSON JUNIO PEREIRA LIMA',
+    genero: 'FEMININO',
+    tipoSanguineo: 'B+',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '594.517.228-66',
+    rg: '68.196.930-1',
+    dataEmissaoRg: '07/07/2022',
+    cep: '13.214-220',
+    logradouro: 'RUA DOUTOR CANDIDO MOJOLA',
+    numeroResidencia: '685',
+    bairro: 'JARDIM BUFALO',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'maria.silva2606@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'HORTENCIA FARIAS DA SILVA',
+    guardianPhone: '(11) 98222-7788',
+    status: 'present',
+    totalAbsencesMonth: 0,
+    justifiedAbsences: 0,
+    initials: 'ML',
+  },
+  {
+    id: 'g4a-s15',
+    number: 15,
+    name: 'MARIANA FAZZIO IZAIAS',
+    tipoEnsino: 'EDUCACAO INFANTIL',
+    serie: '1',
+    numeroChamada: 15,
+    estudante: 'MARIANA FAZZIO IZAIAS',
+    ra: '126112304',
+    digRa: '9',
+    ufRa: 'SP',
+    dataNascimento: '17/01/2022',
+    turma: 'G4A',
+    periodo: 'MANHÃ',
+    dataMatriculaSed: '03/02/2026',
+    irmaos: 'ANA CLARA FAZZIO IZAIAS [1C - MANHÃ]',
+    idade: '4 ANOS, 8 MESES E 15 DIAS',
+    arquivo: '10079',
+    filiacao1: 'JAQUELINE MARCONDES FAZZIO IZAIAS',
+    filiacao2: 'ANDERSON TIAGO IZAIAS',
+    genero: 'FEMININO',
+    tipoSanguineo: 'O+',
+    racaCor: 'BRANCA',
+    nacionalidade: 'BRASILEIRA',
+    municipioNascimento: 'JUNDIAI - SP',
+    cpf: '599.565.928-62',
+    rg: '68.414.558-3',
+    dataEmissaoRg: '13/09/2022',
+    cep: '13.214-120',
+    logradouro: 'RUA ANTONIO MAXIMILIANO DE ALMEIDA',
+    numeroResidencia: '76',
+    complemento: 'TP 2 AP 95',
+    bairro: 'CIDADE LUIZA',
+    cidade: 'JUNDIAI',
+    uf: 'SP',
+    emailMunicipal: 'mariana.izaias@aluno.educacao.jundiai.sp.gov.br',
+    guardianName: 'JAQUELINE MARCONDES FAZZIO IZAIAS',
+    guardianPhone: '(11) 98111-8899',
+    status: 'present',
+    totalAbsencesMonth: 1,
+    justifiedAbsences: 0,
+    initials: 'MI',
+  },
+];
+
+// Helper to generate realistic SED-modeled students for any class
+export const generateSedStudentsForClass = (
+  classId: string,
+  className: string,
+  grade: string,
+  shift: 'Turno Manhã' | 'Turno Tarde',
+  count: number
+): Student[] => {
+  // If it's GRUPO 04 A, return the official 15 students
+  if (classId === 'g04a' || classId === 'g4a') {
+    return REAL_G4A_STUDENTS.map((s) => ({ ...s, turma: 'GRUPO 04 A' }));
+  }
+
+  const isInfantil = className.startsWith('GRUPO') || className.startsWith('G4') || className.startsWith('G5');
+  const tipoEnsino = isInfantil ? 'EDUCACAO INFANTIL' : 'ENSINO FUNDAMENTAL';
+  const serie = isInfantil ? (className.includes('04') ? '1' : '2') : className.replace(/[^0-9]/g, '') || '1';
+  const periodo = shift === 'Turno Manhã' ? 'MANHÃ' : 'TARDE';
+
+  const realPhotoFolderNames = [
+    'ANA LAURA RODRIGUES CUSTODIO',
+    'RAUANNY GRAZIELLY DA SILVA LIMA',
+    'ADRIAN DA SILVA SANTOS',
+    'ADRIELLY LOPES OCTAVIANO',
+    'ADRYAN GABRIEL ZAFALON MACHADO',
+    'ADRYAN PIETRO FERNANDES MARIANO',
+    'ARTHUR PIETRO FERRAZ ALVES',
+    'BEATRIZ KANESI MARION',
+    'BRENDA MIKAELLY DA SILVA JESUS',
+    'BRYAN VIZOTO MILITAO',
+    'DAVI VELO NASCIMENTO',
+    'HEITOR GABRIEL ORLANDO DE ANDRADE',
+    'HELENA ROSA DAMAZIO DE ASSIS',
+    'ISIS OLIVEIRA MARQUES',
+    'JOAO GABRIEL DA SILVA DE OLIVEIRA',
+    'JOSE ARTHUR ALVES DE ARAUJO',
+    'LORENA ALVES RODRIGUES',
+    'LORENA GABRIELLY SIQUEIRA DA SILVA',
+    'MARIA LUCIA DA SILVA COUTINHO',
+    'MARIAH MELO MACHADO',
+    'MIGUEL ENRICO FERREIRA BARRETO',
+    'PEDRO HENRIQUE TAVARES LEAO',
+    'RICHARD ALEXANDRE ALVES DE SOUZA',
+    'RICHELME APARECIDO ALVES DA SILVA',
+    'THAYLLA HELOISE SANTOS BARBOSA',
+    'ARTHUR LEVI GOMES DOS SANTOS',
+    'ALANA BORCAL MAZOLLI',
+    'ANNY VITORIA SILVA LOPES',
+    'ARTHUR ANDRES FLORES DINIZ',
+    'ARTUR SANTOS SIVI',
+    'DAVI DE OLIVEIRA SOUSA',
+    'GIOVANNA DA SILVA FRANCA',
+    'ISABELA ROSA DA SILVA',
+    'BRENO VIZOTO MILITAO',
+    'ISABELA SILVA FERRAGE',
+    'LAVINIA DE SOUZA PINHEIRO',
+    'MANUELLA RIBEIRO PEREIRA',
+    'MARIA VICTORIA LUCENA DA SILVA DE MENDONCA',
+    'MELISSA GARCIA AGUIARI',
+    'NOAH DIONISIO DE SOUZA',
+    'RAUL MATSUMOTO KESPERS',
+    'YAGO DOS SANTOS VARGAS',
+    'YNGRID DO NASCIMENTO SILVA',
+    'AGNES PISONI CAPOBIANCO',
+    'DAVI LUAN AQUINO DE SOUZA',
+    'GAEL CARDOSO TAVARES',
+    'JOAO MIGUEL MARTINS SILVA',
+    'JOAO PAULO MARQUES MONTEIRO',
+    'LAIS ARANHA RODRIGUES',
+    'LETICIA MARTINEZ ARA BASILIO',
+    'LUIGI MAZALA SANTANA',
+  ];
+
+  const realisticMothersNames = [
+    'PATRICIA GRAZIELLY DA SILVA LIMA',
+    'CAMILA DA SILVA SANTOS',
+    'VANESSA LOPES OCTAVIANO',
+    'JULIANA ZAFALON MACHADO',
+    'FERNANDA FERNANDES MARIANO',
+    'CRISTIANE FERRAZ ALVES',
+    'LUCIANA KANESI MARION',
+    'ADRIANA DA SILVA JESUS',
+    'TATIANE VIZOTO MILITAO',
+    'DANIELA VELO NASCIMENTO',
+    'RENATA ORLANDO DE ANDRADE',
+    'SIMONE ROSA DAMAZIO DE ASSIS',
+    'PRISCILA OLIVEIRA MARQUES',
+    'MARCIA DA SILVA DE OLIVEIRA',
+    'CLAUDIA ALVES DE ARAUJO',
+    'ELIANE ALVES RODRIGUES',
+    'SOLANGE SIQUEIRA DA SILVA',
+    'ROSANGELA DA SILVA COUTINHO',
+    'ALINE MELO MACHADO',
+    'DEBORA FERREIRA BARRETO',
+    'CAROLINA TAVARES LEAO',
+    'MONICA ALVES DE SOUZA',
+    'VIVIANE APARECIDA ALVES DA SILVA',
+    'ROBERTA SANTOS BARBOSA',
+    'LETICIA GOMES DOS SANTOS',
+    'SANDRA BORCAL MAZOLLI',
+    'BEATRIZ SILVA LOPES',
+    'GABRIELA FLORES DINIZ',
+    'RAQUEL SANTOS SIVI',
+    'MICHELE DE OLIVEIRA SOUSA',
+  ];
+
+  const realisticFathersNames = [
+    'MARCOS ROBERTO LIMA',
+    'RODRIGO APARECIDO DOS SANTOS',
+    'ANDERSON OCTAVIANO',
+    'CARLOS EDUARDO MACHADO',
+    'PAULO HENRIQUE MARIANO',
+    'LEANDRO FERRAZ ALVES',
+    'RICARDO MARION',
+    'JOSE CARLOS DE JESUS',
+    'MARCELO MILITAO',
+    'FABIO VELO NASCIMENTO',
+    'ALEXANDRE DE ANDRADE',
+    'SERGIO DAMAZIO DE ASSIS',
+    'GUSTAVO OLIVEIRA MARQUES',
+    'ANTONIO CARLOS DE OLIVEIRA',
+    'ROBERTO ALVES DE ARAUJO',
+    'DOUGLAS RODRIGUES',
+    'FERNANDO SIQUEIRA DA SILVA',
+    'EDSON COUTINHO',
+    'THIAGO MELO MACHADO',
+    'RAFAEL FERREIRA BARRETO',
+    'HENRIQUE TAVARES LEAO',
+    'CLAUDIO ALVES DE SOUZA',
+    'WILSON ALVES DA SILVA',
+    'WAGNER SANTOS BARBOSA',
+    'DIEGO GOMES DOS SANTOS',
+    'LUIS FERNANDO MAZOLLI',
+    'CRISTIANO SILVA LOPES',
+    'JORGE FLORES DINIZ',
+    'VITOR SANTOS SIVI',
+    'DANIEL DE OLIVEIRA SOUSA',
+  ];
+
+  const offset = classId === 'g4c' || classId === 'g04c' ? 25 : 0;
+
+  const students: Student[] = [];
+  for (let i = 1; i <= count; i++) {
+    const name = realPhotoFolderNames[(offset + i - 1) % realPhotoFolderNames.length];
+    const motherName = realisticMothersNames[(offset + i - 1) % realisticMothersNames.length];
+    const fatherName = realisticFathersNames[(offset + i - 1) % realisticFathersNames.length];
+    const initials = name.split(' ').map((p) => p[0]).slice(0, 2).join('');
+    const raNumber = 124000000 + i * 173 + (classId.charCodeAt(0) * 11);
+    const digRa = ((i * 7) % 10).toString();
+    const cleanEmailName = name.toLowerCase().split(' ').slice(0, 2).join('.');
+
+    let absences = 0;
+    let consecutiveAlert: Student['consecutiveAbsenceAlert'] = undefined;
+    if (i === 4) {
+      absences = isInfantil ? 10 : 10; // Marca de 10 dias consecutivos (Crítico 10+ dias)
+      const dates10 = ['14/10', '18/10', '19/10', '20/10', '21/10', '22/10', '25/10', '26/10', '27/10', '28/10'];
+      consecutiveAlert = {
+        active: true,
+        selectedDates: dates10,
+        reportedAt: '28/10/2027 às 08:15',
+        occurrences: [
+          {
+            id: `occ-10d-${classId}-s${i}`,
+            sequenceNumber: 1,
+            selectedDates: dates10,
+            reportedAt: '28/10/2027 às 08:15',
+            monthLabel: 'Outubro/2027',
+          },
+        ],
+      };
+    } else if (i === 8) {
+      absences = 5; // Marca de 5 dias consecutivos (Alerta Severo 5+ dias)
+      const dates5 = ['22/10', '25/10', '26/10', '27/10', '28/10'];
+      consecutiveAlert = {
+        active: true,
+        selectedDates: dates5,
+        reportedAt: '28/10/2027 às 09:30',
+        occurrences: [
+          {
+            id: `occ-5d-${classId}-s${i}`,
+            sequenceNumber: 1,
+            selectedDates: dates5,
+            reportedAt: '28/10/2027 às 09:30',
+            monthLabel: 'Outubro/2027',
+          },
+        ],
+      };
+    } else if (i === 11) {
+      absences = 3; // Marca de 3 dias consecutivos (Atenção 3+ dias)
+      const dates3 = ['26/10', '27/10', '28/10'];
+      consecutiveAlert = {
+        active: true,
+        selectedDates: dates3,
+        reportedAt: '28/10/2027 às 10:10',
+        familyFeedback: 'Família contatada via WhatsApp: criança em observação médica.',
+        occurrences: [
+          {
+            id: `occ-3d-${classId}-s${i}`,
+            sequenceNumber: 1,
+            selectedDates: dates3,
+            reportedAt: '28/10/2027 às 10:10',
+            familyFeedback: 'Família contatada via WhatsApp: criança em observação médica.',
+            monthLabel: 'Outubro/2027',
+          },
+        ],
+      };
+    }
+
+    // Simular recorte real de matrícula dentro do mês (ativos, transferidos BXTR e remanejados REMAN)
+    const enteredLate = i === 5;
+    const isTransferred = i === 10;
+    const isRemanejado = i === 15 && count >= 18;
+    const nisNumber = `204.${(10000 + i * 317).toString().slice(0, 5)}.${(80 + (i % 19)).toString()}-${i % 9}`;
+
+    students.push({
+      id: `${classId}-s${i}`,
+      number: i,
+      name,
+      tipoEnsino,
+      serie,
+      numeroChamada: i,
+      estudante: name,
+      ra: raNumber.toString(),
+      digRa,
+      ufRa: 'SP',
+      dataNascimento: isInfantil ? `15/0${(i % 9) + 1}/2021` : `10/0${(i % 9) + 1}/2018`,
+      turma: className,
+      periodo,
+      dataMatriculaSed: enteredLate ? '14/10/2027' : '03/02/2027',
+      situacao: isTransferred ? 'BXTR' : isRemanejado ? 'REMAN' : 'ATIVO',
+      dataMovimentacao: isTransferred
+        ? '19/10/2027'
+        : isRemanejado
+        ? '16/10/2027'
+        : undefined,
+      diasLetivosRecorte: enteredLate ? 12 : isTransferred ? 11 : isRemanejado ? 14 : 20,
+      idade: isInfantil ? '5 ANOS' : '8 ANOS',
+      arquivo: (10150 + i).toString(),
+      filiacao1: motherName,
+      filiacao2: fatherName,
+      genero: i % 2 === 0 ? 'FEMININO' : 'MASCULINO',
+      tipoSanguineo: i % 3 === 0 ? 'A+' : i % 2 === 0 ? 'O+' : 'B+',
+      racaCor: i % 4 === 0 ? 'PARDA' : i % 5 === 0 ? 'PRETA' : 'BRANCA',
+      nacionalidade: 'BRASILEIRA',
+      municipioNascimento: 'JUNDIAI - SP',
+      cpf: `59${Math.floor(100 + i * 11)}.${Math.floor(200 + i * 13)}.888-${Math.floor(10 + i)}`,
+      nis: nisNumber,
+      cartaoSus: `700.00${10 + i}.8899.00${10 + i}`,
+      cep: '13.214-220',
+      logradouro: 'RUA DOUTOR CANDIDO MOJOLA',
+      numeroResidencia: (100 + i * 7).toString(),
+      bairro: 'JARDIM BUFALO',
+      cidade: 'JUNDIAI',
+      uf: 'SP',
+      telefones: `(11) 9${Math.floor(7000 + i * 83)}-${Math.floor(1000 + i * 27)}`,
+      emailMunicipal: `${cleanEmailName}@aluno.educacao.jundiai.sp.gov.br`,
+      guardianName: motherName,
+      guardianPhone: `(11) 9${Math.floor(7000 + i * 83)}-${Math.floor(1000 + i * 27)}`,
+      status: absences > 0 ? 'absent' : 'present',
+      totalAbsencesMonth: absences,
+      justifiedAbsences: 0,
+      consecutiveAbsenceAlert: consecutiveAlert,
+      alert:
+        absences >= (isInfantil ? 9 : 6)
+          ? `Alerta Bolsa Família / LDB: Presença abaixo de ${isInfantil ? '60%' : '75%'}`
+          : undefined,
+      initials,
+    });
+  }
+  return students;
+};
+
+// 40 official classes configuration for 2027 (single source of truth derived from OFFICIAL_SCHOOL_MATRIX_2027):
+export const OFFICIAL_2027_CLASSES_CONFIG = OFFICIAL_SCHOOL_MATRIX_2027.map((row) => ({
+  ...row,
+  totalStudents: row.sedExpectedStudents,
+}));
+
+export const INITIAL_CLASSES: ClassGroup[] = OFFICIAL_SCHOOL_MATRIX_2027.map((cfg) => ({
+  id: cfg.id,
+  name: cfg.name,
+  turmaAbrev: cfg.turmaAbrev,
+  grade: cfg.grade,
+  shift: cfg.shift,
+  room: cfg.room,
+  teacherName: cfg.teacherName,
+  teacherEmail: cfg.teacherEmail,
+  pronoun: cfg.pronoun,
+  teacherFirstName: cfg.teacherFirstName,
+  sedClassName: cfg.sedClassName,
+  sedExpectedStudents: cfg.sedExpectedStudents,
+  classeSedCode: cfg.classeSedCode,
+  artTeacher: cfg.artTeacher,
+  peTeacher: cfg.peTeacher,
+  englishTeacher: cfg.englishTeacher,
+  totalStudents: 0,
+  presenceRate: 0,
+  statusText: 'Aguardando importação de estudantes',
+  isPending: false,
+  students: [],
+  monthlyAbsences: 0,
+  classesHeld: 20,
+  classesPlanned: 20,
+  monthlySchoolDays: getDefaultMonthlySchoolDaysMap(),
+  weeklyPerformance: [],
+  pedagogicalNotes: '',
+  isVaga: Boolean(cfg.isVaga),
+  periodo: cfg.periodo,
+}));
+
+export const TOTAL_STUDENTS_COUNT = 0;
+
+export const DEFAULT_SHEET_CONFIG: GoogleSheetConfig = {
+  sheetUrl: 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit',
+  sheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+  sheetName: 'Diário_Oficial_EMEB_Joaquim_Candelario_2027',
+  lastSync: 'Aguardando sincronização',
+  status: 'connected',
+  rowsCount: 0,
+  isAutoSyncEnabled: true,
+  activeTabId: 'frequencia',
+  tabs: [
+    {
+      id: 'frequencia',
+      name: 'Frequência_Mensal_2027',
+      description: 'Registro consolidado com modelagem SED dos estudantes das 40 turmas',
+      rowsCount: 0,
+    },
+    {
+      id: 'dias_letivos',
+      name: 'Dias_Letivos_Calendário_SME_2027',
+      description: 'Calendário de dias letivos, feriados e reuniões pedagógicas SME Jundiaí',
+      rowsCount: 31,
+    },
+    {
+      id: 'turmas',
+      name: 'Turmas_Salas_Horarios_2027',
+      description: 'Relação das 40 turmas ativas (Manhã e Tarde) de 2027',
+      rowsCount: 40,
+    },
+  ],
+};
+
+export const generateSheetRowsFromClasses = (classes: ClassGroup[]): SheetRowData[] => {
+  const rows: SheetRowData[] = [];
+  classes.forEach((c) => {
+    const diasLetivosMes = c.classesHeld || 20;
+    const isInfantil =
+      c.name.toUpperCase().startsWith('GRUPO') ||
+      c.grade.toUpperCase().includes('INFANTIL');
+    const tipoEnsino: 'EDUCACAO INFANTIL' | 'ENSINO FUNDAMENTAL' = isInfantil
+      ? 'EDUCACAO INFANTIL'
+      : 'ENSINO FUNDAMENTAL';
+
+    c.students.forEach((s, sIdx) => {
+      const m = getStudentAttendanceMetrics(s, diasLetivosMes, OFFICIAL_OCTOBER_DAYS);
+      const faltasSemAtestado = Math.max(0, m.faltas - m.atestados);
+      const percentFaltas =
+        m.diasLetivosMatriculados > 0
+          ? Math.round((m.faltas / m.diasLetivosMatriculados) * 100)
+          : 0;
+      const percentAtestadosSobreFaltas =
+        m.faltas > 0 ? Math.round((m.atestados / m.faltas) * 100) : 0;
+      const percentAtestadosSobreDias =
+        m.diasLetivosMatriculados > 0
+          ? Math.round((m.atestados / m.diasLetivosMatriculados) * 100)
+          : 0;
+
+      const consecInfo = getStudentConsecutiveAlertInfo(s);
+
+      rows.push({
+        id: `${c.id}-${s.id || `s${sIdx + 1}`}-idx${sIdx}`,
+        studentId: s.id,
+        classId: c.id,
+        tipoEnsino,
+        etapaSerie: c.grade,
+        turma: c.name,
+        turno: c.shift.replace('Turno ', ''),
+        sala: c.room,
+        numero: s.number,
+        nome: s.name,
+        fotoUrl: s.photo || '',
+        fichaPdfDriveId: s.fichaPdfDriveId || '',
+        fichaPdfDriveUrl: s.fichaPdfDriveUrl || '',
+        ra: s.ra || '',
+        digRa: s.digRa || '',
+        ufRa: s.ufRa || 'SP',
+        deficiencia: s.deficiencia || '',
+        diasLetivosMes: m.diasLetivosMes,
+        diasLetivosMatriculados: m.diasLetivosMatriculados,
+        presencasMes: m.presencas,
+        recorteInfo: m.recorteLabel,
+        dataMatricula: s.dataMatriculaSed || '03/02/2027',
+        dataMovimentacao: s.dataMovimentacao || '',
+        faltasMes: m.faltas,
+        faltasJustificadas: m.atestados,
+        faltasSemAtestado,
+        percentFaltas,
+        percentAtestadosSobreFaltas,
+        percentAtestadosSobreDias,
+        frequenciaPercent: m.frequenciaPercent,
+        situacao: m.isBelowLegalThreshold
+          ? `Alerta <${m.minLegalPresencePercent}% (${m.isEducacaoInfantil ? 'Ed. Infantil' : 'Ens. Fund.'})`
+          : !m.isMesCheio
+          ? `Recorte Parcial (${m.diasLetivosMatriculados}/${m.diasLetivosMes}d)`
+          : m.frequenciaPercent === 100
+          ? '100% Presença'
+          : `Regular (≥${m.minLegalPresencePercent}%)`,
+        observacoesAtestado: s.notes || '',
+        filiacao1: s.filiacao1 || s.guardianName || 'Não informado',
+        filiacao2: s.filiacao2 || 'Não informado',
+        genero: s.genero || '',
+        emailMunicipal: s.emailMunicipal || '',
+        responsavel: s.filiacao1 || s.guardianName || 'Não informado',
+        telefone: s.telefones || s.guardianPhone || '(11) 98765-4321',
+        consecutiveDays: consecInfo.days,
+        consecutiveTier: consecInfo.tier,
+        consecutiveSelectedDates: consecInfo.selectedDates,
+        consecutiveFamilyFeedback: consecInfo.familyFeedback || '',
+      });
+    });
+  });
+  return rows;
+};

@@ -1,0 +1,133 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Official student enrollment and attendance record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 200 },
+        "ra": { "type": "string", "maxLength": 30 },
+        "digRa": { "type": "string", "maxLength": 10 },
+        "number": { "type": "number" },
+        "situation": { "type": "string", "maxLength": 50 },
+        "totalAbsencesMonth": { "type": "number" },
+        "justifiedAbsences": { "type": "number" },
+        "diasLetivosRecorte": { "type": "number" },
+        "photoSha256": { "type": "string", "maxLength": 128 },
+        "fichaPdfSha256": { "type": "string", "maxLength": 128 },
+        "updatedAtMs": { "type": "number" },
+        "isDeleted": { "type": "boolean" }
+      },
+      "required": ["id", "name"]
+    },
+    "ClassGroup": {
+      "title": "ClassGroup",
+      "description": "Class group entity containing students, teacher ownership, and class metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "grade": { "type": "string", "maxLength": 100 },
+        "shift": { "type": "string", "maxLength": 50 },
+        "room": { "type": "string", "maxLength": 50 },
+        "teacherEmail": { "type": "string", "maxLength": 160 },
+        "authorizedTeacherEmails": { "type": "array" },
+        "totalStudents": { "type": "number" },
+        "classesHeld": { "type": "number" },
+        "classesPlanned": { "type": "number" },
+        "updatedAtMs": { "type": "number" },
+        "version": { "type": "number" },
+        "isDeleted": { "type": "boolean" }
+      },
+      "required": ["id", "name", "shift"]
+    },
+    "SchoolMeta": {
+      "title": "SchoolMeta",
+      "description": "Central metadata configuration, authorization lists, notices, and epoch state",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "updatedAtMs": { "type": "number" },
+        "classesUpdatedAtMs": { "type": "number" },
+        "epochUpdatedAtMs": { "type": "number" },
+        "epochVersion": { "type": "number" },
+        "updatedAtISO": { "type": "string", "maxLength": 40 },
+        "cleanResetEpochId": { "type": "string", "maxLength": 128 },
+        "version": { "type": "number" },
+        "authorizedUsers": { "type": "array" },
+        "accessSessionLogs": { "type": "array" },
+        "attendanceWindowConfig": { "type": "object" },
+        "schoolNotices": { "type": "array" },
+        "cloudLinks": { "type": "object" },
+        "discoveredNominalPdfs": { "type": "array" },
+        "discoveredDrivePhotos": { "type": "array" },
+        "genderDictionary": { "type": "array" }
+      },
+      "required": ["updatedAtMs"]
+    },
+    "FcmDeviceToken": {
+      "title": "FcmDeviceToken",
+      "description": "FCM Web Push device subscription metadata per institutional teacher/staff member",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 160 },
+        "userName": { "type": "string", "maxLength": 160 },
+        "userRole": { "type": "string", "maxLength": 30 },
+        "teacherRoleType": { "type": "string", "maxLength": 30 },
+        "assignedClassIds": { "type": "array" },
+        "fcmToken": { "type": "string", "maxLength": 512 },
+        "vapidSource": { "type": "string", "maxLength": 30 },
+        "channel": { "type": "string", "maxLength": 30 },
+        "permission": { "type": "string", "maxLength": 30 },
+        "deviceLabel": { "type": "string", "maxLength": 80 },
+        "active": { "type": "boolean" },
+        "createdAtISO": { "type": "string", "maxLength": 40 },
+        "updatedAtMs": { "type": "number" }
+      },
+      "required": ["id", "userEmail", "channel", "active", "updatedAtMs"]
+    },
+    "FcmWindowAlert": {
+      "title": "FcmWindowAlert",
+      "description": "Attendance launch window closing push alert broadcast",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 180 },
+        "body": { "type": "string", "maxLength": 600 },
+        "category": { "type": "string", "maxLength": 30 },
+        "urgency": { "type": "string", "maxLength": 20 },
+        "targetScreen": { "type": "string", "maxLength": 50 },
+        "targetClassIds": { "type": "array" },
+        "targetAudience": { "type": "string", "maxLength": 30 },
+        "closingDateFormatted": { "type": "string", "maxLength": 30 },
+        "windowPhase": { "type": "string", "maxLength": 40 },
+        "createdAtMs": { "type": "number" },
+        "createdAtISO": { "type": "string", "maxLength": 40 },
+        "createdByEmail": { "type": "string", "maxLength": 160 },
+        "createdByName": { "type": "string", "maxLength": 160 },
+        "pendingClassesCount": { "type": "number" }
+      },
+      "required": ["id", "title", "body", "category", "urgency", "createdAtMs", "createdByEmail"]
+    }
+  },
+  "firestore": {
+    "/school_classes_2027/{classId}": {
+      "schema": "ClassGroup",
+      "description": "Classes collection partitioned by class identifier (40 classes, <1MB each)"
+    },
+    "/school_meta_2027/{docId}": {
+      "schema": "SchoolMeta",
+      "description": "School operational metadata, calendar config, users, and audit state"
+    },
+    "/school_fcm_tokens_2027/{subscriptionId}": {
+      "schema": "FcmDeviceToken",
+      "description": "Registered FCM Web Push tokens and notification channel state per user device"
+    },
+    "/school_fcm_alerts_2027/{alertId}": {
+      "schema": "FcmWindowAlert",
+      "description": "Attendance closing window FCM push alerts dispatched to teachers"
+    }
+  }
+}

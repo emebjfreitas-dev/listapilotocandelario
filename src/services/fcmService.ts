@@ -1,0 +1,1475 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import {
+  getMessaging,
+  getToken,
+  onMessage,
+  deleteToken,
+  isSupported as isMessagingSupported,
+  Messaging,
+  MessagePayload,
+} from 'firebase/messaging';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+} from 'firebase/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
+import {
+  AttendanceWindowConfig,
+  AuthorizedUser,
+  ClassGroup,
+  FcmDeviceSubscription,
+  FcmSystemConfig,
+  FcmWindowAlert,
+  ScreenType,
+  UserRole,
+} from '../types';
+import { toast } from 'sonner';
+import {
+  evaluateAttendanceLaunchWindow,
+  evaluateClassEndOfDayReminder,
+  ClassEndOfDayReminderEvaluation,
+  getActiveUserAuthHeadersAsync,
+} from './db';
+import {
+  commitViaUnaryTransaction,
+  firestoreDb,
+  handleFirestoreError,
+  isFirestoreQuotaExceeded,
+  OperationType,
+  stripUndefinedDeep,
+} from './firebaseSync';
+import { isBackendApiAvailable } from './apiEnvironment';
+import {
+  PushNoticeItem,
+  getPushPermissionState,
+  getReadPushNoticeIds,
+  getStoredPushPreferences,
+  registerPushServiceWorker,
+  saveStoredPushPreferences,
+  triggerPushNotification,
+} from './pushNotificationService';
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+const FCM_TOKEN_STORAGE_KEY = 'emeb_candelario_fcm_device_token_v1';
+const PUSH_SUB_ACTIVE_STORAGE_KEY = 'emeb_candelario_webpush_active_v1';
+const FCM_CONFIG_STORAGE_KEY = 'emeb_candelario_fcm_system_config_v1';
+const FCM_SEEN_ALERTS_STORAGE_KEY = 'emeb_candelario_fcm_seen_alerts_v1';
+const FCM_DAILY_WINDOW_REMINDER_KEY = 'emeb_candelario_fcm_window_reminder_day_v1';
+const FCM_EOD_TEACHER_REMINDER_KEY = 'emeb_candelario_eod_teacher_reminder_v1';
+
+const DEFAULT_FCM_CONFIG: FcmSystemConfig = {
+  vapidPublicKey: '',
+  autoWindowAlertsEnabled: true,
+  notifyDaysBeforeClose: 2,
+  remindPendingTeachersOnly: true,
+};
+
+let messagingInstance: Messaging | null = null;
+
+export interface FcmRegistrationResult {
+  ok: boolean;
+  supported: boolean;
+  channel: 'fcm_push' | 'sw_realtime';
+  fcmToken: string | null;
+  hasPushSubscription: boolean;
+  permission: NotificationPermission | 'unsupported';
+  swReady: boolean;
+  message: string;
+}
+
+export interface FcmBackendStatus {
+  autoConfigured?: boolean;
+  autoVapidPublicKey?: string;
+  hasServiceAccountConfigured: boolean;
+  hasFirebaseAdminAccount?: boolean;
+  hasViteVapidKey?: boolean;
+  fcmHttpV1Ready?: boolean;
+  firebaseProjectId?: string | null;
+  hasVapidKey: boolean;
+  totalRegisteredDevices: number;
+  activeFcmTokensCount: number;
+  realFcmTokensCount?: number;
+  teachersCoveredEmails: string[];
+  recentDispatches: FcmWindowAlert[];
+  fcmConfig: FcmSystemConfig;
+  tokensSummary: Array<{
+    id: string;
+    userEmail: string;
+    userName: string;
+    userRole: UserRole;
+    assignedClassIds: string[];
+    channel: 'fcm_push' | 'sw_realtime';
+    deviceLabel: string;
+    active: boolean;
+    updatedAtMs: number;
+    hasFcmToken: boolean;
+    hasNativeFcmToken?: boolean;
+  }>;
+}
+
+export function getFcmDeviceSubscriptionId(email: string): string {
+  const clean = (email || 'anonimo')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '_')
+    .slice(0, 90);
+  return `fcm_sub_${clean}`;
+}
+
+export function getStoredFcmToken(): string | null {
+  try {
+    return localStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredFcmToken(token: string | null): void {
+  try {
+    if (token) {
+      localStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+function getStoredPushSubscriptionActive(): boolean {
+  try {
+    return localStorage.getItem(PUSH_SUB_ACTIVE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setStoredPushSubscriptionActive(active: boolean): void {
+  try {
+    if (active) {
+      localStorage.setItem(PUSH_SUB_ACTIVE_STORAGE_KEY, '1');
+    } else {
+      localStorage.removeItem(PUSH_SUB_ACTIVE_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const buffer = new ArrayBuffer(rawData.length);
+  const outputArray = new Uint8Array(buffer);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function areApplicationServerKeysEqual(
+  existingKey: ArrayBuffer | null | undefined,
+  expectedBase64Url: string
+): boolean {
+  if (!existingKey || !expectedBase64Url) return false;
+  try {
+    const existingBytes = new Uint8Array(existingKey);
+    const expectedBytes = urlBase64ToUint8Array(expectedBase64Url);
+    if (existingBytes.length !== expectedBytes.length) return false;
+    for (let i = 0; i < existingBytes.length; i++) {
+      if (existingBytes[i] !== expectedBytes[i]) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchAutoVapidKeysFromServer(): Promise<{
+  publicKey: string;
+  firebaseVapidKey: string;
+}> {
+  if (!isBackendApiAvailable()) {
+    return { publicKey: '', firebaseVapidKey: '' };
+  }
+  try {
+    const authHeaders = await getActiveUserAuthHeadersAsync();
+    const res = await fetch('/api/fcm/vapid-public-key', {
+      headers: authHeaders,
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!res.ok) return { publicKey: '', firebaseVapidKey: '' };
+    const data = await res.json();
+    return {
+      publicKey: typeof data?.publicKey === 'string' ? data.publicKey.trim() : '',
+      firebaseVapidKey:
+        typeof data?.firebaseVapidKey === 'string' ? data.firebaseVapidKey.trim() : '',
+    };
+  } catch {
+    return { publicKey: '', firebaseVapidKey: '' };
+  }
+}
+
+export function getStoredFcmSystemConfig(): FcmSystemConfig {
+  try {
+    const raw = localStorage.getItem(FCM_CONFIG_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_FCM_CONFIG,
+        ...parsed,
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_FCM_CONFIG;
+}
+
+export function saveStoredFcmSystemConfig(config: FcmSystemConfig): void {
+  try {
+    localStorage.setItem(FCM_CONFIG_STORAGE_KEY, JSON.stringify(config));
+  } catch {
+    // ignore
+  }
+}
+
+export function getViteEnvVapidKey(): string {
+  const envKey = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+    ?.VITE_FIREBASE_VAPID_KEY;
+  return (envKey || '').trim();
+}
+
+export function getEffectiveVapidKey(overrideKey?: string): string {
+  if (overrideKey && overrideKey.trim()) return overrideKey.trim();
+  const envKey = getViteEnvVapidKey();
+  if (envKey) return envKey;
+  const cfgKey = getStoredFcmSystemConfig().vapidPublicKey;
+  return (cfgKey || '').trim();
+}
+
+function getCompactDeviceLabel(): string {
+  if (typeof navigator === 'undefined') return 'Web Browser';
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS Safari / PWA';
+  if (/Android/i.test(ua)) return 'Android Chrome / PWA';
+  if (/Edg\//i.test(ua)) return 'Desktop Edge';
+  if (/Chrome\//i.test(ua)) return 'Desktop Chrome';
+  if (/Firefox\//i.test(ua)) return 'Desktop Firefox';
+  if (/Safari\//i.test(ua)) return 'macOS Safari';
+  return 'Navegador Web';
+}
+
+function getSeenAlertIds(): string[] {
+  try {
+    const raw = localStorage.getItem(FCM_SEEN_ALERTS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function markAlertIdSeen(alertId: string): boolean {
+  const seen = getSeenAlertIds();
+  if (seen.includes(alertId)) return false;
+  try {
+    localStorage.setItem(
+      FCM_SEEN_ALERTS_STORAGE_KEY,
+      JSON.stringify([alertId, ...seen].slice(0, 120))
+    );
+  } catch {
+    // ignore
+  }
+  return true;
+}
+
+async function getSafeMessagingInstance(): Promise<Messaging | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const supported = await isMessagingSupported();
+    if (!supported) return null;
+    if (!messagingInstance) {
+      messagingInstance = getMessaging(app);
+    }
+    return messagingInstance;
+  } catch {
+    return null;
+  }
+}
+
+async function waitForActiveServiceWorker(
+  initialReg: ServiceWorkerRegistration | null
+): Promise<ServiceWorkerRegistration | null> {
+  if (!initialReg) return null;
+  if (initialReg.active) return initialReg;
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      const readyReg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<ServiceWorkerRegistration>((resolve) =>
+          window.setTimeout(() => resolve(initialReg), 3000)
+        ),
+      ]);
+      return readyReg || initialReg;
+    } catch {
+      return initialReg;
+    }
+  }
+  return initialReg;
+}
+
+/**
+ * Registra o dispositivo do professor no Firebase Cloud Messaging (FCM) usando VITE_FIREBASE_VAPID_KEY,
+ * evita colisão de applicationServerKey no PushManager e persiste no backend + Firestore.
+ */
+export async function registerDeviceForFcm(params: {
+  userEmail: string;
+  userName: string;
+  userRole: UserRole;
+  teacherRoleType?: AuthorizedUser['teacherRoleType'];
+  assignedClassIds?: string[];
+  vapidKeyOverride?: string;
+}): Promise<FcmRegistrationResult> {
+  const initialReg = await registerPushServiceWorker();
+  const reg = await waitForActiveServiceWorker(initialReg);
+  const swReady = Boolean(reg);
+  const messagingSupported = await isMessagingSupported().catch(() => false);
+  const pushManagerSupported = Boolean(reg && 'pushManager' in reg);
+  const supported = messagingSupported || pushManagerSupported;
+
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return {
+      ok: false,
+      supported: false,
+      channel: 'sw_realtime',
+      fcmToken: null,
+      hasPushSubscription: false,
+      permission: 'unsupported',
+      swReady,
+      message: 'Navegador sem suporte à API de Notificações. Alertas internos continuam ativos.',
+    };
+  }
+
+  let permission: NotificationPermission = Notification.permission;
+  if (permission === 'default') {
+    try {
+      permission = await Notification.requestPermission();
+    } catch {
+      permission = Notification.permission;
+    }
+  }
+
+  if (permission !== 'granted') {
+    return {
+      ok: false,
+      supported,
+      channel: 'sw_realtime',
+      fcmToken: null,
+      hasPushSubscription: false,
+      permission,
+      swReady,
+      message:
+        permission === 'denied'
+          ? 'Permissão de notificações bloqueada no navegador. Libere nas configurações do site para receber alertas Push.'
+          : 'Permissão de notificações não concedida.',
+    };
+  }
+
+  const prefs = getStoredPushPreferences();
+  saveStoredPushPreferences({ ...prefs, enabled: true, deadlinesEnabled: true });
+
+  const serverVapid = await fetchAutoVapidKeysFromServer();
+  const autoPublicKey = serverVapid.publicKey;
+  const firebaseVapidKey =
+    getEffectiveVapidKey(params.vapidKeyOverride) || serverVapid.firebaseVapidKey;
+
+  let obtainedFcmToken: string | null = null;
+  let pushSubscriptionPayload: FcmDeviceSubscription['pushSubscription'] | undefined = undefined;
+  let vapidSource: FcmDeviceSubscription['vapidSource'] = 'auto_webpush';
+  let statusDetail = 'Alertas em tempo real ativos via Service Worker.';
+
+  // 1. Prioridade absoluta ao Firebase Cloud Messaging (FCM) via VITE_FIREBASE_VAPID_KEY
+  const messaging = await getSafeMessagingInstance();
+  if (messaging && reg && firebaseVapidKey) {
+    try {
+      // Remove assinatura anterior se tiver sido criada com outra VAPID key (evita InvalidAccessError)
+      if ('pushManager' in reg) {
+        const existingSub = await reg.pushManager.getSubscription();
+        if (
+          existingSub &&
+          !areApplicationServerKeysEqual(
+            existingSub.options?.applicationServerKey,
+            firebaseVapidKey
+          )
+        ) {
+          await existingSub.unsubscribe().catch(() => false);
+        }
+      }
+
+      const token = await getToken(messaging, {
+        vapidKey: firebaseVapidKey,
+        serviceWorkerRegistration: reg,
+      });
+
+      if (token) {
+        obtainedFcmToken = token;
+        vapidSource = 'firebase_fcm';
+        setStoredFcmToken(token);
+        setStoredPushSubscriptionActive(true);
+        statusDetail =
+          'Dispositivo conectado ao Firebase Cloud Messaging (FCM) com VITE_FIREBASE_VAPID_KEY.';
+
+        if ('pushManager' in reg) {
+          const fcmSub = await reg.pushManager.getSubscription();
+          if (fcmSub) {
+            const subJson = fcmSub.toJSON();
+            if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
+              pushSubscriptionPayload = {
+                endpoint: subJson.endpoint,
+                expirationTime: subJson.expirationTime ?? null,
+                keys: {
+                  p256dh: subJson.keys.p256dh,
+                  auth: subJson.keys.auth,
+                },
+              };
+            }
+          }
+        }
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('FCM getToken fallback para Web Push/SW:', errMsg);
+      obtainedFcmToken = getStoredFcmToken();
+    }
+  } else {
+    obtainedFcmToken = getStoredFcmToken();
+  }
+
+  // 2. Fallback Web Push RFC 8291 com chave automática do servidor SOMENTE se FCM nativo não obteve token
+  if (!obtainedFcmToken && reg && 'pushManager' in reg && autoPublicKey) {
+    try {
+      let existingSub = await reg.pushManager.getSubscription();
+      if (
+        existingSub &&
+        !areApplicationServerKeysEqual(existingSub.options?.applicationServerKey, autoPublicKey)
+      ) {
+        await existingSub.unsubscribe().catch(() => false);
+        existingSub = null;
+      }
+      if (!existingSub) {
+        existingSub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(autoPublicKey),
+        });
+      }
+      if (existingSub) {
+        const subJson = existingSub.toJSON();
+        if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
+          pushSubscriptionPayload = {
+            endpoint: subJson.endpoint,
+            expirationTime: subJson.expirationTime ?? null,
+            keys: {
+              p256dh: subJson.keys.p256dh,
+              auth: subJson.keys.auth,
+            },
+          };
+          vapidSource = 'auto_webpush';
+          setStoredPushSubscriptionActive(true);
+          statusDetail =
+            'Notificações Web Push ativadas neste dispositivo (modo compatível).';
+        }
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('Web Push PushManager fallback para SW:', errMsg);
+    }
+  }
+
+  const hasPushChannel = Boolean(obtainedFcmToken || pushSubscriptionPayload);
+  const channel: 'fcm_push' | 'sw_realtime' = hasPushChannel ? 'fcm_push' : 'sw_realtime';
+
+  if (!hasPushChannel && swReady) {
+    statusDetail =
+      'Notificações em tempo real ativadas neste dispositivo (modo compatível com navegador embutido).';
+  }
+
+  const cleanEmail = (params.userEmail || '').trim().toLowerCase();
+  const subId = getFcmDeviceSubscriptionId(cleanEmail);
+  const nowMs = Date.now();
+  const subscription: FcmDeviceSubscription = {
+    id: subId,
+    userEmail: cleanEmail,
+    userName: params.userName || cleanEmail.split('@')[0],
+    userRole: params.userRole,
+    teacherRoleType: params.teacherRoleType,
+    assignedClassIds: Array.isArray(params.assignedClassIds) ? params.assignedClassIds : [],
+    ...(obtainedFcmToken ? { fcmToken: obtainedFcmToken } : {}),
+    vapidSource,
+    ...(pushSubscriptionPayload ? { pushSubscription: pushSubscriptionPayload } : {}),
+    channel,
+    permission,
+    deviceLabel: getCompactDeviceLabel(),
+    active: true,
+    createdAtISO: new Date(nowMs).toISOString(),
+    updatedAtMs: nowMs,
+  };
+
+  // 3. Persistir no backend Express (para disparo HTTP v1 automático e manual em segundo plano)
+  if (isBackendApiAvailable()) {
+    try {
+      const authHeaders = await getActiveUserAuthHeadersAsync();
+      await fetch('/api/fcm/register-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        credentials: 'include',
+        body: JSON.stringify(subscription),
+      });
+    } catch {
+      // ignore offline
+    }
+  }
+
+  // 4. Persistir no Firestore se sessão Firebase Auth estiver ativa
+  try {
+    const auth = getAuth(app);
+    if (auth.currentUser && !isFirestoreQuotaExceeded()) {
+      const tokenRef = doc(firestoreDb, 'school_fcm_tokens_2027', subId);
+      const tokenPayload = stripUndefinedDeep(subscription);
+      await commitViaUnaryTransaction((tx) => {
+        tx.set(tokenRef, tokenPayload, { merge: true });
+      });
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `school_fcm_tokens_2027/${subId}`);
+  }
+
+  return {
+    ok: true,
+    supported,
+    channel,
+    fcmToken: obtainedFcmToken,
+    hasPushSubscription: Boolean(pushSubscriptionPayload || obtainedFcmToken),
+    permission,
+    swReady,
+    message: statusDetail,
+  };
+}
+
+/**
+ * Desativa e remove o token FCM / inscrição Web Push deste dispositivo.
+ */
+export async function unregisterDeviceFromFcm(userEmail: string): Promise<void> {
+  const messaging = await getSafeMessagingInstance();
+  if (messaging) {
+    try {
+      await deleteToken(messaging);
+    } catch {
+      // ignore
+    }
+  }
+
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      const baseUrl =
+        (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
+      const reg =
+        (await navigator.serviceWorker.getRegistration(`${baseUrl}sw.js`)) ||
+        (await navigator.serviceWorker.getRegistration());
+      const existingSub = await reg?.pushManager?.getSubscription();
+      if (existingSub) {
+        await existingSub.unsubscribe();
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  setStoredFcmToken(null);
+  setStoredPushSubscriptionActive(false);
+
+  // Mantém notificações compulsórias sempre habilitadas mesmo após limpeza de sessão
+  saveStoredPushPreferences({
+    enabled: true,
+    deadlinesEnabled: true,
+    noticesEnabled: true,
+    activeSearchEnabled: true,
+  });
+
+  const cleanEmail = (userEmail || '').trim().toLowerCase();
+  const subId = getFcmDeviceSubscriptionId(cleanEmail);
+
+  if (isBackendApiAvailable()) {
+    try {
+      const authHeaders = await getActiveUserAuthHeadersAsync();
+      await fetch('/api/fcm/unregister-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ id: subId, userEmail: cleanEmail }),
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    const auth = getAuth(app);
+    if (auth.currentUser && !isFirestoreQuotaExceeded()) {
+      const tokenRef = doc(firestoreDb, 'school_fcm_tokens_2027', subId);
+      const tokenPayload = {
+        id: subId,
+        userEmail: cleanEmail,
+        channel: 'sw_realtime',
+        active: false,
+        updatedAtMs: Date.now(),
+      };
+      await commitViaUnaryTransaction((tx) => {
+        tx.set(tokenRef, tokenPayload, { merge: true });
+      });
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `school_fcm_tokens_2027/${subId}`);
+  }
+}
+
+/**
+ * Inscreve o aplicativo em:
+ * 1) Mensagens FCM em primeiro plano (`onMessage`)
+ * 2) Feed em tempo real do Firestore (`school_fcm_alerts_2027`) via `onAuthStateChanged`
+ * 3) Sincronismo periódico de alertas no backend (`/api/fcm/alerts`)
+ */
+export function subscribeToFcmNotifications(params: {
+  userEmail: string;
+  userRole: UserRole;
+  assignedClassIds: string[];
+  onAlertReceived?: (notice: PushNoticeItem) => void;
+}): () => void {
+  let cancelled = false;
+  let unsubFcmForeground: (() => void) | null = null;
+  let unsubFirestoreAlerts: (() => void) | null = null;
+  let unsubAuth: (() => void) | null = null;
+  let pollIntervalId: number | null = null;
+
+  const processIncomingAlert = async (alert: FcmWindowAlert) => {
+    if (cancelled || !alert || !alert.id) return;
+    if (params.userRole !== 'admin') {
+      if (
+        alert.targetAudience === 'peb1' &&
+        params.userRole !== 'usuario'
+      ) {
+        return;
+      }
+      if (
+        Array.isArray(alert.targetClassIds) &&
+        alert.targetClassIds.length > 0 &&
+        !alert.targetClassIds.includes('all') &&
+        params.assignedClassIds.length > 0
+      ) {
+        const hasMatch = params.assignedClassIds.some((cid) =>
+          alert.targetClassIds.includes(cid)
+        );
+        if (!hasMatch) return;
+      }
+    }
+
+    const isNew = markAlertIdSeen(alert.id);
+    if (!isNew) return;
+    if (getReadPushNoticeIds(params.userEmail).includes(alert.id)) return;
+
+    const notice = await triggerPushNotification(
+      {
+        id: alert.id,
+        title: alert.title,
+        body: alert.body,
+        category: alert.category || 'prazo',
+        targetClassId:
+          alert.targetClassIds && alert.targetClassIds.length === 1
+            ? alert.targetClassIds[0]
+            : 'all',
+        targetScreen: alert.targetScreen || 'frequencia_mensal',
+        authorName: alert.createdByName || 'Coordenação EMEB Candelário',
+        createdAt: new Date(alert.createdAtMs || Date.now()).toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      },
+      { showBanner: true, saveToFeed: true, userEmail: params.userEmail }
+    );
+    params.onAlertReceived?.(notice);
+  };
+
+  // 1. FCM Foreground (`onMessage`)
+  getSafeMessagingInstance().then((messaging) => {
+    if (cancelled || !messaging) return;
+    try {
+      unsubFcmForeground = onMessage(messaging, async (payload: MessagePayload) => {
+        const notif = payload.notification || {};
+        const data = payload.data || {};
+        const msgId = data.alertId || payload.messageId || `fcm_fg_${Date.now()}`;
+        if (!markAlertIdSeen(msgId)) return;
+        if (getReadPushNoticeIds(params.userEmail).includes(msgId)) return;
+
+        const notice = await triggerPushNotification(
+          {
+            id: msgId,
+            title: notif.title || data.title || 'Prazo de Frequência Mensal',
+            body:
+              notif.body ||
+              data.body ||
+              'A janela de lançamento de presença está se encerrando. Confira sua turma.',
+            category: (data.category as PushNoticeItem['category']) || 'prazo',
+            targetClassId: data.targetClassId || 'all',
+            targetScreen: (data.targetScreen as ScreenType) || 'frequencia_mensal',
+            authorName: data.authorName || 'Firebase Cloud Messaging',
+          },
+          { showBanner: true, saveToFeed: true, userEmail: params.userEmail }
+        );
+        params.onAlertReceived?.(notice);
+      });
+    } catch {
+      // ignore if browser blocks messaging listener
+    }
+  });
+
+  // 2. Firestore real-time alerts (`school_fcm_alerts_2027`) sincronizado com estado Firebase Auth
+  const attachFirestoreAlertsListener = () => {
+    if (unsubFirestoreAlerts) {
+      unsubFirestoreAlerts();
+      unsubFirestoreAlerts = null;
+    }
+    if (isFirestoreQuotaExceeded()) {
+      return;
+    }
+    try {
+      const q = query(
+        collection(firestoreDb, 'school_fcm_alerts_2027'),
+        orderBy('createdAtMs', 'desc'),
+        limit(10)
+      );
+      const bootThresholdMs = Date.now() - 1000 * 60 * 60 * 12;
+      unsubFirestoreAlerts = onSnapshot(
+        q,
+        (snap) => {
+          snap.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              const alert = change.doc.data() as FcmWindowAlert;
+              if ((alert.createdAtMs || 0) >= bootThresholdMs) {
+                void processIncomingAlert(alert);
+              }
+            }
+          });
+        },
+        (err) => {
+          handleFirestoreError(err, OperationType.LIST, 'school_fcm_alerts_2027');
+        }
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  try {
+    const auth = getAuth(app);
+    if (auth.currentUser) {
+      attachFirestoreAlertsListener();
+    }
+    unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (cancelled) return;
+      if (user) {
+        attachFirestoreAlertsListener();
+      } else if (unsubFirestoreAlerts) {
+        unsubFirestoreAlerts();
+        unsubFirestoreAlerts = null;
+      }
+    });
+  } catch {
+    // ignore
+  }
+
+  // 3. Backend fallback polling para ambientes embutidos sem Firebase Auth popup
+  const pollBackendAlerts = async () => {
+    if (cancelled || !isBackendApiAvailable()) return;
+    try {
+      const authHeaders = await getActiveUserAuthHeadersAsync();
+      const res = await fetch('/api/fcm/alerts', {
+        headers: authHeaders,
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const alerts: FcmWindowAlert[] = Array.isArray(data?.alerts) ? data.alerts : [];
+      const thresholdMs = Date.now() - 1000 * 60 * 60 * 12;
+      for (const alert of alerts) {
+        if ((alert.createdAtMs || 0) >= thresholdMs) {
+          await processIncomingAlert(alert);
+        }
+      }
+    } catch {
+      // ignore offline
+    }
+  };
+
+  if (isBackendApiAvailable()) {
+    void pollBackendAlerts();
+    pollIntervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void pollBackendAlerts();
+      }
+    }, 30000);
+  }
+
+  return () => {
+    cancelled = true;
+    if (unsubFcmForeground) unsubFcmForeground();
+    if (unsubFirestoreAlerts) unsubFirestoreAlerts();
+    if (unsubAuth) unsubAuth();
+    if (pollIntervalId !== null) window.clearInterval(pollIntervalId);
+  };
+}
+
+/**
+ * Verifica automaticamente se a janela de lançamento está em fase crítica de abertura/fechamento
+ * e envia um lembrete push diário (deduplicado) para que o professor não esqueça de lançar as faltas.
+ */
+export async function evaluateAndTriggerWindowClosingReminder(params: {
+  attendanceWindowConfig: AttendanceWindowConfig;
+  visibleClasses: ClassGroup[];
+  userEmail: string;
+  userRole: UserRole;
+  forceNotify?: boolean;
+}): Promise<PushNoticeItem | null> {
+  // Notificações FCM compulsórias para todos os usuários
+  const fcmSysCfg = getStoredFcmSystemConfig();
+
+  const win = evaluateAttendanceLaunchWindow(params.attendanceWindowConfig);
+  const pendingClasses = params.visibleClasses.filter((c) => c.isPending);
+  const notifyDays = Math.max(1, Math.min(5, Number(fcmSysCfg.notifyDaysBeforeClose || 2)));
+
+  const isCriticalPhase =
+    win.windowPhase === 'next_month_closing' ||
+    win.windowPhase === 'last_day' ||
+    (win.windowPhase === 'closing_soon' && win.daysRemaining <= notifyDays) ||
+    win.windowPhase === 'override_open';
+
+  if (!isCriticalPhase && !params.forceNotify) {
+    return null;
+  }
+
+  if (
+    fcmSysCfg.remindPendingTeachersOnly &&
+    pendingClasses.length === 0 &&
+    !params.forceNotify
+  ) {
+    return null;
+  }
+
+  const nowLocal = new Date();
+  const todayKey = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(
+    2,
+    '0'
+  )}-${String(nowLocal.getDate()).padStart(2, '0')}`;
+  const dedupKey = `${todayKey}|${win.windowPhase}|${win.urgencyLevel}|${pendingClasses.length}|${(
+    params.userEmail || ''
+  )
+    .trim()
+    .toLowerCase()}`;
+
+  if (!params.forceNotify) {
+    try {
+      const lastSentKey = localStorage.getItem(FCM_DAILY_WINDOW_REMINDER_KEY);
+      if (lastSentKey === dedupKey) {
+        return null;
+      }
+      localStorage.setItem(FCM_DAILY_WINDOW_REMINDER_KEY, dedupKey);
+    } catch {
+      // ignore
+    }
+  }
+
+  const classPreview =
+    pendingClasses.length > 0
+      ? pendingClasses
+          .slice(0, 3)
+          .map((c) => c.name)
+          .join(', ') + (pendingClasses.length > 3 ? ` e +${pendingClasses.length - 3}` : '')
+      : `${params.visibleClasses.length} turma(s)`;
+
+  let title = `Lembrete de Janela • ${win.targetMonthName}`;
+  let body = `Confira o lançamento de presença até ${win.closingDateFormatted}.`;
+
+  if (win.windowPhase === 'next_month_closing' && win.urgencyLevel === 'urgent') {
+    title = `ÚLTIMO DIA: Fechamento da Janela Hoje (${win.closingDateFormatted})`;
+    body = `Restam poucas horas! ${pendingClasses.length} turma(s) pendente(s) (${classPreview}). Preencha as faltas e atestados hoje (salvamento automático) para não perder o prazo.`;
+  } else if (win.windowPhase === 'next_month_closing') {
+    title = `Janela Fecha Amanhã (${win.closingDateFormatted})`;
+    body = `${pendingClasses.length} turma(s) ainda aguardam fechamento (${classPreview}). Toque para lançar a frequência mensal.`;
+  } else if (win.windowPhase === 'last_day') {
+    title = `Janela de Frequência Aberta Hoje (${win.targetMonthName})`;
+    body = `Último dia letivo do mês! Lançamento liberado até ${win.closingDateFormatted} para ${classPreview}.`;
+  } else if (win.windowPhase === 'closing_soon') {
+    title = `Fechamento em ${win.daysRemaining} dia(s) • ${win.targetMonthName}`;
+    body = `Prepare os registros e atestados de ${classPreview}. A janela oficial abre em ${win.nextWindowOpenDateFormatted} e encerra em ${win.closingDateFormatted}.`;
+  } else if (win.windowPhase === 'override_open') {
+    title = `Liberação Excepcional Ativa • ${win.targetMonthName}`;
+    body = `A gestão abriu o lançamento de presença para regularização (${classPreview}). Confira suas pendências antes do encerramento.`;
+  }
+
+  const reminderId = `window_auto_${todayKey}_${win.windowPhase}`;
+  if (!params.forceNotify && getReadPushNoticeIds(params.userEmail).includes(reminderId)) {
+    return null;
+  }
+
+  return triggerPushNotification(
+    {
+      id: reminderId,
+      title,
+      body,
+      category: 'prazo',
+      targetClassId: pendingClasses[0]?.id || 'all',
+      targetScreen: 'frequencia_mensal',
+      authorName: 'FCM · Monitoramento de Prazos',
+    },
+    { showBanner: true, saveToFeed: true, userEmail: params.userEmail }
+  );
+}
+
+export interface EvaluatedTeacherClassReminder {
+  cls: ClassGroup;
+  evaluation: ClassEndOfDayReminderEvaluation;
+}
+
+export interface TeacherEndOfDayReminderSummary {
+  isEligibleTeacherRole: boolean;
+  windowEvaluation: ReturnType<typeof evaluateAttendanceLaunchWindow>;
+  scopedClasses: ClassGroup[];
+  pendingEvaluations: EvaluatedTeacherClassReminder[];
+  dueNowEvaluations: EvaluatedTeacherClassReminder[];
+  upcomingEvaluations: EvaluatedTeacherClassReminder[];
+  nextDelayMs: number | null;
+}
+
+/**
+ * Avalia, a partir de `evaluateAttendanceLaunchWindow`, quais turmas atribuídas ao
+ * educador logado ainda estão com lançamento pendente (`isPending === true`) ao final
+ * do expediente do respectivo turno (Manhã até 12:00 · aviso a partir de 11:15;
+ * Tarde até 17:30 · aviso a partir de 16:45).
+ */
+export function evaluateTeacherEndOfDayPendingClasses(params: {
+  attendanceWindowConfig: AttendanceWindowConfig;
+  visibleClasses: ClassGroup[];
+  userRole: UserRole;
+  teacherRoleType?: AuthorizedUser['teacherRoleType'];
+  assignedClassIds?: string[];
+  referenceDate?: Date;
+}): TeacherEndOfDayReminderSummary {
+  const windowEvaluation = evaluateAttendanceLaunchWindow(
+    params.attendanceWindowConfig,
+    params.referenceDate
+  );
+
+  // Perfis exclusivamente observadores (PEB II, Apoio, AEE) não lançam diário de chamada
+  const isReadOnlyObserver =
+    params.userRole === 'peb2' ||
+    params.teacherRoleType === 'apoio' ||
+    params.teacherRoleType === 'aee';
+
+  if (isReadOnlyObserver) {
+    return {
+      isEligibleTeacherRole: false,
+      windowEvaluation,
+      scopedClasses: [],
+      pendingEvaluations: [],
+      dueNowEvaluations: [],
+      upcomingEvaluations: [],
+      nextDelayMs: null,
+    };
+  }
+
+  // Para docente regente (`usuario`), considera suas turmas visíveis; para admin/gestão,
+  // considera apenas caso possua turmas regentes explicitamente atribuídas.
+  const explicitAssigned = (params.assignedClassIds || []).filter(
+    (id) => id && id !== 'all'
+  );
+  const scopedClasses =
+    params.userRole === 'usuario'
+      ? explicitAssigned.length > 0
+        ? params.visibleClasses.filter((c) => explicitAssigned.includes(c.id))
+        : params.visibleClasses
+      : explicitAssigned.length > 0
+      ? params.visibleClasses.filter((c) => explicitAssigned.includes(c.id))
+      : [];
+
+  if (scopedClasses.length === 0) {
+    return {
+      isEligibleTeacherRole: params.userRole === 'usuario',
+      windowEvaluation,
+      scopedClasses: [],
+      pendingEvaluations: [],
+      dueNowEvaluations: [],
+      upcomingEvaluations: [],
+      nextDelayMs: null,
+    };
+  }
+
+  const pendingEvaluations: EvaluatedTeacherClassReminder[] = scopedClasses
+    .filter((cls) => cls.isPending)
+    .map((cls) => ({
+      cls,
+      evaluation: evaluateClassEndOfDayReminder(
+        params.attendanceWindowConfig,
+        cls,
+        params.referenceDate
+      ),
+    }));
+
+  const dueNowEvaluations = pendingEvaluations.filter(
+    (item) => item.evaluation.shouldRemindNow
+  );
+  const upcomingEvaluations = pendingEvaluations.filter(
+    (item) =>
+      !item.evaluation.shouldRemindNow &&
+      item.evaluation.msUntilReminder !== null &&
+      item.evaluation.msUntilReminder > 0
+  );
+
+  const delays = upcomingEvaluations
+    .map((item) => item.evaluation.msUntilReminder)
+    .filter((ms): ms is number => typeof ms === 'number' && ms > 0);
+  const nextDelayMs = delays.length > 0 ? Math.min(...delays) : null;
+
+  return {
+    isEligibleTeacherRole: true,
+    windowEvaluation,
+    scopedClasses,
+    pendingEvaluations,
+    dueNowEvaluations,
+    upcomingEvaluations,
+    nextDelayMs,
+  };
+}
+
+export function getNextTeacherEndOfDayReminderDelayMs(params: {
+  attendanceWindowConfig: AttendanceWindowConfig;
+  visibleClasses: ClassGroup[];
+  userRole: UserRole;
+  teacherRoleType?: AuthorizedUser['teacherRoleType'];
+  assignedClassIds?: string[];
+  referenceDate?: Date;
+}): number | null {
+  return evaluateTeacherEndOfDayPendingClasses(params).nextDelayMs;
+}
+
+/**
+ * Dispara o lembrete ao educador logado caso ainda não tenha lançado a frequência de sua(s)
+ * turma(s) até o fim do período escolar, integrando Central Push + Service Worker + Toast acionável.
+ */
+export async function evaluateAndTriggerTeacherEndOfDayReminder(params: {
+  attendanceWindowConfig: AttendanceWindowConfig;
+  visibleClasses: ClassGroup[];
+  userEmail: string;
+  userRole: UserRole;
+  teacherRoleType?: AuthorizedUser['teacherRoleType'];
+  assignedClassIds?: string[];
+  referenceDate?: Date;
+  forceNotify?: boolean;
+  onOpenClassAttendance?: (classId: string) => void;
+}): Promise<PushNoticeItem | null> {
+  // Notificações FCM compulsórias para todos os usuários
+  const summary = evaluateTeacherEndOfDayPendingClasses({
+    attendanceWindowConfig: params.attendanceWindowConfig,
+    visibleClasses: params.visibleClasses,
+    userRole: params.userRole,
+    teacherRoleType: params.teacherRoleType,
+    assignedClassIds: params.assignedClassIds,
+    referenceDate: params.referenceDate,
+  });
+
+  if (!summary.isEligibleTeacherRole) return null;
+
+  const targetItems = params.forceNotify
+    ? summary.dueNowEvaluations.length > 0
+      ? summary.dueNowEvaluations
+      : summary.pendingEvaluations
+    : summary.dueNowEvaluations;
+
+  if (targetItems.length === 0) return null;
+
+  const refDate = params.referenceDate || new Date();
+  const todayKey = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(
+    2,
+    '0'
+  )}-${String(refDate.getDate()).padStart(2, '0')}`;
+  const dueClassIds = targetItems.map((item) => item.cls.id).sort();
+  const normalizedEmail = (params.userEmail || '').trim().toLowerCase();
+  const dedupKey = `${todayKey}|${normalizedEmail}|${dueClassIds.join(',')}`;
+
+  if (!params.forceNotify) {
+    try {
+      const lastSentKey = localStorage.getItem(FCM_EOD_TEACHER_REMINDER_KEY);
+      if (lastSentKey === dedupKey) {
+        return null;
+      }
+    } catch {
+      // ignore storage read error
+    }
+  }
+
+  const primary = targetItems[0];
+  const reminderId = `eod_teacher_${todayKey}_${dueClassIds.join('_')}`;
+  if (!params.forceNotify && getReadPushNoticeIds(params.userEmail).includes(reminderId)) {
+    return null;
+  }
+
+  const classPreview =
+    targetItems.length === 1
+      ? `Turma ${primary.cls.name}`
+      : `${targetItems
+          .slice(0, 2)
+          .map((i) => i.cls.name)
+          .join(', ')}${targetItems.length > 2 ? ` e +${targetItems.length - 2}` : ''}`;
+
+  const title =
+    targetItems.length === 1
+      ? `Fim do ${primary.evaluation.shiftLabel} (${primary.evaluation.closingTimeLabel}) • Frequência Pendente`
+      : `Fim do Expediente Escolar • ${targetItems.length} Turmas Pendentes`;
+
+  const body = `Você ainda não lançou a frequência de ${classPreview} (${summary.windowEvaluation.targetMonthName}). Atualize os lançamentos antes do encerramento às ${primary.evaluation.closingTimeLabel} (salvamento automático).`;
+
+  if (!params.forceNotify) {
+    try {
+      localStorage.setItem(FCM_EOD_TEACHER_REMINDER_KEY, dedupKey);
+    } catch {
+      // ignore storage write error
+    }
+  }
+
+  toast.warning(title, {
+    id: reminderId,
+    description: body,
+    duration: 14000,
+    action: params.onOpenClassAttendance
+      ? {
+          label: 'Lançar Agora',
+          onClick: () => params.onOpenClassAttendance?.(primary.cls.id),
+        }
+      : undefined,
+  });
+
+  return triggerPushNotification(
+    {
+      id: reminderId,
+      title,
+      body,
+      category: 'prazo',
+      targetClassId: primary.cls.id,
+      targetScreen: 'frequencia_mensal',
+      authorName: 'Lembrete Fim de Turno · EMEB Candelário',
+    },
+    { showBanner: true, saveToFeed: true, userEmail: params.userEmail }
+  );
+}
+
+/**
+ * Dispara alerta FCM oficial sobre o fechamento da janela de lançamento de presença
+ * para professores (envio HTTP v1 em background + Firestore realtime + Service Worker).
+ * Restrito estritamente a Administradores.
+ */
+export async function dispatchWindowClosingFcmAlert(params: {
+  title?: string;
+  body?: string;
+  targetAudience?: 'all' | 'pending_only' | 'peb1';
+  targetClassIds?: string[];
+  attendanceWindowConfig: AttendanceWindowConfig;
+  classes: ClassGroup[];
+  senderEmail: string;
+  senderName: string;
+  senderRole?: UserRole;
+  senderTeacherRoleType?: AuthorizedUser['teacherRoleType'];
+}): Promise<{
+  ok: boolean;
+  alert: FcmWindowAlert;
+  deliveredFcmCount: number;
+  realtimeNotified: boolean;
+  message: string;
+}> {
+  if (
+    (params.senderRole && params.senderRole !== 'admin') ||
+    params.senderTeacherRoleType === 'apoio' ||
+    params.senderTeacherRoleType === 'aee'
+  ) {
+    const emptyAlert: FcmWindowAlert = {
+      id: `blocked_${Date.now()}`,
+      title: '',
+      body: '',
+      category: 'prazo',
+      urgency: 'info',
+      targetScreen: 'frequencia_mensal',
+      targetClassIds: [],
+      targetAudience: 'all',
+      closingDateFormatted: '',
+      windowPhase: 'closed',
+      createdAtMs: Date.now(),
+      createdAtISO: new Date().toISOString(),
+      createdByEmail: params.senderEmail,
+      createdByName: params.senderName,
+      pendingClassesCount: 0,
+    };
+    return {
+      ok: false,
+      alert: emptyAlert,
+      deliveredFcmCount: 0,
+      realtimeNotified: false,
+      message: 'Apenas administradores podem enviar notificações push.',
+    };
+  }
+  const win = evaluateAttendanceLaunchWindow(params.attendanceWindowConfig);
+  const pendingClasses = params.classes.filter((c) => c.isPending);
+  const audience = params.targetAudience || 'pending_only';
+
+  const resolvedClassIds =
+    params.targetClassIds && params.targetClassIds.length > 0
+      ? params.targetClassIds
+      : audience === 'pending_only' && pendingClasses.length > 0
+      ? pendingClasses.map((c) => c.id)
+      : ['all'];
+
+  const urgency: FcmWindowAlert['urgency'] =
+    win.urgencyLevel === 'urgent'
+      ? 'urgent'
+      : win.windowPhase === 'next_month_closing' || win.windowPhase === 'last_day'
+      ? 'warning'
+      : 'info';
+
+  const defaultTitle =
+    win.urgencyLevel === 'urgent'
+      ? `ÚLTIMO DIA: Fechamento de Frequência Hoje (${win.closingDateFormatted})`
+      : win.isAllowedToLaunch
+      ? `Janela de Frequência Aberta — Encerra em ${win.closingDateFormatted}`
+      : `Aviso de Fechamento • Próxima Janela em ${win.nextWindowOpenDateFormatted}`;
+
+  const defaultBody =
+    pendingClasses.length > 0
+      ? `Atenção docentes: ${pendingClasses.length} turma(s) ainda com fechamento pendente (${pendingClasses
+          .slice(0, 4)
+          .map((c) => c.name)
+          .join(', ')}${pendingClasses.length > 4 ? '...' : ''}). Atualize os lançamentos até ${win.closingDateFormatted} (salvamento automático).`
+      : `Lembrete oficial de conferência da frequência de ${win.targetMonthName}. Prazo final: ${win.closingDateFormatted}.`;
+
+  const nowMs = Date.now();
+  const alertId = `fcm_win_${nowMs}_${Math.random().toString(36).slice(2, 6)}`;
+  const alert: FcmWindowAlert = {
+    id: alertId,
+    title: (params.title || defaultTitle).slice(0, 175),
+    body: (params.body || defaultBody).slice(0, 580),
+    category: 'prazo',
+    urgency,
+    targetScreen: 'frequencia_mensal',
+    targetClassIds: resolvedClassIds,
+    targetAudience: audience,
+    closingDateFormatted: win.closingDateFormatted,
+    windowPhase: win.windowPhase,
+    createdAtMs: nowMs,
+    createdAtISO: new Date(nowMs).toISOString(),
+    createdByEmail: params.senderEmail,
+    createdByName: params.senderName || 'Gestão Escolar',
+    pendingClassesCount: pendingClasses.length,
+  };
+
+  let deliveredFcmCount = 0;
+  let serverMessage = 'Alerta publicado em tempo real para os dispositivos conectados.';
+
+  // 1. Disparo backend (FCM HTTP v1 via Service Account + persistência compartilhada)
+  if (isBackendApiAvailable()) {
+    try {
+      const authHeaders = await getActiveUserAuthHeadersAsync();
+      const res = await fetch('/api/fcm/send-window-alert', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ alert }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        deliveredFcmCount = Number(data?.deliveredFcmCount || 0);
+        if (data?.message) serverMessage = data.message;
+      }
+    } catch {
+      // fallback Firestore/local abaixo
+    }
+  }
+
+  // 2. Publicar no Firestore `school_fcm_alerts_2027` para entrega realtime aos clientes
+  try {
+    const auth = getAuth(app);
+    if (auth.currentUser && !isFirestoreQuotaExceeded()) {
+      const alertRef = doc(firestoreDb, 'school_fcm_alerts_2027', alertId);
+      const alertPayload = stripUndefinedDeep(alert);
+      await commitViaUnaryTransaction((tx) => {
+        tx.set(alertRef, alertPayload);
+      });
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `school_fcm_alerts_2027/${alertId}`);
+  }
+
+  // 3. Garantir feedback imediato local na central e Service Worker
+  markAlertIdSeen(alertId);
+  await triggerPushNotification(
+    {
+      id: alert.id,
+      title: alert.title,
+      body: alert.body,
+      category: 'prazo',
+      targetClassId: resolvedClassIds[0] || 'all',
+      targetScreen: 'frequencia_mensal',
+      authorName: alert.createdByName,
+    },
+    { showBanner: true, saveToFeed: true }
+  );
+
+  return {
+    ok: true,
+    alert: { ...alert, deliveredFcmCount },
+    deliveredFcmCount,
+    realtimeNotified: true,
+    message: serverMessage,
+  };
+}
+
+export async function fetchFcmBackendStatus(): Promise<FcmBackendStatus | null> {
+  if (!isBackendApiAvailable()) return null;
+  try {
+    const authHeaders = await getActiveUserAuthHeadersAsync();
+    const res = await fetch('/api/fcm/status', {
+      headers: authHeaders,
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data?.fcmConfig) {
+      saveStoredFcmSystemConfig(data.fcmConfig);
+    }
+    return data as FcmBackendStatus;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveFcmSystemConfiguration(
+  config: FcmSystemConfig
+): Promise<boolean> {
+  const nextConfig: FcmSystemConfig = {
+    ...config,
+    updatedAtMs: Date.now(),
+  };
+  saveStoredFcmSystemConfig(nextConfig);
+
+  if (isBackendApiAvailable()) {
+    try {
+      const authHeaders = await getActiveUserAuthHeadersAsync();
+      const res = await fetch('/api/fcm/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ fcmConfig: nextConfig }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function getFcmCapabilitySnapshot(): {
+  permission: NotificationPermission | 'unsupported';
+  hasFcmToken: boolean;
+  hasNativeFcmToken: boolean;
+  hasVapidKey: boolean;
+  hasViteVapidKey: boolean;
+} {
+  const viteVapid = Boolean(getViteEnvVapidKey());
+  const nativeToken = Boolean(getStoredFcmToken());
+  return {
+    permission: getPushPermissionState(),
+    hasFcmToken: nativeToken || getStoredPushSubscriptionActive(),
+    hasNativeFcmToken: nativeToken,
+    hasVapidKey: Boolean(getEffectiveVapidKey()),
+    hasViteVapidKey: viteVapid,
+  };
+}
+
+/**
+ * Força habilitação compulsória do FCM para todos os usuários:
+ * 1) Tenta registrar automaticamente ao abrir/logar;
+ * 2) Se o navegador exigir interação do usuário para `Notification.requestPermission()`,
+ *    reexecuta automaticamente no primeiro toque/clique ou tecla pressionada.
+ */
+export function setupCompulsoryFcmAutoActivation(params: {
+  userEmail: string;
+  userName: string;
+  userRole: UserRole;
+  teacherRoleType?: AuthorizedUser['teacherRoleType'];
+  assignedClassIds?: string[];
+  onResult?: (res: FcmRegistrationResult) => void;
+}): () => void {
+  let cancelled = false;
+  let inFlight = false;
+  let gestureAttached = false;
+
+  const tryRegister = async () => {
+    if (cancelled || inFlight || !params.userEmail) return;
+    inFlight = true;
+    try {
+      const res = await registerDeviceForFcm(params);
+      if (!cancelled) {
+        params.onResult?.(res);
+      }
+      if (!cancelled && res.permission === 'default' && !gestureAttached && typeof window !== 'undefined') {
+        gestureAttached = true;
+        const onFirstGesture = () => {
+          gestureAttached = false;
+          window.removeEventListener('pointerdown', onFirstGesture, true);
+          window.removeEventListener('keydown', onFirstGesture, true);
+          void tryRegister();
+        };
+        window.addEventListener('pointerdown', onFirstGesture, true);
+        window.addEventListener('keydown', onFirstGesture, true);
+      }
+    } finally {
+      inFlight = false;
+    }
+  };
+
+  void tryRegister();
+
+  return () => {
+    cancelled = true;
+  };
+}

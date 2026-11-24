@@ -1,0 +1,369 @@
+import React, { useState } from 'react';
+import { AttendanceWindowConfig, AuthorizedUser, ClassGroup, UserRole } from '../types';
+import { evaluateAttendanceLaunchWindow } from '../services/db';
+import {
+  dispatchWindowClosingFcmAlert,
+  evaluateTeacherEndOfDayPendingClasses,
+  setupCompulsoryFcmAutoActivation,
+} from '../services/fcmService';
+import {
+  Clock,
+  LockOpen,
+  CalendarCheck,
+  AlertTriangle,
+  Settings,
+  Bell,
+  Send,
+  X,
+} from 'lucide-react';
+
+interface LembretePrazoFrequenciaCardProps {
+  attendanceWindowConfig: AttendanceWindowConfig;
+  userRole?: UserRole;
+  teacherRoleType?: AuthorizedUser['teacherRoleType'];
+  userEmail?: string;
+  userName?: string;
+  classes?: ClassGroup[];
+  assignedClassId?: string;
+  assignedClassIds?: string[];
+  onOpenMonthlyAttendance?: (cls: ClassGroup) => void;
+  onNavigateToAcessos?: () => void;
+}
+
+export const LembretePrazoFrequenciaCard: React.FC<LembretePrazoFrequenciaCardProps> = ({
+  attendanceWindowConfig,
+  userRole = 'usuario',
+  teacherRoleType,
+  userEmail = 'emebjfreitas@jundiai.sp.gov.br',
+  userName,
+  classes = [],
+  assignedClassId,
+  assignedClassIds = [],
+  onOpenMonthlyAttendance,
+  onNavigateToAcessos,
+}) => {
+  const isStrictAdmin =
+    userRole === 'admin' && teacherRoleType !== 'apoio' && teacherRoleType !== 'aee';
+  const [isDismissed, setIsDismissed] = useState(false);
+  const [fcmActionLoading, setFcmActionLoading] = useState(false);
+  const [fcmToastMsg, setFcmToastMsg] = useState<string | null>(null);
+
+  const win = evaluateAttendanceLaunchWindow(attendanceWindowConfig);
+
+  const targetClass = React.useMemo(() => {
+    if (assignedClassId) {
+      const found = classes.find((c) => c.id === assignedClassId);
+      if (found) return found;
+    }
+    if (assignedClassIds.length > 0) {
+      const found = classes.find((c) => assignedClassIds.includes(c.id));
+      if (found) return found;
+    }
+    return classes[0];
+  }, [classes, assignedClassId, assignedClassIds]);
+
+  const pendingSummary = React.useMemo(() => {
+    const list =
+      userRole === 'usuario'
+        ? classes.filter((c) => assignedClassIds.includes(c.id) || c.id === assignedClassId)
+        : classes;
+    const pending = list.filter((c) => c.isPending);
+    return {
+      total: list.length,
+      pendingCount: pending.length,
+      firstPendingClass: pending[0] || list[0],
+    };
+  }, [classes, userRole, assignedClassId, assignedClassIds]);
+
+  const teacherEodSummary = React.useMemo(() => {
+    const effectiveAssigned =
+      assignedClassIds.length > 0
+        ? assignedClassIds
+        : assignedClassId
+        ? [assignedClassId]
+        : [];
+    return evaluateTeacherEndOfDayPendingClasses({
+      attendanceWindowConfig,
+      visibleClasses: classes,
+      userRole,
+      teacherRoleType,
+      assignedClassIds: effectiveAssigned,
+    });
+  }, [
+    attendanceWindowConfig,
+    classes,
+    userRole,
+    teacherRoleType,
+    assignedClassId,
+    assignedClassIds,
+  ]);
+
+  const dueTeacherReminder = teacherEodSummary.dueNowEvaluations[0];
+  const upcomingTeacherReminder = teacherEodSummary.upcomingEvaluations[0];
+
+  React.useEffect(() => {
+    const unsub = setupCompulsoryFcmAutoActivation({
+      userEmail,
+      userName: userName || userEmail.split('@')[0],
+      userRole,
+      teacherRoleType,
+      assignedClassIds:
+        assignedClassIds.length > 0
+          ? assignedClassIds
+          : assignedClassId
+          ? [assignedClassId]
+          : [],
+    });
+    return unsub;
+  }, [userEmail, userName, userRole, teacherRoleType, assignedClassIds, assignedClassId]);
+
+  const handleAdminNotifyPendingViaFcm = async () => {
+    if (!isStrictAdmin || fcmActionLoading) return;
+    setFcmActionLoading(true);
+    setFcmToastMsg(null);
+    try {
+      const res = await dispatchWindowClosingFcmAlert({
+        targetAudience: 'pending_only',
+        attendanceWindowConfig,
+        classes,
+        senderEmail: userEmail,
+        senderName: userName || 'Gestão Escolar',
+        senderRole: userRole,
+        senderTeacherRoleType: teacherRoleType,
+      });
+      setFcmToastMsg(res.message);
+    } finally {
+      setFcmActionLoading(false);
+    }
+  };
+
+  if (isDismissed) {
+    return (
+      <div className="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-[#f3f6fb] text-xs text-slate-800 shadow-[0_2px_10px_-3px_rgba(9,15,29,0.08)] animate-gentle-fade">
+        <div className="flex items-center gap-1.5">
+          <Bell className="w-3.5 h-3.5 text-[#14428c]" />
+          <span className="font-medium">Lembrete de prazos minimizado</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsDismissed(false)}
+          className="font-bold text-[#14428c] hover:underline cursor-pointer"
+        >
+          Reexibir
+        </button>
+      </div>
+    );
+  }
+
+  const hasEndOfDayPendingAlert = Boolean(dueTeacherReminder);
+  const isUrgent = win.urgencyLevel === 'urgent' || hasEndOfDayPendingAlert;
+  const isWarning = win.urgencyLevel === 'warning';
+  const isOpen = win.isAllowedToLaunch;
+
+  const bgClass = isUrgent
+    ? 'bg-rose-50 shadow-xs'
+    : isOpen
+    ? 'bg-emerald-50 shadow-xs'
+    : isWarning
+    ? 'bg-amber-50 shadow-xs'
+    : 'bg-[#f3f6fb] shadow-xs';
+
+  const badgeBg = isUrgent
+    ? 'bg-rose-800 text-white font-bold'
+    : isOpen
+    ? 'bg-emerald-800 text-white font-bold'
+    : isWarning
+    ? 'bg-amber-800 text-white font-bold'
+    : 'bg-[#14428c] text-white font-bold';
+
+  const titleColor = isUrgent
+    ? 'text-rose-950 font-bold'
+    : isOpen
+    ? 'text-emerald-950 font-bold'
+    : isWarning
+    ? 'text-amber-950 font-bold'
+    : 'text-[#0f172a] font-bold';
+
+  return (
+    <aside
+      aria-label="Lembrete Oficial de Prazo de Fechamento da Frequência"
+      className={`rounded-3xl p-4 sm:p-5 transition-all duration-200 space-y-2.5 animate-gentle-fade ${bgClass}`}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Left Side: Icon + Message */}
+        <div className="flex items-start sm:items-center gap-3 min-w-0">
+          <div
+            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+              isUrgent
+                ? 'bg-rose-200 text-rose-900'
+                : isOpen
+                ? 'bg-emerald-200 text-emerald-950'
+                : isWarning
+                ? 'bg-amber-200 text-amber-950'
+                : 'bg-blue-200 text-blue-950'
+            }`}
+          >
+            {isUrgent ? (
+              <AlertTriangle className="w-5 h-5 text-rose-900" />
+            ) : isOpen ? (
+              <LockOpen className="w-5 h-5 text-emerald-900" />
+            ) : (
+              <Clock className="w-5 h-5 text-blue-900" />
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`px-2.5 py-0.5 rounded-md text-xs uppercase tracking-wider ${badgeBg}`}
+              >
+                {hasEndOfDayPendingAlert
+                  ? 'Fim do Turno · Pendente'
+                  : isOpen
+                  ? 'Janela Aberta'
+                  : 'Lembrete de Prazo'}
+              </span>
+
+              <span className="text-xs text-[#334155] font-bold tabular-nums">
+                {win.currentDateFormatted} · Mês de {win.targetMonthName}
+              </span>
+
+              {pendingSummary.pendingCount > 0 && (
+                <span className="px-2.5 py-0.5 rounded-md bg-white text-[#0f172a] text-xs font-bold tabular-nums">
+                  {pendingSummary.pendingCount} fechamento(s) pendente(s)
+                </span>
+              )}
+            </div>
+
+            <h2 className={`text-base tracking-tight leading-snug mt-1 ${titleColor}`}>
+              {dueTeacherReminder ? (
+                <span>
+                  Fim do {dueTeacherReminder.evaluation.shiftLabel} (
+                  {dueTeacherReminder.evaluation.closingTimeLabel}) — Frequência da turma{' '}
+                  {dueTeacherReminder.cls.name} ainda não lançada
+                </span>
+              ) : isOpen ? (
+                <span>
+                  Prazo de Fechamento Aberto — Encerramento em {win.closingDateFormatted}
+                </span>
+              ) : (
+                <span>
+                  Próxima Abertura de Lançamento: {win.nextWindowOpenDateFormatted}
+                </span>
+              )}
+            </h2>
+
+            <p className="text-xs sm:text-sm text-[#334155] font-medium leading-normal mt-0.5">
+              {dueTeacherReminder ? (
+                <span>
+                  Seu expediente do {dueTeacherReminder.evaluation.shiftLabel.toLowerCase()} encerra às{' '}
+                  <strong className="tabular-nums">
+                    {dueTeacherReminder.evaluation.closingTimeLabel}
+                  </strong>
+                  . Atualize o registro de faltas da sua turma agora (salvamento automático · prazo até{' '}
+                  {win.closingDateFormatted}).
+                </span>
+              ) : upcomingTeacherReminder ? (
+                <span>
+                  Lembrete automático de fim de turno programado para{' '}
+                  <strong className="tabular-nums">
+                    {upcomingTeacherReminder.evaluation.reminderStartTimeLabel}
+                  </strong>{' '}
+                  ({upcomingTeacherReminder.evaluation.shiftLabel} · até{' '}
+                  {upcomingTeacherReminder.evaluation.closingTimeLabel}). Prazo mensal até{' '}
+                  {win.closingDateFormatted}.
+                </span>
+              ) : isOpen ? (
+                <span>
+                  Os educadores devem preencher as faltas e atestados antes do prazo final ({win.closingDateFormatted}, 2º dia letivo). Tudo é salvo automaticamente.
+                </span>
+              ) : (
+                <span>
+                  {win.reasonLabel}. {win.windowRuleDescription}
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Right Side: Quick Action CTA Buttons */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0 pt-1 sm:pt-0">
+          {isOpen && onOpenMonthlyAttendance && (dueTeacherReminder?.cls || targetClass) && (
+            <button
+              type="button"
+              onClick={() =>
+                onOpenMonthlyAttendance(
+                  dueTeacherReminder?.cls || pendingSummary.firstPendingClass || targetClass
+                )
+              }
+              className={`min-h-[38px] px-3.5 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                hasEndOfDayPendingAlert
+                  ? 'bg-rose-700 hover:bg-rose-800'
+                  : 'bg-[#047857] hover:bg-[#065f46]'
+              }`}
+            >
+              <CalendarCheck className="w-3.5 h-3.5 text-white shrink-0" />
+              <span>
+                {hasEndOfDayPendingAlert
+                  ? 'Lançar Minhas Faltas Agora'
+                  : userRole === 'usuario'
+                  ? 'Lançar Minhas Faltas'
+                  : 'Conferir Fechamentos'}
+              </span>
+            </button>
+          )}
+
+          {isStrictAdmin && (
+            <button
+              type="button"
+              disabled={fcmActionLoading}
+              onClick={handleAdminNotifyPendingViaFcm}
+              title="Enviar lembrete de fechamento para professores com turmas pendentes"
+              className="min-h-[38px] px-3.5 rounded-xl bg-[#14428c] hover:bg-[#0f3370] text-white font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>
+                {fcmActionLoading ? 'Enviando...' : 'Notificar Pendentes'}
+              </span>
+            </button>
+          )}
+
+          {isStrictAdmin && onNavigateToAcessos && (
+            <button
+              type="button"
+              onClick={onNavigateToAcessos}
+              title="Configurar Janela de Lançamento e Prazos"
+              className="min-h-[38px] px-3.5 rounded-xl bg-white hover:bg-[#e8f0fe] text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all duration-150 active:scale-[0.97] cursor-pointer"
+            >
+              <Settings className="w-3.5 h-3.5 text-slate-700" />
+              <span>Ajustar Prazos</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsDismissed(true)}
+            title="Dispensar lembrete temporariamente"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-700 hover:text-slate-950 hover:bg-black/10 transition-all duration-150 active:scale-[0.94] cursor-pointer"
+            aria-label="Dispensar lembrete temporariamente"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {fcmToastMsg && (
+        <div className="px-3 py-2 rounded-xl bg-white/95 text-xs font-medium text-slate-950 flex items-center justify-between gap-2 animate-gentle-fade">
+          <span>{fcmToastMsg}</span>
+          <button
+            type="button"
+            onClick={() => setFcmToastMsg(null)}
+            className="text-xs font-semibold text-slate-700 hover:text-slate-950 cursor-pointer"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
+    </aside>
+  );
+};
