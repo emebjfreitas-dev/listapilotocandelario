@@ -313,7 +313,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-2 sm:gap-3 cursor-pointer group select-none min-w-0 shrink text-left min-h-[44px]"
             title="Ir para o Início"
           >
-            <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white shadow-[0_2px_10px_rgba(15,23,42,0.12)] p-1 flex items-center justify-center shrink-0 border border-slate-200 group-hover:scale-105 transition-transform">
+            <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white shadow-[0_4px_16px_rgba(15,23,42,0.1)] p-1 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <img
                 src={APP_LOGO_URL}
                 alt="Brasão de Jundiaí"
@@ -566,7 +566,7 @@ export const Header: React.FC<HeaderProps> = ({
               className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                 isFullscreen
                   ? 'bg-[#1649a8] text-white shadow-[0_4px_14px_rgba(22,73,168,0.3)]'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 border border-slate-200/60'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 shadow-2xs'
               }`}
             >
               <SFSymbol
@@ -586,7 +586,7 @@ export const Header: React.FC<HeaderProps> = ({
                 }}
                 aria-label="Buscar aluno ou turma"
                 title="Buscar aluno ou turma (⌘K)"
-                className="h-9 w-9 xl:w-auto xl:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-[13px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 border border-slate-200/60"
+                className="h-9 w-9 xl:w-auto xl:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-[13px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-2xs"
               >
                 <SFSymbol name="search" size={19} weight={480} className="text-[#1649a8]" />
                 <span className="hidden xl:inline">Buscar</span>
@@ -620,7 +620,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setShowAdminNavDropdown(false);
                 }}
                 aria-label="Menu do perfil e sair"
-                className="h-9 pl-1.5 pr-2 sm:pr-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0 border border-slate-200/60"
+                className="h-9 pl-1.5 pr-2 sm:pr-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0 shadow-2xs"
               >
                 <StudentAvatar
                   name={userName || userEmail || 'Educador'}

@@ -88,6 +88,37 @@ export interface SyncQueueManagerSnapshot {
 
 type QueueSubscriber = (snapshot: SyncQueueManagerSnapshot) => void;
 
+export function isDeepEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return a === b;
+  if (typeof a !== typeof b) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!isDeepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  if (typeof a === 'object') {
+    if (a instanceof Date && b instanceof Date) {
+      return a.getTime() === b.getTime();
+    }
+    const keysA = Object.keys(a).filter((k) => k !== 'updatedAtMs');
+    const keysB = Object.keys(b).filter((k) => k !== 'updatedAtMs');
+    const allKeys = Array.from(new Set([...keysA, ...keysB]));
+    for (const key of allKeys) {
+      if (!isDeepEqual(a[key], b[key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Centralized, persistent, and atomic SyncQueueManager for Cloud Firestore & Google Sheets writes.
  * - Coalesces multiple writes targeting the same resource (e.g. `class:<id>`, `users:all`, `gender:all`)
@@ -400,6 +431,16 @@ class CentralizedSyncQueueManager {
     studentId?: string;
     description?: string;
   }): void {
+    const storedClasses = getStoredClasses();
+    const existingStoredClass = storedClasses.find((c) => c.id === params.updatedClass.id);
+    const bufferedSnapshot = this.pendingClassSnapshots.get(params.updatedClass.id);
+    const baselineClass = bufferedSnapshot || existingStoredClass;
+
+    if (baselineClass && isDeepEqual(baselineClass, params.updatedClass)) {
+      // Diffing rigoroso: Dados idênticos detectados. Ignorando escrita redundante para preservar cotas e evitar corrupção.
+      return;
+    }
+
     const now = Date.now();
     const incomingTs = Math.max(now, params.updatedClass.updatedAtMs || now);
     const stampedIncoming: ClassGroup = {
@@ -407,7 +448,7 @@ class CentralizedSyncQueueManager {
       updatedAtMs: incomingTs,
     };
     const mergedClassSnapshot = this.mergeCoalescedClassSnapshot(
-      this.pendingClassSnapshots.get(params.updatedClass.id),
+      bufferedSnapshot,
       stampedIncoming
     );
     this.pendingClassSnapshots.set(params.updatedClass.id, mergedClassSnapshot);
