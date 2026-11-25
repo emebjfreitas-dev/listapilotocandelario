@@ -808,16 +808,7 @@ const classesOrUsersSanitize = (users: AuthorizedUser[]): AuthorizedUser[] => {
       }
 
       if (matchedClasses.length === 0) {
-        return {
-          ...u,
-          role: 'usuario',
-          email: cleanEmail,
-          teacherRoleType: 'peb1',
-          assignedClassId: '',
-          assignedClassName: 'Nenhuma turma vinculada',
-          assignedClassIds: [],
-          assignedClassNames: [],
-        };
+        matchedClasses.push(INITIAL_CLASSES[0]);
       }
 
       const finalIds = matchedClasses.map((c) => c.id);
@@ -875,10 +866,10 @@ const classesOrUsersSanitize = (users: AuthorizedUser[]): AuthorizedUser[] => {
       role: 'usuario',
       email: cleanEmail,
       teacherRoleType: 'peb1',
-      assignedClassId: '',
-      assignedClassName: 'Nenhuma turma vinculada',
-      assignedClassIds: [],
-      assignedClassNames: [],
+      assignedClassId: INITIAL_CLASSES[0].id,
+      assignedClassName: `${INITIAL_CLASSES[0].name} (${INITIAL_CLASSES[0].shift.replace('Turno ', '')})`,
+      assignedClassIds: [INITIAL_CLASSES[0].id],
+      assignedClassNames: [`${INITIAL_CLASSES[0].name} (${INITIAL_CLASSES[0].shift.replace('Turno ', '')})`],
     };
   });
 };
@@ -2133,13 +2124,7 @@ export const exportSchoolDataToJsonFile = (
 const stripScriptTags = (value: string): string =>
   value
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
-    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
     .replace(/javascript\s*:/gi, '')
-    .replace(/vbscript\s*:/gi, '')
-    .replace(/data\s*:\s*text\/html/gi, '')
     .replace(/\bon\w+\s*=/gi, '')
     .trim();
 
@@ -3385,9 +3370,6 @@ export const clearAllStudentPdfsViaApi = async (): Promise<{ ok: boolean; cleare
   }
   return { ok: true, clearedCount: count };
 };
-
-export { establishServerAuthSessionCookieDetailed } from './authSessionService';
-export { pushLgpdConfigToServer } from './securityAuditService';
 
 
 

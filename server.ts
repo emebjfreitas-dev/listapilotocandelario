@@ -33,7 +33,6 @@ import {
   validateFcmUnregisterTokenPayload,
   validateFcmConfigPayload,
   validateFcmSendWindowAlertPayload,
-  validateLgpdConfigPayload,
 } from './src/utils/serverValidation.ts';
 const MONTH_NAMES_PT = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -302,8 +301,6 @@ interface ServerSecretsState {
   sessionHmacSecret?: string;
   adminDriveToken?: string;
   adminDriveTokenUpdatedAtMs?: number;
-  revokedSessionJtis?: Record<string, number>;
-  revokedUsersAfterMs?: Record<string, number>;
   webPushVapidKeys?: {
     publicKey: string;
     privateKey: string;
@@ -860,65 +857,21 @@ const getSessionHmacSecret = (): string => {
   return runtimeSessionSecret;
 };
 
-const revokeSessionJti = (jti?: string, expSec?: number) => {
-  if (!jti || typeof jti !== 'string') return;
-  const nowSec = Math.floor(Date.now() / 1000);
-  const secrets = readServerSecrets();
-  const nextJtis: Record<string, number> = {};
-  for (const [k, exp] of Object.entries(secrets.revokedSessionJtis || {})) {
-    if (typeof exp === 'number' && exp > nowSec) {
-      nextJtis[k] = exp;
-    }
-  }
-  nextJtis[jti] = typeof expSec === 'number' && expSec > nowSec ? expSec : nowSec + SESSION_TTL_SECONDS;
-  writeServerSecrets({ revokedSessionJtis: nextJtis });
-};
-
-const revokeUserSessionsAfter = (email: string, afterMs = Date.now()) => {
-  const cleanEmail = email.trim().toLowerCase();
-  if (!cleanEmail) return;
-  const secrets = readServerSecrets();
-  const nextUsers = { ...(secrets.revokedUsersAfterMs || {}), [cleanEmail]: afterMs };
-  writeServerSecrets({ revokedUsersAfterMs: nextUsers });
-};
-
-const isSessionRevoked = (jti: string | undefined, email: string, iatSec: number): boolean => {
-  const secrets = readServerSecrets();
-  if (jti && secrets.revokedSessionJtis && typeof secrets.revokedSessionJtis[jti] === 'number') {
-    if (secrets.revokedSessionJtis[jti] > Math.floor(Date.now() / 1000)) {
-      return true;
-    }
-  }
-  const cleanEmail = email.trim().toLowerCase();
-  const revokedAfterMs = secrets.revokedUsersAfterMs?.[cleanEmail];
-  if (typeof revokedAfterMs === 'number' && iatSec * 1000 < revokedAfterMs) {
-    return true;
-  }
-  return false;
-};
-
 const signSessionCookieValue = (payload: {
   email: string;
   uid: string;
   name: string;
   exp: number;
-  iat?: number;
-  jti?: string;
 }): string => {
   const secret = getSessionHmacSecret();
-  const enriched = {
-    ...payload,
-    iat: typeof payload.iat === 'number' ? payload.iat : Math.floor(Date.now() / 1000),
-    jti: payload.jti || crypto.randomUUID(),
-  };
-  const dataB64 = Buffer.from(JSON.stringify(enriched), 'utf8').toString('base64url');
+  const dataB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
   const sig = crypto.createHmac('sha256', secret).update(dataB64).digest('base64url');
   return `${dataB64}.${sig}`;
 };
 
 const verifySessionCookieValue = (
   cookieVal?: string
-): { email: string; uid: string; name: string; exp: number; iat: number; jti?: string } | null => {
+): { email: string; uid: string; name: string; exp: number } | null => {
   if (!cookieVal || typeof cookieVal !== 'string') return null;
   const dotIdx = cookieVal.indexOf('.');
   if (dotIdx <= 0) return null;
@@ -942,19 +895,11 @@ const verifySessionCookieValue = (
       return null;
     }
     if (parsed.exp <= nowSec) return null;
-    const cleanEmail = parsed.email.trim().toLowerCase();
-    const iatSec = typeof parsed.iat === 'number' ? parsed.iat : 0;
-    const jti = typeof parsed.jti === 'string' ? parsed.jti : undefined;
-    if (isSessionRevoked(jti, cleanEmail, iatSec)) {
-      return null;
-    }
     return {
-      email: cleanEmail,
+      email: parsed.email.trim().toLowerCase(),
       uid: String(parsed.uid || ''),
       name: String(parsed.name || ''),
       exp: parsed.exp,
-      iat: iatSec,
-      jti,
     };
   } catch {
     return null;
@@ -1114,291 +1059,6 @@ const extractRequestUser = (req: express.Request): RequestUser => {
   };
 };
 
-const maskServerSensitiveText = (
-  text: string | undefined | null,
-  type: 'cpf' | 'nis' | 'phone' | 'rg' | 'address' | 'sus' | 'cep'
-): string => {
-  if (!text || typeof text !== 'string') return '';
-  const clean = text.trim();
-  if (!clean) return '';
-  if (clean.length < 3) return '***';
-
-  if (type === 'cpf') {
-    const digits = clean.replace(/\D/g, '');
-    if (digits.length === 11) return `***.${digits.slice(3, 6)}.${digits.slice(6, 9)}-**`;
-    return `***.***.***-${digits.slice(-2) || '**'}`;
-  }
-  if (type === 'nis') {
-    const digits = clean.replace(/\D/g, '');
-    if (digits.length >= 10) return `***.${digits.slice(3, 8)}.***-*`;
-    return '***.*****.***-*';
-  }
-  if (type === 'sus') {
-    const digits = clean.replace(/\D/g, '');
-    if (digits.length >= 4) return `*** **** **** ${digits.slice(-4)}`;
-    return '*** **** **** ****';
-  }
-  if (type === 'phone') {
-    const digits = clean.replace(/\D/g, '');
-    if (digits.length >= 10) return `(${digits.slice(0, 2)}) *****-${digits.slice(-4)}`;
-    if (digits.length >= 4) return `*****-${digits.slice(-4)}`;
-    return '(**) *****-****';
-  }
-  if (type === 'rg') {
-    const alnum = clean.replace(/[^a-zA-Z0-9]/g, '');
-    if (alnum.length >= 3) return `**.***.***-${alnum.slice(-1).toUpperCase()}`;
-    return '**.***.***-*';
-  }
-  if (type === 'cep') {
-    const digits = clean.replace(/\D/g, '');
-    if (digits.length === 8) return `*****-${digits.slice(-3)}`;
-    return '*****-***';
-  }
-  if (type === 'address') {
-    return clean.replace(/\d+/g, '***');
-  }
-  return '***';
-};
-
-const getAllowedTeacherClassIdsForUser = (
-  state: SharedSchoolState,
-  userEmail: string
-): Set<string> => {
-  const cleanEmail = userEmail.trim().toLowerCase();
-  const allowed = new Set<string>();
-  const matchedUser = (state.authorizedUsers || []).find(
-    (u: any) => u && typeof u.email === 'string' && u.email.trim().toLowerCase() === cleanEmail
-  );
-  if (matchedUser?.assignedClassId && matchedUser.assignedClassId !== 'all') {
-    allowed.add(String(matchedUser.assignedClassId).toLowerCase());
-  }
-  if (Array.isArray(matchedUser?.assignedClassIds)) {
-    matchedUser.assignedClassIds.forEach((id: string) => {
-      if (id && id !== 'all') allowed.add(String(id).toLowerCase());
-    });
-  }
-  (state.classes || []).forEach((c: any) => {
-    if (!c?.id) return;
-    const primary = String(c.teacherEmail || '').trim().toLowerCase();
-    const extraMatch =
-      Array.isArray(c.authorizedTeacherEmails) &&
-      c.authorizedTeacherEmails.some(
-        (e: string) => typeof e === 'string' && e.trim().toLowerCase() === cleanEmail
-      );
-    if (primary === cleanEmail || extraMatch) {
-      allowed.add(String(c.id).toLowerCase());
-    }
-  });
-  return allowed;
-};
-
-const maskStudentForServerRole = (st: any, role: string): any => {
-  if (!st || typeof st !== 'object' || role === 'admin') return st;
-  const baseMasked = {
-    ...st,
-    cpf: st.cpf ? maskServerSensitiveText(st.cpf, 'cpf') : undefined,
-    rg: st.rg ? maskServerSensitiveText(st.rg, 'rg') : undefined,
-    dataEmissaoRg: st.dataEmissaoRg ? '**/**/****' : undefined,
-    nis: st.nis ? maskServerSensitiveText(st.nis, 'nis') : undefined,
-    cartaoSus: st.cartaoSus ? maskServerSensitiveText(st.cartaoSus, 'sus') : undefined,
-    cep: st.cep ? maskServerSensitiveText(st.cep, 'cep') : undefined,
-    logradouro: st.logradouro ? maskServerSensitiveText(st.logradouro, 'address') : undefined,
-    numeroResidencia: st.numeroResidencia ? '***' : undefined,
-    complemento: st.complemento ? '***' : undefined,
-  };
-  if (role === 'peb2') {
-    return {
-      ...baseMasked,
-      telefones: st.telefones ? maskServerSensitiveText(st.telefones, 'phone') : undefined,
-      guardianPhone: st.guardianPhone ? maskServerSensitiveText(st.guardianPhone, 'phone') : undefined,
-      fichaPdfDriveId: undefined,
-      fichaPdfDriveUrl: undefined,
-      fichaPdfSubfolder: undefined,
-      fichaPdfSha256: undefined,
-      fichaPdfManualLink: false,
-    };
-  }
-  return baseMasked;
-};
-
-const filterClassesForUser = (
-  classes: any[] | undefined,
-  state: SharedSchoolState,
-  reqUser: RequestUser
-): any[] => {
-  if (!Array.isArray(classes)) return [];
-  if (reqUser.isAdmin) return classes;
-  if (reqUser.role === 'peb2') {
-    return classes.map((cls: any) => ({
-      ...cls,
-      students: Array.isArray(cls?.students)
-        ? cls.students.map((st: any) => maskStudentForServerRole(st, 'peb2'))
-        : [],
-    }));
-  }
-  const allowedClassIds = getAllowedTeacherClassIdsForUser(state, reqUser.email);
-  return classes
-    .filter((cls: any) => cls?.id && allowedClassIds.has(String(cls.id).toLowerCase()))
-    .map((cls: any) => ({
-      ...cls,
-      students: Array.isArray(cls?.students)
-        ? cls.students.map((st: any) => maskStudentForServerRole(st, 'usuario'))
-        : [],
-    }));
-};
-
-const sanitizeUsersForRole = (
-  users: any[] | undefined,
-  reqUser: RequestUser
-): any[] | undefined => {
-  if (!Array.isArray(users) || reqUser.isAdmin) return users;
-  return users.map((u: any) => {
-    if (!u || typeof u !== 'object') return u;
-    const email = String(u.email || '').trim().toLowerCase();
-    if (email === reqUser.email) return u;
-    return {
-      id: u.id,
-      name: u.name,
-      role: u.role,
-      teacherRoleType: u.teacherRoleType,
-      pronoun: u.pronoun,
-      firstName: u.firstName,
-      subjectName: u.subjectName,
-      email: u.email,
-      assignedClassId: u.assignedClassId,
-      assignedClassIds: u.assignedClassIds,
-      assignedClassName: u.assignedClassName,
-      assignedClassNames: u.assignedClassNames,
-      active: u.active,
-      updatedAtMs: u.updatedAtMs,
-    };
-  });
-};
-
-const filterSchoolStateForUser = (
-  state: SharedSchoolState,
-  reqUser: RequestUser
-): Record<string, any> => {
-  const { fcmTokens: _hiddenFcmTokens, lastAutoFcmWindowKey: _hiddenKey, ...publicState } = state;
-  if (reqUser.isAdmin) return publicState;
-
-  const allowedClassIds =
-    reqUser.role === 'peb2' ? null : getAllowedTeacherClassIdsForUser(state, reqUser.email);
-  const filteredClasses = filterClassesForUser(state.classes, state, reqUser);
-  const ownedFileTokens = new Set<string>();
-  filteredClasses.forEach((cls: any) => {
-    (cls.students || []).forEach((st: any) => {
-      if (st?.id) ownedFileTokens.add(String(st.id).replace(/[^a-zA-Z0-9-_]/g, '_').toLowerCase());
-      if (st?.fichaPdfDriveUrl) ownedFileTokens.add(String(st.fichaPdfDriveUrl).toLowerCase());
-    });
-  });
-
-  return {
-    ...publicState,
-    classes: filteredClasses,
-    authorizedUsers: sanitizeUsersForRole(state.authorizedUsers, reqUser),
-    accessSessionLogs: Array.isArray(state.accessSessionLogs)
-      ? state.accessSessionLogs.filter(
-          (l: any) => l && String(l.email || '').trim().toLowerCase() === reqUser.email
-        )
-      : [],
-    securityAuditLogs: [],
-    discoveredNominalPdfs:
-      reqUser.role === 'peb2'
-        ? []
-        : Array.isArray(state.discoveredNominalPdfs)
-        ? state.discoveredNominalPdfs.filter((p: any) => {
-            const cid = String(p?.classId || '').toLowerCase();
-            const sid = String(p?.studentId || '').replace(/[^a-zA-Z0-9-_]/g, '_').toLowerCase();
-            return (
-              (cid && allowedClassIds?.has(cid)) ||
-              (sid && ownedFileTokens.has(sid))
-            );
-          })
-        : [],
-  };
-};
-
-const personalizeRealtimeEventForUser = (
-  type: string,
-  payload: Record<string, any>,
-  reqUser: RequestUser,
-  state: SharedSchoolState
-): Record<string, any> | null => {
-  if (reqUser.isAdmin) return payload;
-  const next = { ...payload };
-  if (Array.isArray(next.classes)) {
-    next.classes = filterClassesForUser(next.classes, state, reqUser);
-    if (type === 'classes:updated' && next.classes.length === 0) {
-      return null;
-    }
-  }
-  if (Array.isArray(next.authorizedUsers)) {
-    next.authorizedUsers = sanitizeUsersForRole(next.authorizedUsers, reqUser);
-  }
-  if (Array.isArray(next.accessSessionLogs)) {
-    next.accessSessionLogs = next.accessSessionLogs.filter(
-      (l: any) => l && String(l.email || '').trim().toLowerCase() === reqUser.email
-    );
-  }
-  if (Array.isArray(next.securityAuditLogs)) {
-    next.securityAuditLogs = [];
-  }
-  if (reqUser.role === 'peb2' && Array.isArray(next.discoveredNominalPdfs)) {
-    next.discoveredNominalPdfs = [];
-  }
-  return next;
-};
-
-const canUserAccessOrMutateStudent = (
-  state: SharedSchoolState,
-  reqUser: RequestUser,
-  targetIdOrFilename: string,
-  mode: 'read_photo' | 'read_pdf' | 'write'
-): boolean => {
-  if (reqUser.isAdmin) return true;
-  if (reqUser.role === 'peb2') {
-    if (mode !== 'read_photo') return false;
-    const stem = path.basename(targetIdOrFilename.split('?')[0]).replace(/\.[^/.]+$/, '').toLowerCase();
-    return (state.classes || []).some(
-      (cls: any) =>
-        Array.isArray(cls?.students) &&
-        cls.students.some(
-          (st: any) =>
-            st?.id &&
-            (String(st.id).toLowerCase() === stem ||
-              String(st.id).replace(/[^a-zA-Z0-9-_]/g, '_').toLowerCase() === stem)
-        )
-    );
-  }
-  if (reqUser.role !== 'usuario') return false;
-  const allowedClassIds = getAllowedTeacherClassIdsForUser(state, reqUser.email);
-  if (allowedClassIds.size === 0) return false;
-
-  const cleanTarget = targetIdOrFilename.split('?')[0];
-  const baseName = path.basename(cleanTarget).toLowerCase();
-  const stem = baseName.replace(/\.[^/.]+$/, '');
-  const sanitizedTarget = cleanTarget.replace(/[^a-zA-Z0-9-_]/g, '_').toLowerCase();
-
-  return (state.classes || []).some((cls: any) => {
-    if (!cls?.id || !allowedClassIds.has(String(cls.id).toLowerCase())) return false;
-    return (cls.students || []).some((st: any) => {
-      if (!st?.id) return false;
-      const stIdLower = String(st.id).toLowerCase();
-      const stIdSafe = String(st.id).replace(/[^a-zA-Z0-9-_]/g, '_').toLowerCase();
-      const stPhotoFile = String(st.photo || '').split('?')[0].split('/').pop()?.toLowerCase() || '';
-      const stPdfFile = String(st.fichaPdfDriveUrl || '').split('?')[0].split('/').pop()?.toLowerCase() || '';
-      return (
-        stIdLower === cleanTarget.toLowerCase() ||
-        stIdSafe === sanitizedTarget ||
-        stIdSafe === stem ||
-        stPhotoFile === baseName ||
-        stPdfFile === baseName
-      );
-    });
-  });
-};
-
 const recordSecurityAuditLog = (
   eventType: string,
   details: string,
@@ -1550,84 +1210,54 @@ async function startServer() {
     payload: Record<string, any>,
     originClientId?: string
   ) => {
-    const state = readSharedState();
-    const baseEnvelope = {
+    const envelopePayload = {
       ...payload,
       ...(originClientId ? { originClientId } : {}),
     };
-    const ts = Date.now();
-    let adminSerialized: string | null = null;
-    const getAdminSerialized = () => {
-      if (!adminSerialized) {
-        adminSerialized = JSON.stringify({ type, payload: baseEnvelope, ts });
-      }
-      return adminSerialized;
-    };
+    const serialized = JSON.stringify({
+      type,
+      payload: envelopePayload,
+      ts: Date.now(),
+    });
 
     wsClients.forEach((client) => {
       if (!client.user || !client.user.isInstitutional) return;
       if (originClientId && client.clientId && client.clientId === originClientId) return;
-      if (client.ws.readyState !== WebSocket.OPEN) return;
-      try {
-        if (client.user.isAdmin) {
-          client.ws.send(getAdminSerialized());
-          return;
+      if (client.ws.readyState === WebSocket.OPEN) {
+        try {
+          client.ws.send(serialized);
+        } catch {
+          // cleaned up by close/ping watchdog
         }
-        const personalized = personalizeRealtimeEventForUser(type, baseEnvelope, client.user, state);
-        if (!personalized) return;
-        client.ws.send(JSON.stringify({ type, payload: personalized, ts }));
-      } catch {
-        // cleaned up by close/ping watchdog
       }
     });
 
     sseClients.forEach((client) => {
-      if (!client.user || !client.user.isInstitutional) return;
       if (originClientId && client.clientId && client.clientId === originClientId) return;
-      if (client.res.writableEnded) return;
-      try {
-        if (client.user.isAdmin) {
-          client.res.write(`data: ${getAdminSerialized()}\n\n`);
-          return;
+      if (!client.res.writableEnded) {
+        try {
+          client.res.write(`data: ${serialized}\n\n`);
+        } catch {
+          sseClients.delete(client);
         }
-        const personalized = personalizeRealtimeEventForUser(type, baseEnvelope, client.user, state);
-        if (!personalized) return;
-        client.res.write(`data: ${JSON.stringify({ type, payload: personalized, ts })}\n\n`);
-      } catch {
-        sseClients.delete(client);
       }
     });
   };
 
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  app.use((req, res, next) => {
-    const xfProto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
-    const isHttps = req.secure || xfProto.includes('https');
+  app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader(
-      'Permissions-Policy',
-      'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
-    );
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-    if (isHttps) {
-      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    }
-    const scriptDirective =
-      process.env.NODE_ENV === 'production'
-        ? "script-src 'self' 'unsafe-inline' https:;"
-        : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:;";
-    res.setHeader(
       'Content-Security-Policy',
-      `default-src 'self' 'unsafe-inline' https: blob: data:; ${scriptDirective} object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; frame-src 'self' https: data: blob:; img-src 'self' https: data: blob:;`
+      "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'self' https: data: blob:; img-src 'self' https: data: blob:;"
     );
     next();
   });
 
-  // Proteção anti-CSRF estrita por verificação de Origin/Referer/Host + cabeçalho customizado em mutações via cookie
+  // Proteção anti-CSRF por verificação de Origin/Host em mutações autenticadas via cookie
   app.use('/api', (req, res, next) => {
     const method = req.method.toUpperCase();
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
@@ -1639,15 +1269,14 @@ async function startServer() {
       next();
       return;
     }
-    const expectedHost = String(req.headers['x-forwarded-host'] || req.headers.host || '')
-      .split(',')[0]
-      .trim()
-      .toLowerCase();
     const origin = String(req.headers.origin || '').trim();
-    const referer = String(req.headers.referer || '').trim();
     if (origin && origin !== 'null') {
       try {
         const originHost = new URL(origin).host.toLowerCase();
+        const expectedHost = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+          .split(',')[0]
+          .trim()
+          .toLowerCase();
         if (expectedHost && originHost !== expectedHost) {
           res.status(403).json({
             error: 'Origem da requisição não autorizada para esta operação.',
@@ -1659,36 +1288,11 @@ async function startServer() {
         res.status(403).json({ error: 'Cabeçalho Origin inválido.', code: 'INVALID_ORIGIN' });
         return;
       }
-    } else if (referer) {
-      try {
-        const refererHost = new URL(referer).host.toLowerCase();
-        if (expectedHost && refererHost !== expectedHost) {
-          res.status(403).json({
-            error: 'Origem Referer da requisição não autorizada.',
-            code: 'CSRF_REFERER_MISMATCH',
-          });
-          return;
-        }
-      } catch {
-        res.status(403).json({ error: 'Cabeçalho Referer inválido.', code: 'INVALID_REFERER' });
-        return;
-      }
-    } else {
-      const hasCustomHeader =
-        Boolean(req.headers['x-requested-with']) ||
-        Boolean(req.headers['x-realtime-client-id']);
-      if (!hasCustomHeader) {
-        res.status(403).json({
-          error: 'Cabeçalho anti-CSRF obrigatório ausente.',
-          code: 'CSRF_HEADER_REQUIRED',
-        });
-        return;
-      }
     }
     next();
   });
 
-  // Rate limiter leve em memória para endpoints críticos de sessão, logs, estado e upload
+  // Rate limiter leve em memória para endpoints críticos de sessão, logs e upload
   const rateLimitBuckets = new Map<string, { count: number; resetAtMs: number }>();
   const applyRateLimit = (bucketPrefix: string, maxReq: number, windowMs: number) => {
     return (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -1717,9 +1321,6 @@ async function startServer() {
   };
 
   app.use('/api/auth/session', applyRateLimit('auth', 30, 60_000));
-  app.use('/api/auth/logout', applyRateLimit('auth_logout', 30, 60_000));
-  app.use('/api/school-state', applyRateLimit('school_state', 180, 60_000));
-  app.use('/api/fcm', applyRateLimit('fcm', 90, 60_000));
   app.use('/api/security-logs', applyRateLimit('sec_logs', 90, 60_000));
   app.use('/api/photos', applyRateLimit('photos', 240, 60_000));
   app.use('/api/pdfs', applyRateLimit('pdfs', 240, 60_000));
@@ -1825,20 +1426,8 @@ async function startServer() {
     }
   });
 
-  // API: Encerrar sessão segura e revogar token jti + cookie HttpOnly
+  // API: Encerrar sessão segura e revogar cookie HttpOnly
   app.post('/api/auth/logout', (req, res) => {
-    try {
-      const cookies = parseCookiesFromRequest(req);
-      const rawCookie = cookies[SESSION_COOKIE_NAME];
-      if (rawCookie) {
-        const parsed = verifySessionCookieValue(rawCookie);
-        if (parsed?.jti) {
-          revokeSessionJti(parsed.jti, parsed.exp);
-        }
-      }
-    } catch {
-      // ignore cookie parse error on logout
-    }
     setSessionCookieHeader(req, res, '', 0);
     res.json({ ok: true });
   });
@@ -1890,13 +1479,12 @@ async function startServer() {
     });
   });
 
-  // API: Obter estado compartilhado filtrado estritamente por perfil RBAC e proteção LGPD
-  app.get('/api/school-state', requireInstitutionalAuth, (req, res) => {
-    const reqUser = extractRequestUser(req);
+  // API: Obter estado compartilhado (protegido por autenticação institucional verificada)
+  app.get('/api/school-state', requireInstitutionalAuth, (_req, res) => {
     const state = readSharedState();
-    const filtered = filterSchoolStateForUser(state, reqUser);
+    const { fcmTokens: _hiddenFcmTokens, ...publicState } = state;
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.json(filtered);
+    res.json(publicState);
   });
 
   // API: Registrar token de leitura da pasta oficial do Drive (Admin Only)
@@ -2028,33 +1616,19 @@ async function startServer() {
     }
   };
 
-  // API: Servir fotos salvas localmente no servidor com verificação RBAC por turma e contenção estrita de caminho
+  // API: Servir fotos salvas localmente no servidor com Content-Type correto (WebP/PNG/JPG) e acesso autenticado
   app.get('/api/photos/:filename', requireInstitutionalAuth, (req, res) => {
     const filename = path.basename(req.params.filename || '');
-    if (!filename || filename === '.' || filename === '..' || String(req.params.filename || '').includes('..')) {
+    if (!filename || filename.includes('..')) {
       res.status(400).end();
       return;
     }
-    const reqUser = extractRequestUser(req);
-    const state = readSharedState();
-    if (!canUserAccessOrMutateStudent(state, reqUser, filename, 'read_photo')) {
-      res.status(403).json({
-        error: 'Acesso negado à foto de estudante fora da sua turma atribuída.',
-        code: 'CLASS_OWNERSHIP_FORBIDDEN',
-      });
-      return;
-    }
-    const resolvedPhotosRoot = path.resolve(PHOTOS_DIR) + path.sep;
-    let filePath = path.resolve(PHOTOS_DIR, filename);
-    if (!filePath.startsWith(resolvedPhotosRoot)) {
-      res.status(400).end();
-      return;
-    }
+    let filePath = path.join(PHOTOS_DIR, filename);
     if (!fs.existsSync(filePath)) {
       const stem = filename.replace(/\.[^/.]+$/, '');
       for (const fallbackExt of ['.webp', '.jpg', '.jpeg', '.png']) {
-        const altPath = path.resolve(PHOTOS_DIR, `${stem}${fallbackExt}`);
-        if (altPath.startsWith(resolvedPhotosRoot) && fs.existsSync(altPath)) {
+        const altPath = path.join(PHOTOS_DIR, `${stem}${fallbackExt}`);
+        if (fs.existsSync(altPath)) {
           filePath = altPath;
           break;
         }
@@ -2208,7 +1782,7 @@ async function startServer() {
     return { updatedCount, skippedCount, results };
   };
 
-  // API: Upload individual binário de foto (zero bloat base64) com checagem RBAC de turma
+  // API: Upload individual binário de foto (zero bloat base64)
   app.post(
     '/api/photos/upload-binary',
     requireInstitutionalAuth,
@@ -2224,29 +1798,6 @@ async function startServer() {
         return;
       }
       const { studentId, sha256 } = validation.data;
-      const reqUser = extractRequestUser(req);
-      const currentState = readSharedState();
-      if (!reqUser.isAdmin && reqUser.role !== 'usuario') {
-        res.status(403).json({
-          error: 'Perfil somente leitura não pode enviar ou substituir fotos.',
-          code: 'READ_ONLY_ROLE_FORBIDDEN',
-        });
-        return;
-      }
-      if (!canUserAccessOrMutateStudent(currentState, reqUser, studentId, 'write')) {
-        recordSecurityAuditLog(
-          'CLASS_OWNERSHIP_VIOLATION_BLOCKED',
-          `Docente ${reqUser.email} tentou enviar foto para estudante fora da sua turma (${studentId}).`,
-          req,
-          'BLOCKED',
-          reqUser
-        );
-        res.status(403).json({
-          error: 'Você só pode enviar fotos de estudantes da sua própria turma atribuída.',
-          code: 'CLASS_OWNERSHIP_FORBIDDEN',
-        });
-        return;
-      }
       const buffer = req.body as Buffer;
       try {
         const result = applyPhotoBatchToState(
@@ -2283,7 +1834,7 @@ async function startServer() {
     }
   );
 
-  // API: Upload individual de foto pelo PEB I ou Admin (JSON DataURL retrocompatível) com RBAC por turma
+  // API: Upload individual de foto pelo PEB I ou Admin (JSON DataURL retrocompatível)
   app.post('/api/photos/upload', requireInstitutionalAuth, (req, res) => {
     const validation = validatePhotoUploadPayload(req.body);
     if (!validation.ok) {
@@ -2291,31 +1842,9 @@ async function startServer() {
       return;
     }
     const { studentId, photoDataUrl } = validation.data;
-    const reqUser = extractRequestUser(req);
-    const current = readSharedState();
-    if (!reqUser.isAdmin && reqUser.role !== 'usuario') {
-      res.status(403).json({
-        error: 'Perfil somente leitura não pode enviar ou substituir fotos.',
-        code: 'READ_ONLY_ROLE_FORBIDDEN',
-      });
-      return;
-    }
-    if (!canUserAccessOrMutateStudent(current, reqUser, studentId, 'write')) {
-      recordSecurityAuditLog(
-        'CLASS_OWNERSHIP_VIOLATION_BLOCKED',
-        `Docente ${reqUser.email} tentou enviar foto para estudante fora da sua turma (${studentId}).`,
-        req,
-        'BLOCKED',
-        reqUser
-      );
-      res.status(403).json({
-        error: 'Você só pode enviar fotos de estudantes da sua própria turma atribuída.',
-        code: 'CLASS_OWNERSHIP_FORBIDDEN',
-      });
-      return;
-    }
     try {
       const saved = savePhotoDataUrlToFile(studentId, photoDataUrl);
+      const current = readSharedState();
       let updated = false;
       const now = Date.now();
       const changedClasses: any[] = [];
@@ -2427,9 +1956,6 @@ async function startServer() {
       return;
     }
 
-    const reqUser = extractRequestUser(req);
-    const state = readSharedState();
-    const resolvedPhotosRoot = path.resolve(PHOTOS_DIR) + path.sep;
     const results: Record<
       string,
       { accessible: boolean; sizeBytes?: number; reason?: 'missing' | 'empty' | 'invalid_name' }
@@ -2445,21 +1971,12 @@ async function startServer() {
         continue;
       }
 
-      if (!canUserAccessOrMutateStudent(state, reqUser, filename, 'read_photo')) {
-        results[trimmed] = { accessible: false, reason: 'missing' };
-        continue;
-      }
-
-      let filePath = path.resolve(PHOTOS_DIR, filename);
-      if (!filePath.startsWith(resolvedPhotosRoot)) {
-        results[trimmed] = { accessible: false, reason: 'invalid_name' };
-        continue;
-      }
+      let filePath = path.join(PHOTOS_DIR, filename);
       if (!fs.existsSync(filePath)) {
         const stem = filename.replace(/\.[^/.]+$/, '');
         for (const fallbackExt of ['.webp', '.jpg', '.jpeg', '.png']) {
-          const altPath = path.resolve(PHOTOS_DIR, `${stem}${fallbackExt}`);
-          if (altPath.startsWith(resolvedPhotosRoot) && fs.existsSync(altPath)) {
+          const altPath = path.join(PHOTOS_DIR, `${stem}${fallbackExt}`);
+          if (fs.existsSync(altPath)) {
             filePath = altPath;
             break;
           }
@@ -2554,42 +2071,20 @@ async function startServer() {
     } catch {}
   }
 
-  // API: Servir PDFs salvos no servidor com checagem estrita de perfil (bloqueia PEB II e outras turmas) e contenção de caminho
+  // API: Servir PDFs salvos no servidor apenas para usuários institucionais autenticados
   app.get('/api/pdfs/:filename', requireInstitutionalAuth, (req, res) => {
     const filename = path.basename(req.params.filename || '');
-    if (!filename || filename === '.' || filename === '..' || String(req.params.filename || '').includes('..')) {
+    if (!filename || filename.includes('..')) {
       res.status(400).end();
       return;
     }
-    const reqUser = extractRequestUser(req);
-    const state = readSharedState();
-    if (!canUserAccessOrMutateStudent(state, reqUser, filename, 'read_pdf')) {
-      recordSecurityAuditLog(
-        'LGPD_DOCUMENT_ACCESS_BLOCKED',
-        `Acesso bloqueado ao PDF "${filename}" para perfil ${reqUser.role} (${reqUser.email}).`,
-        req,
-        'BLOCKED',
-        reqUser
-      );
-      res.status(403).json({
-        error: 'Acesso negado à ficha cadastral em PDF deste estudante.',
-        code: 'PDF_ACCESS_FORBIDDEN',
-      });
-      return;
-    }
-    const resolvedPdfsRoot = path.resolve(PDFS_DIR) + path.sep;
-    const filePath = path.resolve(PDFS_DIR, filename);
-    if (!filePath.startsWith(resolvedPdfsRoot)) {
-      res.status(400).end();
-      return;
-    }
+    const filePath = path.join(PDFS_DIR, filename);
     if (!fs.existsSync(filePath)) {
       res.status(404).end();
       return;
     }
-    const safeDispositionName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${safeDispositionName}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
     res.setHeader('Cache-Control', 'private, max-age=86400');
     fs.createReadStream(filePath).pipe(res);
   });
@@ -2737,7 +2232,7 @@ async function startServer() {
     return { updatedCount, skippedCount, results };
   };
 
-  // API: Upload individual de PDF de estudante com checagem RBAC de turma
+  // API: Upload individual de PDF de estudante
   app.post('/api/pdfs/upload', requireInstitutionalAuth, (req, res) => {
     const validation = validatePdfUploadPayload(req.body);
     if (!validation.ok) {
@@ -2745,29 +2240,6 @@ async function startServer() {
       return;
     }
     const { studentId, pdfDataUrl } = validation.data;
-    const reqUser = extractRequestUser(req);
-    const current = readSharedState();
-    if (!reqUser.isAdmin && reqUser.role !== 'usuario') {
-      res.status(403).json({
-        error: 'Perfil somente leitura não pode enviar fichas PDF.',
-        code: 'READ_ONLY_ROLE_FORBIDDEN',
-      });
-      return;
-    }
-    if (!canUserAccessOrMutateStudent(current, reqUser, studentId, 'write')) {
-      recordSecurityAuditLog(
-        'CLASS_OWNERSHIP_VIOLATION_BLOCKED',
-        `Docente ${reqUser.email} tentou enviar PDF para estudante fora da sua turma (${studentId}).`,
-        req,
-        'BLOCKED',
-        reqUser
-      );
-      res.status(403).json({
-        error: 'Você só pode enviar fichas de estudantes da sua própria turma atribuída.',
-        code: 'CLASS_OWNERSHIP_FORBIDDEN',
-      });
-      return;
-    }
     try {
       const buffer = decodePdfBufferFromDataUrl(pdfDataUrl);
       const result = applyPdfBatchToState([{ studentId, buffer }], getRequestClientId(req));
@@ -2899,7 +2371,7 @@ async function startServer() {
     const cached = drivePhotoBufferCache.get(fileId);
     if (cached && Date.now() - cached.cachedAt < 1000 * 60 * 60 * 6) {
       res.setHeader('Content-Type', cached.contentType);
-      res.setHeader('Cache-Control', 'private, max-age=86400');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
       res.send(cached.buffer);
       return;
     }
@@ -2940,7 +2412,7 @@ async function startServer() {
                 cachedAt: Date.now(),
               });
               res.setHeader('Content-Type', finalType);
-              res.setHeader('Cache-Control', 'private, max-age=86400');
+              res.setHeader('Cache-Control', 'public, max-age=86400');
               res.send(buffer);
               return;
             }
@@ -2970,7 +2442,7 @@ async function startServer() {
               cachedAt: Date.now(),
             });
             res.setHeader('Content-Type', contentType);
-            res.setHeader('Cache-Control', 'private, max-age=86400');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
             res.send(buffer);
             return;
           }
@@ -3113,35 +2585,8 @@ async function startServer() {
               ? extSt.photoDriveUrl
               : baseSt.photoDriveUrl || extSt?.photoDriveUrl;
 
-            // Preserva campos sensíveis/documentos no servidor caso usuário não-admin envie payload mascarado via LGPD
-            const preserveServerPii = !user.isAdmin && Boolean(extSt);
-            const isMaskedString = (v: unknown) => typeof v === 'string' && v.includes('***');
-            const preservedPhones =
-              preserveServerPii && isMaskedString(baseSt.telefones)
-                ? extSt.telefones
-                : baseSt.telefones;
-            const preservedGuardianPhone =
-              preserveServerPii && isMaskedString(baseSt.guardianPhone)
-                ? extSt.guardianPhone
-                : baseSt.guardianPhone;
-
             return {
               ...baseSt,
-              ...(preserveServerPii
-                ? {
-                    cpf: extSt.cpf,
-                    rg: extSt.rg,
-                    dataEmissaoRg: extSt.dataEmissaoRg,
-                    nis: extSt.nis,
-                    cartaoSus: extSt.cartaoSus,
-                    cep: extSt.cep,
-                    logradouro: extSt.logradouro,
-                    numeroResidencia: extSt.numeroResidencia,
-                    complemento: extSt.complemento,
-                    telefones: preservedPhones,
-                    guardianPhone: preservedGuardianPhone,
-                  }
-                : {}),
               diasLetivosRecorte,
               totalAbsencesMonth,
               justifiedAbsences,
@@ -3370,41 +2815,6 @@ async function startServer() {
     });
 
     const saved = writeSharedState({ authorizedUsers: mergedUsers });
-
-    // Revoga imediatamente sessões e conexões realtime de contas recém-desativadas ou expiradas
-    const todayIso = getTodaySaoPauloIso();
-    const revokedEmails = new Set<string>();
-    mergedUsers.forEach((u: any) => {
-      const email = String(u?.email || '').trim().toLowerCase();
-      if (!email) return;
-      const expired =
-        typeof u.accessExpiresAt === 'string' &&
-        /^\d{4}-\d{2}-\d{2}$/.test(u.accessExpiresAt.trim()) &&
-        todayIso > u.accessExpiresAt.trim();
-      if (u.active === false || expired) {
-        revokedEmails.add(email);
-        revokeUserSessionsAfter(email, Date.now());
-      }
-    });
-    if (revokedEmails.size > 0) {
-      wsClients.forEach((client) => {
-        if (client.user?.email && revokedEmails.has(client.user.email)) {
-          try {
-            client.ws.close(4403, 'Acesso revogado pelo administrador');
-          } catch {}
-          wsClients.delete(client);
-        }
-      });
-      sseClients.forEach((client) => {
-        if (client.user?.email && revokedEmails.has(client.user.email)) {
-          try {
-            client.res.end();
-          } catch {}
-          sseClients.delete(client);
-        }
-      });
-    }
-
     broadcastRealtimeEvent(
       'meta:updated',
       {
@@ -3415,39 +2825,13 @@ async function startServer() {
     res.json(saved);
   });
 
-  // API: Atualizar Política Centralizada de LGPD & Sessão (Admin Only)
-  app.post('/api/school-state/lgpd', requireAdminAuth, (req, res) => {
-    const validation = validateLgpdConfigPayload(req.body);
-    if (!validation.ok) {
-      res.status(400).json({ error: validation.error });
-      return;
-    }
-    const reqUser = extractRequestUser(req);
-    const saved = writeSharedState({ lgpdConfig: validation.data.lgpdConfig });
-    broadcastRealtimeEvent(
-      'meta:updated',
-      { lgpdConfig: saved.lgpdConfig },
-      getRequestClientId(req)
-    );
-    recordSecurityAuditLog(
-      'LGPD_CONFIG_UPDATED',
-      `Política LGPD atualizada por ${reqUser.email}: mascaramento=${saved.lgpdConfig?.maskSensitiveDataByDefault ? 'ATIVO' : 'DESATIVADO'}, anonimizar_export=${saved.lgpdConfig?.anonymizeExportedSpreadsheets ? 'SIM' : 'NÃO'}, auto_logout=${saved.lgpdConfig?.autoLogoutMinutes || 60}min.`,
-      req,
-      'SUCCESS',
-      reqUser
-    );
-    res.json({ ok: true, lgpdConfig: saved.lgpdConfig });
-  });
-
   // Helper: Higienização Recursiva contra XSS / Injection
   const sanitizeTextSafe = (val: any): any => {
     if (typeof val === 'string') {
       return val
-        .replace(/<(script|svg|iframe|object|embed)\b[^]*?(?:<\/\1>|\/\s*>)/gi, '')
-        .replace(/<\/?(script|svg|iframe|object|embed)\b[^>]*>/gi, '')
-        .replace(/\b(?:javascript|vbscript)\s*:/gi, '')
-        .replace(/\bdata\s*:\s*text\/html\b/gi, '')
-        .replace(/\son\w+\s*=/gi, '');
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/javascript\s*:/gi, '')
+        .replace(/on\w+\s*=/gi, '');
     }
     if (Array.isArray(val)) {
       return val.map(sanitizeTextSafe);
@@ -3630,7 +3014,7 @@ async function startServer() {
     const { accessSessionLogs, authorizedUsers } = validation.data;
     const current = readSharedState();
 
-    const reqUser = extractRequestUser(req);
+    // Merge session logs by ID
     const logMap = new Map<string, any>();
     (current.accessSessionLogs || []).forEach((l: any) => {
       if (l && l.id) logMap.set(l.id, l);
@@ -3638,11 +3022,9 @@ async function startServer() {
     if (Array.isArray(accessSessionLogs)) {
       accessSessionLogs.forEach((l: any) => {
         if (!l || !l.id) return;
-        const logEmail = String(l.email || '').trim().toLowerCase();
-        if (!reqUser.isAdmin && logEmail !== reqUser.email) return;
         const prev = logMap.get(l.id);
         if (!prev || (l.durationSeconds || 0) >= (prev.durationSeconds || 0) || l.logoutTimeISO) {
-          logMap.set(l.id, { ...l, ...(logEmail ? { email: logEmail } : {}) });
+          logMap.set(l.id, l);
         }
       });
     }
@@ -3655,6 +3037,7 @@ async function startServer() {
       .slice(0, 500);
 
     let nextUsers = current.authorizedUsers;
+    const reqUser = extractRequestUser(req);
     if (Array.isArray(authorizedUsers)) {
       const currentByEmail = new Map<string, any>();
       (current.authorizedUsers || []).forEach((u: any) => {
@@ -3876,7 +3259,6 @@ async function startServer() {
       return;
     }
 
-    const reqUser = extractRequestUser(req);
     const newCalendarConfig = {
       year: Number(year) || 2027,
       schoolDays: validation.validDates,
@@ -3884,16 +3266,16 @@ async function startServer() {
       monthlyDistribution: validation.monthlyDistribution,
       holidays: currentHolidays,
       updatedAtMs: Date.now(),
-      updatedByEmail: reqUser.email || adminEmail || 'emebjfreitas@jundiai.sp.gov.br',
-      updatedByName: reqUser.name || adminName || 'Administrador Escolar',
+      updatedByEmail: adminEmail || 'emebjfreitas@jundiai.sp.gov.br',
+      updatedByName: adminName || 'Administrador Escolar',
       version: (current.officialCalendarConfig?.version || 1) + 1,
     };
 
     const auditEntry = {
       id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestampISO: new Date().toISOString(),
-      adminEmail: reqUser.email || adminEmail || 'emebjfreitas@jundiai.sp.gov.br',
-      adminName: reqUser.name || adminName || 'Administrador Escolar',
+      adminEmail: adminEmail || 'emebjfreitas@jundiai.sp.gov.br',
+      adminName: adminName || 'Administrador Escolar',
       action: 'UPDATE_200_DAYS',
       previousDaysCount: current.officialCalendarConfig?.schoolDays?.length || 200,
       newDaysCount: 200,
@@ -3951,9 +3333,6 @@ async function startServer() {
       return;
     }
     const { action, holiday, holidayId, adminEmail, adminName } = validation.data;
-    const reqUser = extractRequestUser(req);
-    const verifiedAdminEmail = reqUser.email || adminEmail || 'emebjfreitas@jundiai.sp.gov.br';
-    const verifiedAdminName = reqUser.name || adminName || 'Administrador Escolar';
     const current = readSharedState();
     let holidaysList = Array.isArray(current.holidays) ? [...current.holidays] : [...OFFICIAL_DEFAULT_HOLIDAYS_2027];
 
@@ -3979,7 +3358,7 @@ async function startServer() {
         type: holiday.type || 'municipal',
         description: holiday.description || '',
         createdAtISO: new Date().toISOString(),
-        updatedByEmail: verifiedAdminEmail,
+        updatedByEmail: adminEmail || 'emebjfreitas@jundiai.sp.gov.br',
       };
       holidaysList.push(newHol);
       auditDetail = `Cadastro de novo feriado/recesso: "${newHol.name}" em ${newHol.date} (${newHol.type}).`;
@@ -4001,8 +3380,8 @@ async function startServer() {
     const auditEntry = {
       id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestampISO: new Date().toISOString(),
-      adminEmail: verifiedAdminEmail,
-      adminName: verifiedAdminName,
+      adminEmail: adminEmail || 'emebjfreitas@jundiai.sp.gov.br',
+      adminName: adminName || 'Administrador Escolar',
       action: action === 'delete' ? 'DELETE_HOLIDAY' : action === 'edit' ? 'EDIT_HOLIDAY' : 'ADD_HOLIDAY',
       previousDaysCount: current.officialCalendarConfig?.schoolDays?.length || 200,
       newDaysCount: current.officialCalendarConfig?.schoolDays?.length || 200,

@@ -286,57 +286,11 @@ export const sanitizeStudentForLgpd = (
     guardianPhone: student.guardianPhone
       ? maskSensitiveText(student.guardianPhone, 'phone')
       : undefined,
-    cartaoSus: student.cartaoSus ? maskSensitiveText(student.cartaoSus, 'sus') : undefined,
+    cartaoSus: student.cartaoSus ? maskSensitiveText(student.cartaoSus, 'nis') : undefined,
     logradouro: student.logradouro ? maskSensitiveText(student.logradouro, 'address') : undefined,
     numeroResidencia: student.numeroResidencia ? '***' : undefined,
     complemento: student.complemento ? '***' : undefined,
   };
-};
-
-const sanitizeCsvCell = (val: string | number): string => {
-  const str = String(val ?? '');
-  if (/^[=+\-@\t\r]/.test(str)) {
-    return `"'${str.replace(/"/g, '""')}"`;
-  }
-  if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-};
-
-export const pushLgpdConfigToServer = async (config: LgpdProtectionConfig): Promise<boolean> => {
-  if (!isBackendApiAvailable()) return false;
-  try {
-    const headers = await getActiveUserAuthHeadersAsync();
-    const res = await fetch('/api/school-state/lgpd', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      credentials: 'include',
-      body: JSON.stringify(config),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-};
-
-export const applyRemoteLgpdConfig = (config: Partial<LgpdProtectionConfig>): LgpdProtectionConfig => {
-  const current = getStoredLgpdConfig();
-  const merged: LgpdProtectionConfig = {
-    ...current,
-    ...config,
-    lastAuditedAtISO: new Date().toISOString(),
-  };
-  memoryLgpdConfig = merged;
-  try {
-    localStorage.setItem(LGPD_CONFIG_STORAGE_KEY, JSON.stringify(merged));
-  } catch {
-    // ignore
-  }
-  return merged;
 };
 
 export const exportSecurityAuditLogsCSV = (): void => {
@@ -354,16 +308,16 @@ export const exportSecurityAuditLogsCSV = (): void => {
     'IP',
   ];
   const rows = logs.map((l) => [
-    sanitizeCsvCell(l.id),
-    sanitizeCsvCell(new Date(l.timestampISO).toLocaleString('pt-BR')),
-    sanitizeCsvCell(l.userEmail),
-    sanitizeCsvCell(l.userName || ''),
-    sanitizeCsvCell(l.userRole.toUpperCase()),
-    sanitizeCsvCell(l.eventType),
-    sanitizeCsvCell(l.actionTitle || ''),
-    sanitizeCsvCell(l.severity.toUpperCase()),
-    sanitizeCsvCell(l.details || ''),
-    sanitizeCsvCell(l.clientIp || '127.0.0.1'),
+    l.id,
+    new Date(l.timestampISO).toLocaleString('pt-BR'),
+    l.userEmail,
+    `"${(l.userName || '').replace(/"/g, '""')}"`,
+    l.userRole.toUpperCase(),
+    l.eventType,
+    `"${(l.actionTitle || '').replace(/"/g, '""')}"`,
+    l.severity.toUpperCase(),
+    `"${(l.details || '').replace(/"/g, '""')}"`,
+    l.clientIp || '127.0.0.1',
   ]);
 
   const csvContent =

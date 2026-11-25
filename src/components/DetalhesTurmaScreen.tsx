@@ -7,8 +7,6 @@ import {
   ClassExportSortOrder,
   ClassExportStatusFilter,
   downloadClassCustomXLS,
-  getStoredLgpdConfig,
-  maskSensitiveText,
 } from '../services/db';
 import { OFFICIAL_OCTOBER_DAYS } from '../data/mockData';
 import {
@@ -499,9 +497,7 @@ const LinhaEstudante: React.FC<LinhaEstudanteProps> = memo(({
                   <>
                     {hasCompactGuardian1 && <span aria-hidden="true"> · </span>}
                     <span className="text-[#047857] tabular-nums font-medium">
-                      {getStoredLgpdConfig().maskSensitiveDataByDefault
-                        ? maskSensitiveText(student.telefones, 'phone')
-                        : student.telefones}
+                      {student.telefones}
                     </span>
                   </>
                 )}

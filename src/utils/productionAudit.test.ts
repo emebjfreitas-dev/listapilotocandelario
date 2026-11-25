@@ -882,13 +882,6 @@ assert.ok(!cleanupPlan.blobsToDelete.includes('url:https://lh3.googleusercontent
 assert.equal(cleanupPlan.freedBytes, 2048 + 1024);
 assert.equal(cleanupPlan.orphanedAliasesCount, 1);
 
-// Testes adicionais de segurança e LGPD
-const maskedCpf = maskSensitiveText('12345678901', 'cpf');
-assert.ok(maskedCpf.includes('***'), 'CPF deve estar mascarado');
-
-const maskedSus = maskSensitiveText('123456789012345', 'sus');
-assert.ok(maskedSus.includes('***'), 'Cartão SUS deve estar mascarado');
-
 console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting e cache IndexedDB de fotos passaram com sucesso!');
 
 

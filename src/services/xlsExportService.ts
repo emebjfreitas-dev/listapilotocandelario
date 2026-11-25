@@ -112,7 +112,7 @@ export const exportOfficialMatrixToXLS = async (
     );
     const periodo = cls.shift.toUpperCase().includes('TARDE') ? 'TARDE' : 'MANHÃ';
 
-    return sanitizeSpreadsheetRow({
+    return {
       'TURMA ABREV': cls.turmaAbrev || cls.id.toUpperCase(),
       'PROFESSOR(A)': regenteUser?.name || cls.teacherName || '',
       'E-MAIL INSTITUCIONAL REGENTE': regenteUser?.email || cls.teacherEmail || '',
@@ -133,7 +133,7 @@ export const exportOfficialMatrixToXLS = async (
       'E-MAIL EDUCAÇÃO FÍSICA': cls.peTeacherEmail || '',
       'LÍNGUA INGLESA': cls.englishTeacher || '',
       'E-MAIL LÍNGUA INGLESA': cls.englishTeacherEmail || '',
-    });
+    };
   });
 
   const wsMatrix = XLSX.utils.json_to_sheet(matrixRows);
@@ -161,36 +161,34 @@ export const exportOfficialMatrixToXLS = async (
   ];
   XLSX.utils.book_append_sheet(wb, wsMatrix, 'QUADRO TURMAS E PROFESSORES');
 
-  const accessRows = authorizedUsers.map((u, idx) =>
-    sanitizeSpreadsheetRow({
-      'ORDEM': idx + 1,
-      'NOME DO(A) SERVIDOR(A)': u.name,
-      'PRONOME': u.pronoun || '',
-      'PRINOME': u.firstName || '',
-      'E-MAIL INSTITUCIONAL': u.email,
-      'PERFIL / FUNÇÃO':
-        u.role === 'admin'
-          ? 'ADMINISTRADOR (Acesso Pleno)'
-          : u.role === 'usuario'
-          ? 'PROFESSOR(A) REGENTE PEB I'
-          : `ESPECIALISTA PEB II (${u.subjectName || 'Arte / Educação Física / Inglês'})`,
-      'TURMAS VINCULADAS':
-        u.assignedClassNames && u.assignedClassNames.length > 0
-          ? u.assignedClassNames.join(' + ')
-          : u.assignedClassName,
-      'STATUS': isUserAccessExpired(u)
-        ? 'EXPIRADO'
-        : u.active
-        ? 'ATIVO'
-        : 'BLOQUEADO',
-      'VALIDADE DO ACESSO': u.accessExpiresAt
-        ? formatAccessExpirationDateBR(u.accessExpiresAt)
-        : 'Permanente',
-      'ACESSOS TOTAIS': u.totalAccessCount || 0,
-      'TEMPO CONECTADO': formatDurationHuman(u.totalDurationSeconds || 0),
-      'ÚLTIMO ACESSO': u.lastLoginAt || 'Ainda não acessou',
-    })
-  );
+  const accessRows = authorizedUsers.map((u, idx) => ({
+    'ORDEM': idx + 1,
+    'NOME DO(A) SERVIDOR(A)': u.name,
+    'PRONOME': u.pronoun || '',
+    'PRINOME': u.firstName || '',
+    'E-MAIL INSTITUCIONAL': u.email,
+    'PERFIL / FUNÇÃO':
+      u.role === 'admin'
+        ? 'ADMINISTRADOR (Acesso Pleno)'
+        : u.role === 'usuario'
+        ? 'PROFESSOR(A) REGENTE PEB I'
+        : `ESPECIALISTA PEB II (${u.subjectName || 'Arte / Educação Física / Inglês'})`,
+    'TURMAS VINCULADAS':
+      u.assignedClassNames && u.assignedClassNames.length > 0
+        ? u.assignedClassNames.join(' + ')
+        : u.assignedClassName,
+    'STATUS': isUserAccessExpired(u)
+      ? 'EXPIRADO'
+      : u.active
+      ? 'ATIVO'
+      : 'BLOQUEADO',
+    'VALIDADE DO ACESSO': u.accessExpiresAt
+      ? formatAccessExpirationDateBR(u.accessExpiresAt)
+      : 'Permanente',
+    'ACESSOS TOTAIS': u.totalAccessCount || 0,
+    'TEMPO CONECTADO': formatDurationHuman(u.totalDurationSeconds || 0),
+    'ÚLTIMO ACESSO': u.lastLoginAt || 'Ainda não acessou',
+  }));
   const wsAccess = XLSX.utils.json_to_sheet(accessRows);
   wsAccess['!cols'] = [
     { wch: 8 },

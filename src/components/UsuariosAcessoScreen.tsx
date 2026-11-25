@@ -22,7 +22,6 @@ import {
   clearStoredSecurityAuditLogs,
   getStoredLgpdConfig,
   saveStoredLgpdConfig,
-  pushLgpdConfigToServer,
   exportSecurityAuditLogsCSV,
   RBAC_ROLE_DEFINITIONS,
   getLocalTodayDateISO,
@@ -530,7 +529,6 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
     const nextVal = !lgpdConfig.maskSensitiveDataByDefault;
     const updated = saveStoredLgpdConfig({ maskSensitiveDataByDefault: nextVal });
     setLgpdConfig(updated);
-    void pushLgpdConfigToServer(updated);
     const newEntry = addSecurityAuditLog({
       userEmail: currentUserEmail,
       userName: 'Administrador Escolar',
