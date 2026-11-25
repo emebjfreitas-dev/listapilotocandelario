@@ -1085,7 +1085,7 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
                           </p>
                           <p className="text-xs text-slate-700 font-mono tabular-nums mt-0.5">
                             {formatFileSize(item.fileSizeBytes)}
-                            {item.optimizedResult?.pageCount ? ` · ${item.optimizedResult.pageCount} pág.` : ''}
+                            {item.optimizedResult?.pageCount ? ` · ${item.optimizedResult.pageCount} ${item.optimizedResult.pageCount === 1 ? 'página' : 'páginas'}` : ''}
                           </p>
                         </div>
                       </div>
@@ -1135,7 +1135,7 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
                                 {item.matchedStudent!.name}
                               </p>
                               <p className="text-[11px] text-slate-700 break-words mt-0.5">
-                                {item.matchedClass?.turmaAbrev || item.matchedClass?.name} · RA{' '}
+                                {item.matchedClass?.name} · RA{' '}
                                 {item.matchedStudent!.ra || '—'}
                               </p>
                             </div>
@@ -1351,7 +1351,7 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-950 truncate">{student.name}</p>
                       <p className="text-[11px] font-medium text-slate-700">
-                        {classGroup.turmaAbrev || classGroup.name} · Nº {student.number.toString().padStart(2, '0')} · RA{' '}
+                        {classGroup.name} · Nº {student.number.toString().padStart(2, '0')} · RA{' '}
                         {student.ra || '—'}
                       </p>
                     </div>

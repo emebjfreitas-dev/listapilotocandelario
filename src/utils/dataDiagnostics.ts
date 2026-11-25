@@ -254,7 +254,7 @@ export function runSchoolDataDiagnostics(
             studentName: st.name,
             affectedField: 'Frequência do Mês',
             currentValue: `${metrics.frequenciaPercent}% (${metrics.faltas} faltas)`,
-            expectedValue: `Mínimo de ${minPresencaLegal}% (${isInfantil ? 'Ed. Infantil' : 'Ens. Fundamental'})`,
+            expectedValue: `Mínimo de ${minPresencaLegal}% (${isInfantil ? 'Educação Infantil' : 'Ensino Fundamental'})`,
             description: `Presença do estudante ${st.name} está em ${metrics.frequenciaPercent}%, abaixo do limite legal (${minPresencaLegal}%).`,
             suggestedAction: 'Conferir atestados médicos ou notificar coordenação pedagógica para acompanhamento.',
             firebaseStatus: 'alinhado',

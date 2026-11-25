@@ -224,7 +224,7 @@ export const FamiliasMultiplosAlunosView: React.FC<FamiliasMultiplosAlunosViewPr
       'Núcleo Familiar',
       'Vínculo Identificado',
       'Responsáveis Compartilhados',
-      'Qtd. Filhos na Escola',
+      'Quantidade de Filhos na Escola',
       'Turmas',
       'Telefones',
       'Estudantes (Nome · Turma · Frequência)',

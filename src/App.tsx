@@ -44,6 +44,8 @@ import {
   syncExpiredAuthorizedUsers,
   establishServerAuthSessionCookie,
   clearServerAuthSessionCookie,
+  pullOfficialCalendarFromServer,
+  setLocalClassesUpdatedAtMs,
 } from './services/db';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import {
@@ -57,6 +59,7 @@ import {
   monitorFirestoreIntegrityOnBoot,
   shouldAllowRemoteClassesOverwrite,
   getFirestoreIntegrityReport,
+  isFirestoreQuotaExceeded,
 } from './services/firebaseSync';
 import { persistSingleStudentPhotoToIndexedDb } from './services/photoIndexedDbCache';
 import {
@@ -67,6 +70,11 @@ import {
   probeBackendAvailability,
   isBackendApiAvailable,
 } from './services/apiEnvironment';
+import {
+  subscribeToRealtimeBus,
+  isRealtimeBusConnected,
+} from './services/realtimeClient';
+import { saveStoredNameGenderEntries } from './utils/genderDictionary';
 import { OFFICIAL_OCTOBER_DAYS, INITIAL_CLASSES, INITIAL_AUTHORIZED_USERS } from './data/mockData';
 import { getClassAttendanceMetrics, haveClassesChanged } from './utils/attendanceRules';
 import {
@@ -871,12 +879,24 @@ export default function App() {
 
       if (!matched) {
         try {
-          const cloudUsers = await fetchAuthorizedUsersFromFirestore();
-          if (cloudUsers && cloudUsers.length > 0) {
-            saveStoredAuthorizedUsers(cloudUsers);
-            setAuthorizedUsers(cloudUsers);
-            currentPool = [...cloudUsers, ...INITIAL_AUTHORIZED_USERS];
-            matched = findAuthorizedUserByEmail(authEmail, currentPool);
+          if (isBackendApiAvailable()) {
+            const shared = await pullSharedSchoolStateFromServer();
+            const srvUsers = shared?.authorizedUsers;
+            if (srvUsers && srvUsers.length > 0) {
+              saveStoredAuthorizedUsers(srvUsers);
+              setAuthorizedUsers(srvUsers);
+              currentPool = [...srvUsers, ...INITIAL_AUTHORIZED_USERS];
+              matched = findAuthorizedUserByEmail(authEmail, currentPool);
+            }
+          }
+          if (!matched && !isFirestoreQuotaExceeded()) {
+            const cloudUsers = await fetchAuthorizedUsersFromFirestore();
+            if (cloudUsers && cloudUsers.length > 0) {
+              saveStoredAuthorizedUsers(cloudUsers);
+              setAuthorizedUsers(cloudUsers);
+              currentPool = [...cloudUsers, ...INITIAL_AUTHORIZED_USERS];
+              matched = findAuthorizedUserByEmail(authEmail, currentPool);
+            }
           }
         } catch {
           // fallback to local list
@@ -929,22 +949,26 @@ export default function App() {
       const hasLocalStudents = classesRef.current.some(
         (c) => Array.isArray(c.students) && c.students.length > 0
       );
-      beginBootIntegrityCheck(localClassesTs);
+      if (!isBackendApiAvailable()) {
+        beginBootIntegrityCheck(localClassesTs);
+      }
 
       setIsAuthVerified(true);
       setIsAuthChecking(false);
       setCurrentScreen((prev) => (prev === 'login' ? 'home' : prev));
 
-      void monitorFirestoreIntegrityOnBoot({
-        baseClasses: INITIAL_CLASSES,
-        localClassesUpdatedAtMs: localClassesTs,
-        hasLocalStudents,
-      }).then((report) => {
-        if (!active) return;
-        if (report.status === 'local_newer_preserved') {
-          void pushClassesToServer(classesRef.current);
-        }
-      });
+      if (!isBackendApiAvailable() && !isFirestoreQuotaExceeded()) {
+        void monitorFirestoreIntegrityOnBoot({
+          baseClasses: INITIAL_CLASSES,
+          localClassesUpdatedAtMs: localClassesTs,
+          hasLocalStudents,
+        }).then((report) => {
+          if (!active) return;
+          if (report.status === 'local_newer_preserved') {
+            void pushClassesToServer(classesRef.current);
+          }
+        });
+      }
     };
 
     void restoreSavedTabSession();
@@ -969,16 +993,17 @@ export default function App() {
     };
   }, []);
 
-  // Sincronização unificada (Firestore onSnapshot + Backend + Focus + Storage) com deduplicação por ref
+  // Sincronização unificada (WebSocket/SSE em Tempo Real + Backend + Focus + Storage, com Firestore apenas como fallback em hospedagem estática)
   useEffect(() => {
     if (!isAuthVerified) return;
     let active = true;
+    const backendActive = isBackendApiAvailable();
 
     const syncFromBackendServer = async () => {
       if (!active || !isBackendApiAvailable() || isServerSyncInFlightRef.current) return;
       isServerSyncInFlightRef.current = true;
       try {
-        if (getFirestoreIntegrityReport().status === 'checking') {
+        if (!isBackendApiAvailable() && getFirestoreIntegrityReport().status === 'checking') {
           await monitorFirestoreIntegrityOnBoot({
             baseClasses: INITIAL_CLASSES,
             localClassesUpdatedAtMs: getLocalClassesUpdatedAtMs(),
@@ -1044,14 +1069,241 @@ export default function App() {
       }
     };
 
+    const applyRealtimeCloudLinksPayload = (payload: {
+      cloudLinks?: Record<string, any>;
+      discoveredNominalPdfs?: any[];
+      discoveredDrivePhotos?: any[];
+    }) => {
+      try {
+        if (payload.cloudLinks && typeof payload.cloudLinks === 'object') {
+          const cl = payload.cloudLinks;
+          if (cl.spreadsheetId) {
+            localStorage.setItem('emeb_candelario_linked_spreadsheet_id_2027', cl.spreadsheetId);
+          }
+          if (cl.spreadsheetTitle) {
+            localStorage.setItem('emeb_candelario_linked_spreadsheet_title_2027', cl.spreadsheetTitle);
+          }
+          if (cl.photosFolderId) {
+            localStorage.setItem('emeb_candelario_drive_photos_folder_id_2027', cl.photosFolderId);
+          }
+          if (cl.photosFolderUrl) {
+            localStorage.setItem('emeb_candelario_drive_photos_folder_url_2027', cl.photosFolderUrl);
+          }
+          if (cl.fichasPdfFolderId) {
+            localStorage.setItem('emeb_candelario_drive_fichas_pdf_folder_id_2027', cl.fichasPdfFolderId);
+          }
+          if (cl.fichasPdfFolderUrl) {
+            localStorage.setItem('emeb_candelario_drive_fichas_pdf_folder_url_2027', cl.fichasPdfFolderUrl);
+          }
+          if (cl.backupFolderId) {
+            localStorage.setItem('emeb_candelario_drive_backup_folder_id_2027', cl.backupFolderId);
+          }
+          if (cl.backupFolderUrl) {
+            localStorage.setItem('emeb_candelario_drive_backup_folder_url_2027', cl.backupFolderUrl);
+          }
+        }
+        if (Array.isArray(payload.discoveredNominalPdfs)) {
+          localStorage.setItem(
+            'emeb_candelario_discovered_nominal_pdfs_2027_v1',
+            JSON.stringify(payload.discoveredNominalPdfs)
+          );
+        }
+        if (Array.isArray(payload.discoveredDrivePhotos)) {
+          localStorage.setItem(
+            'emeb_candelario_discovered_drive_photos_2027_v1',
+            JSON.stringify(payload.discoveredDrivePhotos)
+          );
+        }
+      } catch {
+        // ignore storage quota errors
+      }
+    };
+
     let pollId: number | null = null;
-    if (isBackendApiAvailable()) {
+    let unsubRealtimeBus: (() => void) | null = null;
+    let unsubFirestore: (() => void) | null = null;
+
+    if (backendActive) {
       void syncFromBackendServer();
+
+      unsubRealtimeBus = subscribeToRealtimeBus({
+        onClassesDelta: (payload) => {
+          if (!active) return;
+          applyRealtimeCloudLinksPayload(payload);
+          if (!Array.isArray(payload.classes) || payload.classes.length === 0) {
+            if (payload.discoveredDrivePhotos) {
+              applyRemoteClassesSafely(classesRef.current, true);
+            }
+            return;
+          }
+          const remoteTs = payload.classesUpdatedAtMs || Date.now();
+          if (!shouldAllowRemoteClassesOverwrite({ remoteUpdatedAtMs: remoteTs, fromCache: false })) {
+            return;
+          }
+          const localClasses = classesRef.current;
+          const localUpdatedAtMs = getLocalClassesUpdatedAtMs();
+          const deltaMap = new Map(payload.classes.map((c) => [c.id.toLowerCase(), c]));
+          const fullRemoteCandidate = localClasses.map(
+            (locCls) => deltaMap.get(locCls.id.toLowerCase()) || locCls
+          );
+          payload.classes.forEach((remCls) => {
+            if (!localClasses.some((c) => c.id.toLowerCase() === remCls.id.toLowerCase())) {
+              fullRemoteCandidate.push(remCls);
+            }
+          });
+          const merged = mergeClassesWithConcurrencyControl(
+            fullRemoteCandidate,
+            localClasses,
+            remoteTs,
+            localUpdatedAtMs
+          );
+          if (remoteTs > localUpdatedAtMs) {
+            setLocalClassesUpdatedAtMs(remoteTs);
+          }
+          applyRemoteClassesSafely(merged, true);
+        },
+        onClassesReplaced: (payload) => {
+          if (!active || !Array.isArray(payload.classes) || payload.classes.length === 0) return;
+          const remoteTs = payload.classesUpdatedAtMs || Date.now();
+          if (remoteTs > 0) {
+            setLocalClassesUpdatedAtMs(remoteTs);
+          }
+          applyRemoteClassesSafely(payload.classes, true);
+        },
+        onMetaUpdated: (payload) => {
+          if (!active) return;
+          applyRealtimeCloudLinksPayload(payload);
+          if (Array.isArray(payload.authorizedUsers) && payload.authorizedUsers.length > 0) {
+            applyAuthorizedUsersIfChanged(payload.authorizedUsers, true);
+          }
+          if (payload.attendanceWindowConfig) {
+            const winSig = JSON.stringify(payload.attendanceWindowConfig);
+            if (lastMetaSignatureRef.current.window !== winSig) {
+              lastMetaSignatureRef.current.window = winSig;
+              setAttendanceWindowConfig(payload.attendanceWindowConfig);
+              saveStoredAttendanceWindowConfig(payload.attendanceWindowConfig);
+            }
+          }
+          if (Array.isArray(payload.schoolNotices)) {
+            const noticesSig = JSON.stringify(payload.schoolNotices);
+            if (lastMetaSignatureRef.current.notices !== noticesSig) {
+              lastMetaSignatureRef.current.notices = noticesSig;
+              setSchoolNotices(payload.schoolNotices);
+              saveStoredSchoolNotices(payload.schoolNotices);
+            }
+          }
+          if (Array.isArray(payload.accessSessionLogs)) {
+            const logsSig = `${payload.accessSessionLogs.length}:${payload.accessSessionLogs[0]?.id || ''}:${payload.accessSessionLogs[0]?.lastHeartbeatISO || ''}`;
+            if (lastMetaSignatureRef.current.logs !== logsSig) {
+              lastMetaSignatureRef.current.logs = logsSig;
+              setAccessSessionLogs(payload.accessSessionLogs);
+              saveStoredAccessSessionLogs(payload.accessSessionLogs);
+            }
+          }
+          if (Array.isArray((payload as any).genderDictionary)) {
+            saveStoredNameGenderEntries((payload as any).genderDictionary);
+          }
+        },
+        onCalendarUpdated: (payload) => {
+          if (!active) return;
+          void pullOfficialCalendarFromServer().then(() => {
+            if (!active) return;
+            window.dispatchEvent(new CustomEvent('emeb-calendar-updated'));
+          });
+          if (Array.isArray(payload.classes) && payload.classes.length > 0) {
+            const remoteTs = payload.classesUpdatedAtMs || Date.now();
+            const merged = mergeClassesWithConcurrencyControl(
+              payload.classes,
+              classesRef.current,
+              remoteTs,
+              getLocalClassesUpdatedAtMs()
+            );
+            applyRemoteClassesSafely(merged, true);
+          }
+        },
+        onFcmAlert: (alert) => {
+          if (!active || !alert) return;
+          window.dispatchEvent(new CustomEvent('emeb-realtime-fcm-alert', { detail: alert }));
+        },
+        onStateReset: (payload) => {
+          if (!active) return;
+          if (payload.classesUpdatedAtMs) {
+            setLocalClassesUpdatedAtMs(payload.classesUpdatedAtMs);
+          }
+          if (Array.isArray(payload.classes) && payload.classes.length > 0) {
+            applyRemoteClassesSafely(payload.classes, false);
+          }
+          lastMetaSignatureRef.current.notices = JSON.stringify([]);
+          lastMetaSignatureRef.current.logs = '0::';
+          setSchoolNotices([]);
+          saveStoredSchoolNotices([]);
+          setAccessSessionLogs([]);
+          saveStoredAccessSessionLogs([]);
+        },
+        onReconnect: () => {
+          if (!active) return;
+          void syncFromBackendServer();
+          if (SyncQueueManager.hasPendingTasks()) {
+            void SyncQueueManager.flushNow();
+          }
+        },
+      });
+
+      // Fallback safety check only when WebSocket/SSE stream is disconnected
       pollId = window.setInterval(() => {
-        if (document.visibilityState === 'visible') {
+        if (document.visibilityState === 'visible' && !isRealtimeBusConnected()) {
           void syncFromBackendServer();
         }
-      }, 300000);
+      }, 60000);
+    } else {
+      // Hospedagem estática (sem backend Express): utiliza Cloud Firestore onSnapshot
+      unsubFirestore = subscribeToFirestoreRealtimeState({
+        onClassesUpdate: (remoteClasses, remoteUpdatedAtMs) => {
+          if (!active || !remoteClasses || remoteClasses.length === 0) return;
+          if (!shouldAllowRemoteClassesOverwrite({ remoteUpdatedAtMs, fromCache: false })) {
+            return;
+          }
+          const localClasses = classesRef.current;
+          const localUpdatedAtMs = getLocalClassesUpdatedAtMs();
+          const merged = mergeClassesWithConcurrencyControl(
+            remoteClasses,
+            localClasses,
+            remoteUpdatedAtMs,
+            localUpdatedAtMs
+          );
+          applyRemoteClassesSafely(merged, true);
+        },
+        onMetaConfigUpdate: (cfg) => {
+          if (!active) return;
+          if (Array.isArray(cfg.authorizedUsers) && cfg.authorizedUsers.length > 0) {
+            applyAuthorizedUsersIfChanged(cfg.authorizedUsers, true);
+          }
+          if (cfg.attendanceWindowConfig) {
+            const winSig = JSON.stringify(cfg.attendanceWindowConfig);
+            if (lastMetaSignatureRef.current.window !== winSig) {
+              lastMetaSignatureRef.current.window = winSig;
+              setAttendanceWindowConfig(cfg.attendanceWindowConfig);
+              saveStoredAttendanceWindowConfig(cfg.attendanceWindowConfig);
+            }
+          }
+          if (Array.isArray(cfg.schoolNotices)) {
+            const noticesSig = JSON.stringify(cfg.schoolNotices);
+            if (lastMetaSignatureRef.current.notices !== noticesSig) {
+              lastMetaSignatureRef.current.notices = noticesSig;
+              setSchoolNotices(cfg.schoolNotices);
+              saveStoredSchoolNotices(cfg.schoolNotices);
+            }
+          }
+          if (Array.isArray(cfg.accessSessionLogs)) {
+            const logsSig = `${cfg.accessSessionLogs.length}:${cfg.accessSessionLogs[0]?.id || ''}:${cfg.accessSessionLogs[0]?.lastHeartbeatISO || ''}`;
+            if (lastMetaSignatureRef.current.logs !== logsSig) {
+              lastMetaSignatureRef.current.logs = logsSig;
+              setAccessSessionLogs(cfg.accessSessionLogs);
+              saveStoredAccessSessionLogs(cfg.accessSessionLogs);
+            }
+          }
+        },
+      });
     }
 
     const handleWindowFocus = () => {
@@ -1063,60 +1315,12 @@ export default function App() {
     };
     window.addEventListener('focus', handleWindowFocus);
 
-    // Instant <200ms Real-Time Push via Cloud Firestore onSnapshot (com controle de concorrência, epoch integrity e diff via ref)
-    const unsubFirestore = subscribeToFirestoreRealtimeState({
-      onClassesUpdate: (remoteClasses, remoteUpdatedAtMs) => {
-        if (!active || !remoteClasses || remoteClasses.length === 0) return;
-        if (!shouldAllowRemoteClassesOverwrite({ remoteUpdatedAtMs, fromCache: false })) {
-          return;
-        }
-        const localClasses = classesRef.current;
-        const localUpdatedAtMs = getLocalClassesUpdatedAtMs();
-        const merged = mergeClassesWithConcurrencyControl(
-          remoteClasses,
-          localClasses,
-          remoteUpdatedAtMs,
-          localUpdatedAtMs
-        );
-        applyRemoteClassesSafely(merged, true);
-      },
-      onMetaConfigUpdate: (cfg) => {
-        if (!active) return;
-        if (Array.isArray(cfg.authorizedUsers) && cfg.authorizedUsers.length > 0) {
-          applyAuthorizedUsersIfChanged(cfg.authorizedUsers, true);
-        }
-        if (cfg.attendanceWindowConfig) {
-          const winSig = JSON.stringify(cfg.attendanceWindowConfig);
-          if (lastMetaSignatureRef.current.window !== winSig) {
-            lastMetaSignatureRef.current.window = winSig;
-            setAttendanceWindowConfig(cfg.attendanceWindowConfig);
-            saveStoredAttendanceWindowConfig(cfg.attendanceWindowConfig);
-          }
-        }
-        if (Array.isArray(cfg.schoolNotices)) {
-          const noticesSig = JSON.stringify(cfg.schoolNotices);
-          if (lastMetaSignatureRef.current.notices !== noticesSig) {
-            lastMetaSignatureRef.current.notices = noticesSig;
-            setSchoolNotices(cfg.schoolNotices);
-            saveStoredSchoolNotices(cfg.schoolNotices);
-          }
-        }
-        if (Array.isArray(cfg.accessSessionLogs)) {
-          const logsSig = `${cfg.accessSessionLogs.length}:${cfg.accessSessionLogs[0]?.id || ''}:${cfg.accessSessionLogs[0]?.lastHeartbeatISO || ''}`;
-          if (lastMetaSignatureRef.current.logs !== logsSig) {
-            lastMetaSignatureRef.current.logs = logsSig;
-            setAccessSessionLogs(cfg.accessSessionLogs);
-            saveStoredAccessSessionLogs(cfg.accessSessionLogs);
-          }
-        }
-      },
-    });
-
     return () => {
       active = false;
       if (pollId !== null) window.clearInterval(pollId);
       window.removeEventListener('focus', handleWindowFocus);
-      unsubFirestore();
+      if (unsubRealtimeBus) unsubRealtimeBus();
+      if (unsubFirestore) unsubFirestore();
     };
   }, [isAuthVerified, applyRemoteClassesSafely, applyAuthorizedUsersIfChanged]);
 

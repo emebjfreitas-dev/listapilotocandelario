@@ -76,6 +76,8 @@ interface GradeDadosCriancaModalProps {
   onOpenPhotoModal?: (student: Student) => void;
   onOpenStudentPdf?: (student: Student) => void;
   onNavigateToConsecutiveAbsences?: () => void;
+  currentUserEmail?: string;
+  currentUserName?: string;
 }
 
 type GridCategory = 'todos' | 'escolar' | 'pessoal' | 'familia' | 'endereco';
@@ -92,14 +94,14 @@ function isConsecutiveDaysBadgeLabel(
   totalOccurrences: number
 ): string {
   if (consecutiveDays >= 10) {
-    return `Evasão Crítica (10+d) · ${consecutiveDays} faltas seguidas`;
+    return `Evasão Crítica (10+ dias) · ${consecutiveDays} faltas seguidas`;
   }
   if (consecutiveDays >= 5) {
-    return `Busca Ativa (5+d) · ${consecutiveDays} faltas seguidas`;
+    return `Busca Ativa (5+ dias) · ${consecutiveDays} faltas seguidas`;
   }
   if (consecutiveDays >= 3) {
-    return `Atenção (3+d) · ${consecutiveDays} faltas seguidas${
-      totalOccurrences > 1 ? ` (${totalOccurrences}ª seq.)` : ''
+    return `Atenção (3+ dias) · ${consecutiveDays} faltas seguidas${
+      totalOccurrences > 1 ? ` (${totalOccurrences}ª sequência)` : ''
     }`;
   }
   return '0 faltas seguidas';
@@ -176,6 +178,8 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
   onOpenPhotoModal,
   onOpenStudentPdf,
   onNavigateToConsecutiveAbsences,
+  currentUserEmail = 'educador@educacao.jundiai.sp.gov.br',
+  currentUserName = 'Educador(a) Institucional',
 }) => {
   const [draft, setDraft] = useState<Student | null>(student);
   const [activeCategory, setActiveCategory] = useState<GridCategory>('todos');
@@ -195,8 +199,8 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
   const handleToggleLgpdReveal = () => {
     if (userRole !== 'admin') {
       addSecurityAuditLog({
-        userEmail: 'educador@educacao.jundiai.sp.gov.br',
-        userName: 'Educador(a) Institucional',
+        userEmail: currentUserEmail,
+        userName: currentUserName,
         userRole: userRole,
         eventType: 'UNAUTHORIZED_ACCESS_BLOCKED',
         actionTitle: 'Tentativa de Revelar Dados Sensíveis (LGPD Art. 14)',
@@ -211,8 +215,8 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
     setIsLgpdRevealed(next);
     if (next && draft) {
       addSecurityAuditLog({
-        userEmail: 'emebjfreitas@jundiai.sp.gov.br',
-        userName: 'Administrador Escolar Candelário',
+        userEmail: currentUserEmail,
+        userName: currentUserName,
         userRole: 'admin',
         eventType: 'DATA_MASKING_TOGGLED',
         actionTitle: 'Visualização de Dados Sensíveis da Criança (Ação Auditada)',
@@ -321,6 +325,7 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
     setIsLightboxOpen(false);
     setPortraitFallbackIdx(0);
     setPortraitImgError(false);
+    setIsLgpdRevealed(false);
   }, [student]);
 
   useEffect(() => {
@@ -1248,12 +1253,14 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
                         Telefone da família
                       </span>
                       <span className="text-sm font-semibold text-slate-950 tabular-nums">
-                        {draft.telefones || draft.guardianPhone || 'Sem telefone cadastrado'}
+                        {!isLgpdRevealed && (draft.telefones || draft.guardianPhone)
+                          ? maskSensitiveText(draft.telefones || draft.guardianPhone, 'phone')
+                          : draft.telefones || draft.guardianPhone || 'Sem telefone cadastrado'}
                       </span>
                     </div>
                   </div>
 
-                  {whatsappLinks.length > 0 && (
+                  {whatsappLinks.length > 0 && isLgpdRevealed && (
                     <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
                       {whatsappLinks.map((ph, idx) => (
                         <a
@@ -1283,7 +1290,9 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
                           Endereço onde mora
                         </span>
                         <p className="text-sm font-semibold text-slate-950 leading-snug mt-0.5 break-words">
-                          {fullAddress || '—'}
+                          {!isLgpdRevealed
+                            ? maskSensitiveText(fullAddress, 'address')
+                            : fullAddress || '—'}
                         </p>
                       </div>
                     </div>

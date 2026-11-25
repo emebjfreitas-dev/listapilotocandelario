@@ -1101,7 +1101,7 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
                   <option value="all">Automático (por subpasta ou código da turma)</option>
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.turmaAbrev ? `Turma ${c.turmaAbrev} (${c.name})` : c.name}
+                      {c.name}
                     </option>
                   ))}
                 </select>
@@ -1267,7 +1267,7 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
                             </span>
                             <span className="text-slate-600">·</span>
                             <span className="text-emerald-800 font-semibold">
-                              {item.matchedClass?.turmaAbrev || item.matchedClass?.name} (Nº{' '}
+                              {item.matchedClass?.name} (Nº{' '}
                               {item.matchedStudent?.number.toString().padStart(2, '0')})
                             </span>
                             {item.matchReason && (
@@ -1525,7 +1525,7 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-950 truncate">{student.name}</p>
                       <p className="text-[11px] font-medium text-slate-700">
-                        {classGroup.turmaAbrev || classGroup.name} · Nº {student.number.toString().padStart(2, '0')} · RA{' '}
+                        {classGroup.name} · Nº {student.number.toString().padStart(2, '0')} · RA{' '}
                         {student.ra || '—'}
                       </p>
                     </div>

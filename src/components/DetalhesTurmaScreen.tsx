@@ -7,6 +7,8 @@ import {
   ClassExportSortOrder,
   ClassExportStatusFilter,
   downloadClassCustomXLS,
+  getStoredLgpdConfig,
+  maskSensitiveText,
 } from '../services/db';
 import { OFFICIAL_OCTOBER_DAYS } from '../data/mockData';
 import {
@@ -275,8 +277,8 @@ const EstudanteCard: React.FC<EstudanteCardProps> = memo(({
           </div>
 
           <ChevronDown
-            className={`w-5 h-5 text-slate-600 shrink-0 mt-0.5 transition-transform duration-200 ${
-              isExpanded ? 'rotate-180 text-[#0f3370]' : ''
+            className={`w-5 h-5 text-[#86868B] shrink-0 mt-0.5 transition-transform duration-200 ${
+              isExpanded ? 'rotate-180 text-[#0071E3]' : ''
             }`}
             aria-hidden="true"
           />
@@ -285,19 +287,19 @@ const EstudanteCard: React.FC<EstudanteCardProps> = memo(({
         {(hasGuardian1 || waList.length > 0) && (
           <div
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center justify-between gap-2 text-[12.5px] font-normal tracking-[-0.008em] text-[#475569] min-w-0"
+            className="flex items-center justify-between gap-2 text-[12.5px] font-normal tracking-[-0.008em] text-[#86868B] min-w-0"
           >
             {hasGuardian1 ? (
               <span className="truncate min-w-0">{guardian1Info.cleanName}</span>
             ) : (
-              <span className="truncate min-w-0 text-slate-500">Contato da família</span>
+              <span className="truncate min-w-0 text-[#86868B]">Contato da família</span>
             )}
             {waList.length > 0 && (
               <a
                 href={waList[0].waUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#047857] hover:underline tabular-nums shrink-0"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#1B873F] hover:underline tabular-nums shrink-0"
               >
                 <MessageCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>{waList[0].display}</span>
@@ -318,9 +320,9 @@ const EstudanteCard: React.FC<EstudanteCardProps> = memo(({
             <button
               type="button"
               onClick={() => onOpenPhotoModal(student)}
-              className="min-h-[44px] sm:min-h-[40px] px-2.5 rounded-2xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              className="min-h-[40px] px-2.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-medium text-[13px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors border border-black/[0.06]"
             >
-              <Camera className="w-4 h-4 text-[#475569] shrink-0" />
+              <Camera className="w-4 h-4 text-[#86868B] shrink-0" />
               <span>Foto</span>
             </button>
           )}
@@ -333,10 +335,10 @@ const EstudanteCard: React.FC<EstudanteCardProps> = memo(({
                 e.stopPropagation();
                 onOpenStudentPdf(student);
               }}
-              className={`min-h-[44px] sm:min-h-[40px] px-2.5 rounded-2xl font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+              className={`min-h-[40px] px-2.5 rounded-full font-medium text-[13px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-black/[0.06] ${
                 hasStudentPdf
-                  ? 'bg-[#e8f0fe] hover:bg-[#d4e2fc] text-[#0f3370]'
-                  : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-700'
+                  ? 'bg-[#0071E3]/10 hover:bg-[#0071E3]/15 text-[#0071E3]'
+                  : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F]'
               }`}
             >
               <FileText className="w-4 h-4 shrink-0" />
@@ -497,7 +499,9 @@ const LinhaEstudante: React.FC<LinhaEstudanteProps> = memo(({
                   <>
                     {hasCompactGuardian1 && <span aria-hidden="true"> · </span>}
                     <span className="text-[#047857] tabular-nums font-medium">
-                      {student.telefones}
+                      {getStoredLgpdConfig().maskSensitiveDataByDefault
+                        ? maskSensitiveText(student.telefones, 'phone')
+                        : student.telefones}
                     </span>
                   </>
                 )}
@@ -529,10 +533,10 @@ const LinhaEstudante: React.FC<LinhaEstudanteProps> = memo(({
                 e.stopPropagation();
                 onOpenStudentPdf(student);
               }}
-              className={`flex-1 sm:flex-initial min-h-[44px] sm:min-h-[40px] px-3.5 rounded-2xl font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+              className={`flex-1 sm:flex-initial min-h-[40px] px-3.5 rounded-full font-medium text-[13px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors border border-black/[0.06] ${
                 hasPdf
-                  ? 'bg-[#e8f0fe] hover:bg-[#d4e2fc] text-[#0f3370]'
-                  : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-700'
+                  ? 'bg-[#0071E3]/10 hover:bg-[#0071E3]/15 text-[#0071E3]'
+                  : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F]'
               }`}
             >
               <FileText className="w-4 h-4 shrink-0" />
@@ -548,9 +552,9 @@ const LinhaEstudante: React.FC<LinhaEstudanteProps> = memo(({
                 e.stopPropagation();
                 onOpenStudentGrid(student);
               }}
-              className="flex-1 sm:flex-initial min-h-[44px] sm:min-h-[40px] px-3.5 rounded-2xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              className="flex-1 sm:flex-initial min-h-[40px] px-3.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-medium text-[13px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors border border-black/[0.06]"
             >
-              <LayoutGrid className="w-4 h-4 text-[#475569] shrink-0" />
+              <LayoutGrid className="w-4 h-4 text-[#86868B] shrink-0" />
               <span>Ficha</span>
             </button>
           )}
@@ -559,11 +563,11 @@ const LinhaEstudante: React.FC<LinhaEstudanteProps> = memo(({
             type="button"
             onClick={() => onToggleExpand(student.id)}
             aria-label={isExpanded ? 'Recolher detalhes' : 'Expandir detalhes'}
-            className="w-11 h-11 sm:w-10 sm:h-10 rounded-2xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#475569] flex items-center justify-center cursor-pointer transition-colors shrink-0"
+            className="w-10 h-10 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] flex items-center justify-center cursor-pointer transition-colors shrink-0 border border-black/[0.06]"
           >
             <ChevronDown
               className={`w-[19px] h-[19px] transition-transform duration-150 ${
-                isExpanded ? 'rotate-180 text-[#14428c]' : ''
+                isExpanded ? 'rotate-180 text-[#0071E3]' : ''
               }`}
             />
           </button>
@@ -674,7 +678,7 @@ const EstudanteTabelaRow: React.FC<EstudanteTabelaRowProps> = memo(({
             >
               <ChevronDown
                 className={`w-4 h-4 transition-transform ${
-                  isExpanded ? 'rotate-180 text-[#14428c]' : ''
+                  isExpanded ? 'rotate-180 text-[#0071E3]' : ''
                 }`}
               />
             </button>
@@ -690,7 +694,7 @@ const EstudanteTabelaRow: React.FC<EstudanteTabelaRowProps> = memo(({
                 student={student}
                 size="md"
                 onUploadPhotoClick={onOpenPhotoModal ? () => onOpenPhotoModal(student) : undefined}
-                className="bg-[#eef3f9]"
+                className="bg-[#F5F5F7]"
               />
               <div className="min-w-0">
                 <span className="font-semibold text-[15px] text-[#0f172a] tracking-[-0.018em] break-words block leading-snug">
@@ -719,10 +723,10 @@ const EstudanteTabelaRow: React.FC<EstudanteTabelaRowProps> = memo(({
                     onOpenStudentPdf(student);
                   }}
                   title={`PDF (${student.name})`}
-                  className={`min-h-[34px] px-2.5 py-1 rounded-xl font-semibold text-[12px] tracking-[-0.008em] flex items-center gap-1 shrink-0 cursor-pointer transition-colors ${
+                  className={`min-h-[34px] px-2.5 py-1 rounded-full font-medium text-[12px] tracking-[-0.008em] flex items-center gap-1 shrink-0 cursor-pointer transition-colors border border-black/[0.06] ${
                     hasPdf
-                      ? 'bg-[#e8f0fe] hover:bg-[#d4e2fc] text-[#0f3370]'
-                      : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-700'
+                      ? 'bg-[#0071E3]/10 hover:bg-[#0071E3]/15 text-[#0071E3]'
+                      : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F]'
                   }`}
                 >
                   <FileText className="w-[15px] h-[15px]" />
@@ -786,7 +790,7 @@ const EstudanteTabelaRow: React.FC<EstudanteTabelaRowProps> = memo(({
           <span className="break-words">{guardian1Info.cleanName}</span>
         </td>
         <td className="py-2.5 px-3 font-medium text-[#0f172a]">
-          <span className="text-xs font-semibold uppercase text-[#14428c] block">
+          <span className="text-xs font-semibold uppercase text-[#0071E3] block">
             {guardian2Info.roleLabel}
           </span>
           <span className="break-words">{guardian2Info.cleanName}</span>
@@ -1038,8 +1042,8 @@ const Peb1StudentCard: React.FC<Peb1StudentCardProps> = memo(({
         </div>
 
         <ChevronDown
-          className={`w-5 h-5 text-slate-600 shrink-0 mt-0.5 transition-transform duration-150 ${
-            isExpanded ? 'rotate-180 text-[#0f3370]' : ''
+          className={`w-5 h-5 text-[#86868B] shrink-0 mt-0.5 transition-transform duration-150 ${
+            isExpanded ? 'rotate-180 text-[#0071E3]' : ''
           }`}
           aria-hidden="true"
         />
@@ -1054,9 +1058,9 @@ const Peb1StudentCard: React.FC<Peb1StudentCardProps> = memo(({
             <button
               type="button"
               onClick={() => onOpenPhotoModal(student)}
-              className="min-h-[44px] sm:min-h-[40px] px-2.5 rounded-2xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              className="min-h-[40px] px-2.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-medium text-[13px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors border border-black/[0.06]"
             >
-              <Camera className="w-4 h-4 text-[#475569] shrink-0" />
+              <Camera className="w-4 h-4 text-[#86868B] shrink-0" />
               <span>Foto</span>
             </button>
           )}
@@ -1065,10 +1069,10 @@ const Peb1StudentCard: React.FC<Peb1StudentCardProps> = memo(({
             <button
               type="button"
               onClick={() => onOpenStudentPdf(student)}
-              className={`min-h-[44px] sm:min-h-[40px] px-2.5 rounded-2xl font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+              className={`min-h-[40px] px-2.5 rounded-full font-medium text-[13px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors border border-black/[0.06] ${
                 hasStudentPdf
-                  ? 'bg-[#e8f0fe] hover:bg-[#d4e2fc] text-[#0f3370]'
-                  : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-700'
+                  ? 'bg-[#0071E3]/10 hover:bg-[#0071E3]/15 text-[#0071E3]'
+                  : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F]'
               }`}
             >
               <FileText className="w-4 h-4 shrink-0" />
@@ -1908,10 +1912,10 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
                   onClick={() =>
                     setStatusFilter(statusFilter === 'sem_ficha_pdf' ? 'all' : 'sem_ficha_pdf')
                   }
-                  className={`min-h-[34px] px-3 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+                  className={`min-h-[34px] px-3.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
                     statusFilter === 'sem_ficha_pdf'
-                      ? 'bg-[#14428c] text-white'
-                      : 'bg-amber-100 hover:bg-amber-200 text-amber-950'
+                      ? 'bg-[#0071E3] text-white'
+                      : 'bg-[#FFF5E5] hover:bg-[#FFE8CC] text-[#B25000]'
                   }`}
                 >
                   {statusFilter === 'sem_ficha_pdf'
@@ -1924,15 +1928,15 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
         </header>
 
         {peb1Rows.length === 0 ? (
-          <div className="bg-white rounded-3xl py-12 px-4 text-center space-y-2">
-            <p className="text-sm font-medium text-[#334155]">
+          <div className="bg-white rounded-3xl py-12 px-4 text-center space-y-2 border border-black/[0.06]">
+            <p className="text-sm font-medium text-[#1D1D1F]">
               Nenhum estudante encontrado.
             </p>
             {searchStudent && (
               <button
                 type="button"
                 onClick={() => setSearchStudent('')}
-                className="text-xs font-semibold text-[#14428c] hover:underline cursor-pointer"
+                className="text-xs font-semibold text-[#0071E3] hover:underline cursor-pointer"
               >
                 Limpar busca
               </button>
@@ -1971,9 +1975,9 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowAllStudentsInView((prev) => !prev)}
-                    className="px-2.5 py-1 rounded-lg bg-[#eef3f9] hover:bg-[#e2e8f0] text-[#14428c] text-xs font-semibold cursor-pointer transition-colors"
+                    className="px-3 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.06] text-[#0071E3] text-xs font-semibold cursor-pointer transition-colors"
                   >
-                    {showAllStudentsInView ? `Paginar (${PAGE_SIZE}/pág)` : `Ver todos (${filteredStudents.length})`}
+                    {showAllStudentsInView ? `Paginar (${PAGE_SIZE} por página)` : `Ver todos (${filteredStudents.length})`}
                   </button>
                 }
               />
@@ -1985,65 +1989,60 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
   }
 
   return (
-    <div className="flex flex-col w-full min-w-0 space-y-5 pb-16 animate-gentle-fade">
+    <div className="flex flex-col w-full min-w-0 space-y-5 pb-16 animate-gentle-fade text-[#1D1D1F]">
 
       {/* Contexto da Turma e Navegação */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] tracking-[-0.008em] text-slate-200 py-0.5 min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] tracking-tight text-[#86868B] py-1 min-w-0">
         <button
           type="button"
           onClick={onBackToClasses}
-          className="text-slate-100 hover:text-white font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+          className="text-[#0071E3] hover:text-[#0077ED] font-medium inline-flex items-center gap-1 transition-colors cursor-pointer shrink-0"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Turmas</span>
         </button>
-        <span className="text-slate-200 font-medium tabular-nums shrink-0">
+        <span className="text-[#86868B] font-medium tabular-nums shrink-0">
           {classGroup.shift.replace('Turno ', '')} · {classGroup.room} · {diasLetivosMes} dias letivos
         </span>
       </div>
 
       {/* Painel Coeso da Turma & Controles */}
-      <section className="bg-white rounded-3xl p-4 sm:p-5 shadow-2xs space-y-3.5 min-w-0">
+      <section className="bg-white rounded-3xl p-5 sm:p-6 border border-black/[0.06] shadow-sm space-y-4 min-w-0">
         {/* Linha 1: Título da Turma + Docentes + Ações */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-baseline gap-2 min-w-0">
-              <h1 className="text-[24px] sm:text-[28px] font-bold text-[#0f172a] tracking-[-0.028em] leading-[1.15] break-words">
+              <h1 className="text-2xl sm:text-3xl font-semibold text-[#1D1D1F] tracking-tight leading-tight break-words">
                 {classGroup.name}
               </h1>
-              {classGroup.turmaAbrev && (
-                <span className="text-[11px] font-bold uppercase tracking-[0.02em] text-white bg-[#14428c] px-2 py-0.5 rounded-lg tabular-nums">
-                  {classGroup.turmaAbrev}
-                </span>
-              )}
               {classGroup.classeSedCode && (
-                <span className="text-[12px] font-medium tracking-[-0.006em] text-slate-700 tabular-nums">
+                <span className="text-[12px] font-medium text-[#86868B] tabular-nums">
                   SED {classGroup.classeSedCode}
                 </span>
               )}
             </div>
-            <p className="text-[13px] tracking-[-0.008em] text-slate-700 font-normal break-words leading-relaxed">
-              <span className="font-semibold text-[#334155]">Regente:</span> {classGroup.teacherName || 'Docente Regente'}
+            <p className="text-[13px] text-[#86868B] font-normal break-words leading-relaxed">
+              <span className="font-semibold text-[#1D1D1F]">Regente:</span> {classGroup.teacherName || 'Docente Regente'}
               {classGroup.artTeacher && (
-                <> · <span className="font-semibold text-[#334155]">Arte:</span> {classGroup.artTeacher}</>
+                <> · <span className="font-semibold text-[#1D1D1F]">Arte:</span> {classGroup.artTeacher}</>
               )}
               {classGroup.peTeacher && (
-                <> · <span className="font-semibold text-[#334155]">Ed. Física:</span> {classGroup.peTeacher}</>
+                <> · <span className="font-semibold text-[#1D1D1F]">Educação Física:</span> {classGroup.peTeacher}</>
               )}
               {classGroup.englishTeacher && (
-                <> · <span className="font-semibold text-[#334155]">Inglês:</span> {classGroup.englishTeacher}</>
+                <> · <span className="font-semibold text-[#1D1D1F]">Inglês:</span> {classGroup.englishTeacher}</>
               )}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto min-w-0 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto min-w-0 shrink-0">
             {canLaunchAttendance && (
               <button
                 type="button"
                 onClick={onGoToMonthlyAttendance}
-                className="w-full sm:w-auto min-h-[40px] py-2 px-4 rounded-2xl bg-[#14428c] hover:bg-[#0f3370] text-white font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-colors"
+                className="w-full sm:w-auto min-h-[40px] py-2 px-4 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-[13px] flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-colors shadow-sm"
               >
-                <ClipboardCheck className="w-[17px] h-[17px] text-emerald-300 shrink-0" />
+                <ClipboardCheck className="w-[17px] h-[17px] shrink-0" />
                 <span>Informar Faltas</span>
               </button>
             )}
@@ -2052,9 +2051,9 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setIsExportXlsModalOpen(true)}
-                className="w-full sm:w-auto min-h-[40px] py-2 px-3.5 rounded-2xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-colors"
+                className="w-full sm:w-auto min-h-[40px] py-2 px-4 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-medium text-[13px] flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-colors border border-black/[0.06]"
               >
-                <Download className="w-[17px] h-[17px] text-[#475569] shrink-0" />
+                <Download className="w-[17px] h-[17px] text-[#86868B] shrink-0" />
                 <span>Word / Excel / PDF</span>
               </button>
             ) : (
@@ -2072,40 +2071,40 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
           <button
             type="button"
             onClick={() => setStatusFilter(statusFilter === 'ativos' ? 'all' : 'ativos')}
-            className={`min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 tabular-nums ${
+            className={`min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 tabular-nums ${
               statusFilter === 'ativos'
-                ? 'bg-[#14428c] text-white'
-                : 'bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a]'
+                ? 'bg-[#0071E3] text-white shadow-xs font-semibold'
+                : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F]'
             }`}
           >
             <span>Ativos</span>
-            <span className="font-bold">{classSummary.ativos}/{classSummary.totalMatriculados}</span>
+            <span className="font-semibold">{classSummary.ativos}/{classSummary.totalMatriculados}</span>
           </button>
 
-          <div className="min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-semibold bg-[#ecfdf5] text-[#047857] flex items-center gap-1 tabular-nums">
+          <div className="min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium bg-[#EAF7EE] text-[#1B873F] flex items-center gap-1 tabular-nums">
             <span>Presença</span>
-            <span className="font-bold">{classSummary.pctPresencaTotal}%</span>
+            <span className="font-semibold">{classSummary.pctPresencaTotal}%</span>
             <span className="text-[11px] opacity-75">· meta {minLegalPresence}%</span>
           </div>
 
-          <div className="min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-medium bg-[#f1f5f9] text-[#475569] flex items-center gap-1.5 tabular-nums">
-            <span><strong className="font-semibold text-[#0f172a]">{classSummary.feminino}</strong> F</span>
-            <span className="text-[#cbd5e1]">·</span>
-            <span><strong className="font-semibold text-[#0f172a]">{classSummary.masculino}</strong> M</span>
+          <div className="min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium bg-[#F5F5F7] text-[#86868B] flex items-center gap-1.5 tabular-nums">
+            <span><strong className="font-semibold text-[#1D1D1F]">{classSummary.feminino}</strong> Feminino</span>
+            <span className="opacity-40">·</span>
+            <span><strong className="font-semibold text-[#1D1D1F]">{classSummary.masculino}</strong> Masculino</span>
           </div>
 
           {(classSummary.transferidos + classSummary.remanejados > 0) && (
             <button
               type="button"
               onClick={() => setStatusFilter(statusFilter === 'movimentados' ? 'all' : 'movimentados')}
-              className={`min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-semibold transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
+              className={`min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
                 statusFilter === 'movimentados'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-amber-50 hover:bg-amber-100 text-amber-900'
+                  ? 'bg-[#B25000] text-white font-semibold'
+                  : 'bg-[#FFF5E5] hover:bg-[#FFE8CC] text-[#B25000]'
               }`}
             >
               <span>Movimentados</span>
-              <span className="font-bold">{classSummary.transferidos + classSummary.remanejados}</span>
+              <span className="font-semibold">{classSummary.transferidos + classSummary.remanejados}</span>
             </button>
           )}
 
@@ -2113,17 +2112,17 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
             <button
               type="button"
               onClick={() => setStatusFilter(statusFilter === 'sem_ficha_pdf' ? 'all' : 'sem_ficha_pdf')}
-              className={`min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-semibold transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
+              className={`min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
                 statusFilter === 'sem_ficha_pdf'
-                  ? 'bg-rose-700 text-white'
-                  : 'bg-rose-50 hover:bg-rose-100 text-rose-800'
+                  ? 'bg-[#D70015] text-white font-semibold'
+                  : 'bg-[#FFEBEB] hover:bg-[#FFD6D6] text-[#D70015]'
               }`}
             >
               <span>PDFs pendentes</span>
-              <span className="font-bold">{classSummary.semFichaEscaneadaCount}</span>
+              <span className="font-semibold">{classSummary.semFichaEscaneadaCount}</span>
             </button>
           ) : (
-            <div className="min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-semibold bg-[#ecfdf5] text-[#047857] flex items-center gap-1">
+            <div className="min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium bg-[#EAF7EE] text-[#1B873F] flex items-center gap-1">
               <BadgeCheck className="w-[15px] h-[15px]" />
               <span>100% PDFs</span>
             </div>
@@ -2133,14 +2132,14 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
             <button
               type="button"
               onClick={() => setStatusFilter(statusFilter === 'alerta' ? 'all' : 'alerta')}
-              className={`min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-semibold transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
+              className={`min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
                 statusFilter === 'alerta'
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-rose-50 hover:bg-rose-100 text-rose-800'
+                  ? 'bg-[#D70015] text-white font-semibold'
+                  : 'bg-[#FFEBEB] hover:bg-[#FFD6D6] text-[#D70015]'
               }`}
             >
               <span>Alerta</span>
-              <span className="font-bold">{classSummary.alertaLegalCount}</span>
+              <span className="font-semibold">{classSummary.alertaLegalCount}</span>
             </button>
           )}
 
@@ -2148,14 +2147,14 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
             <button
               type="button"
               onClick={() => setStatusFilter(statusFilter === 'bolsa_familia' ? 'all' : 'bolsa_familia')}
-              className={`min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-semibold transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
+              className={`min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
                 statusFilter === 'bolsa_familia'
-                  ? 'bg-[#14428c] text-white'
-                  : 'bg-blue-50 hover:bg-blue-100 text-[#14428c]'
+                  ? 'bg-[#0071E3] text-white font-semibold'
+                  : 'bg-[#0071E3]/10 hover:bg-[#0071E3]/15 text-[#0071E3]'
               }`}
             >
               <span>Bolsa Família</span>
-              <span className="font-bold">{classSummary.bolsaFamiliaCount}</span>
+              <span className="font-semibold">{classSummary.bolsaFamiliaCount}</span>
             </button>
           )}
 
@@ -2163,10 +2162,10 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
             <button
               type="button"
               onClick={() => setStatusFilter(statusFilter === 'irmaos' ? 'all' : 'irmaos')}
-              className={`min-h-[32px] px-3 py-1 rounded-xl text-[12px] tracking-[-0.006em] font-medium transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
+              className={`min-h-[32px] px-3.5 py-1 rounded-full text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1 tabular-nums ${
                 statusFilter === 'irmaos'
-                  ? 'bg-[#047857] text-white shadow-xs'
-                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900'
+                  ? 'bg-[#1B873F] text-white shadow-xs font-semibold'
+                  : 'bg-[#EAF7EE] hover:bg-[#D4EFE0] text-[#1B873F]'
               }`}
             >
               <Users className="w-3.5 h-3.5 shrink-0" />
@@ -2179,23 +2178,23 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
         {/* Linha 3: Busca + Controles */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-0.5 min-w-0">
           <div className="relative flex-1 min-w-0">
-            <Search className="w-[19px] h-[19px] absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-700" />
+            <Search className="w-[18px] h-[18px] absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868B]" />
             <input
               type="text"
               value={searchStudent}
               onChange={(e) => setSearchStudent(e.target.value)}
               placeholder="Buscar por Nº, nome, RA ou responsável..."
               aria-label="Buscar estudante"
-              className="w-full min-h-[44px] pl-10 pr-9 rounded-2xl bg-[#f3f6fb] text-[15px] font-medium tracking-[-0.012em] text-slate-950 placeholder:text-slate-600 focus:bg-[#eef3f9] transition-colors"
+              className="w-full min-h-[42px] pl-10 pr-9 rounded-full bg-white text-[14px] font-normal text-[#1D1D1F] placeholder:text-[#86868B] border border-black/[0.08] shadow-2xs focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 focus:outline-hidden transition-all"
             />
             {searchStudent && (
               <button
                 type="button"
                 onClick={() => setSearchStudent('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-700 hover:text-slate-950 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#86868B] hover:text-[#1D1D1F] cursor-pointer"
                 aria-label="Limpar busca"
               >
-                <X className="w-[18px] h-[18px]" />
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -2205,9 +2204,9 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setStatusFilter('all')}
-                className="min-h-[40px] px-3 rounded-2xl bg-[#e2e8f0] hover:bg-[#cbd5e1] text-[#0f172a] font-semibold text-[12.5px] tracking-[-0.01em] flex items-center gap-1 cursor-pointer transition-colors"
+                className="min-h-[36px] px-3.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-medium text-[12.5px] flex items-center gap-1 cursor-pointer transition-colors border border-black/[0.06]"
               >
-                <FilterX className="w-[15px] h-[15px]" />
+                <FilterX className="w-[14px] h-[14px]" />
                 <span>Limpar</span>
               </button>
             )}
@@ -2218,54 +2217,54 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
                 setExpandedStudentId((prev) => (prev === '__ALL__' ? null : '__ALL__'))
               }
               title="Expandir ou recolher resumo de todos"
-              className="min-h-[40px] px-3.5 rounded-2xl text-[12.5px] tracking-[-0.01em] font-semibold text-[#0f172a] bg-[#f1f5f9] hover:bg-[#e2e8f0] flex items-center gap-1 cursor-pointer transition-colors"
+              className="min-h-[36px] px-3.5 rounded-full text-[12.5px] font-medium text-[#1D1D1F] bg-[#F5F5F7] hover:bg-black/[0.05] flex items-center gap-1 cursor-pointer transition-colors border border-black/[0.06]"
             >
               {expandedStudentId === '__ALL__' ? (
-                <ChevronsDownUp className="w-[17px] h-[17px]" />
+                <ChevronsDownUp className="w-[16px] h-[16px]" />
               ) : (
-                <ChevronsUpDown className="w-[17px] h-[17px]" />
+                <ChevronsUpDown className="w-[16px] h-[16px]" />
               )}
               <span>{expandedStudentId === '__ALL__' ? 'Recolher' : 'Expandir'}</span>
             </button>
 
-            <div className="flex items-center gap-1 bg-[#f1f5f9] p-1 rounded-2xl">
+            <div className="inline-flex items-center gap-0.5 bg-[#F5F5F7] p-1 rounded-full border border-black/[0.06]">
               <button
                 type="button"
                 onClick={() => setViewMode('grid')}
                 title="Cartões"
-                className={`min-h-[34px] px-2.5 sm:px-3 rounded-xl text-[12.5px] tracking-[-0.01em] flex items-center gap-1 cursor-pointer transition-colors ${
+                className={`min-h-[32px] px-3 rounded-full text-[12.5px] flex items-center gap-1 cursor-pointer transition-all ${
                   viewMode === 'grid'
-                    ? 'bg-white text-slate-950 font-semibold shadow-2xs'
-                    : 'text-slate-700 hover:text-slate-950 font-medium'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F] font-medium'
                 }`}
               >
-                <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Cards</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('compact')}
                 title="Lista"
-                className={`min-h-[34px] px-2.5 sm:px-3 rounded-xl text-[12.5px] tracking-[-0.01em] flex items-center gap-1 cursor-pointer transition-colors ${
+                className={`min-h-[32px] px-3 rounded-full text-[12.5px] flex items-center gap-1 cursor-pointer transition-all ${
                   viewMode === 'compact'
-                    ? 'bg-white text-slate-950 font-semibold shadow-2xs'
-                    : 'text-slate-700 hover:text-slate-950 font-medium'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F] font-medium'
                 }`}
               >
-                <ListIcon className="w-4 h-4" />
+                <ListIcon className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Lista</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
                 title="Tabela"
-                className={`min-h-[34px] px-2.5 sm:px-3 rounded-xl text-[12.5px] tracking-[-0.01em] flex items-center gap-1 cursor-pointer transition-colors ${
+                className={`min-h-[32px] px-3 rounded-full text-[12.5px] flex items-center gap-1 cursor-pointer transition-all ${
                   viewMode === 'table'
-                    ? 'bg-white text-slate-950 font-semibold shadow-2xs'
-                    : 'text-slate-700 hover:text-slate-950 font-medium'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F] font-medium'
                 }`}
               >
-                <Rows3 className="w-4 h-4" />
+                <Rows3 className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Tabela</span>
               </button>
             </div>
@@ -2285,7 +2284,7 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
                 setSearchStudent('');
                 setStatusFilter('all');
               }}
-              className="text-[13px] font-semibold text-[#14428c] hover:underline cursor-pointer"
+              className="text-[13px] font-semibold text-[#0071E3] hover:underline cursor-pointer"
             >
               Limpar filtros
             </button>
@@ -2338,9 +2337,9 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowAllStudentsInView((prev) => !prev)}
-                      className="px-2.5 py-1 rounded-lg bg-[#eef3f9] hover:bg-[#e2e8f0] text-[#14428c] text-xs font-semibold cursor-pointer transition-colors"
+                      className="px-3 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.06] text-[#0071E3] text-xs font-semibold cursor-pointer transition-colors"
                     >
-                      {showAllStudentsInView ? `Paginar (${PAGE_SIZE}/pág)` : `Ver todos (${filteredStudents.length})`}
+                      {showAllStudentsInView ? `Paginar (${PAGE_SIZE} por página)` : `Ver todos (${filteredStudents.length})`}
                     </button>
                   }
                 />
@@ -2379,9 +2378,9 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowAllStudentsInView((prev) => !prev)}
-                      className="px-2.5 py-1 rounded-lg bg-[#eef3f9] hover:bg-[#e2e8f0] text-[#14428c] text-xs font-semibold cursor-pointer transition-colors"
+                      className="px-3 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.06] text-[#0071E3] text-xs font-semibold cursor-pointer transition-colors"
                     >
-                      {showAllStudentsInView ? `Paginar (${PAGE_SIZE}/pág)` : `Ver todos (${filteredStudents.length})`}
+                      {showAllStudentsInView ? `Paginar (${PAGE_SIZE} por página)` : `Ver todos (${filteredStudents.length})`}
                     </button>
                   }
                 />
@@ -2400,20 +2399,20 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
 
             return (
               <div className="space-y-4">
-                <div className="bg-white rounded-3xl overflow-x-auto shadow-2xs">
-                  <div className="px-4 py-3 bg-[#f8fafc] flex flex-wrap items-center justify-between gap-2 text-[12px] tracking-[-0.006em]">
-                    <span className="font-semibold text-[#334155]">Faltas seguidas:</span>
+                <div className="bg-white rounded-3xl overflow-x-auto border border-black/[0.06] shadow-sm">
+                  <div className="px-4 py-3 bg-[#F5F5F7] border-b border-black/[0.06] flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                    <span className="font-medium text-[#1D1D1F]">Faltas seguidas:</span>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#fffbeb] text-[#92400e] font-semibold tabular-nums">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
+                      <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#FFF5E5] text-[#B25000] font-medium tabular-nums">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#B25000]" />
                         <span>3+ Atenção</span>
                       </span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#fff7ed] text-[#9a3412] font-semibold tabular-nums">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c]" />
+                      <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#FFF5E5] text-[#B25000] font-semibold tabular-nums">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#B25000]" />
                         <span>5+ Busca Ativa</span>
                       </span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#fff1f2] text-[#9f1239] font-semibold tabular-nums">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#e11d48]" />
+                      <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#FFEBEB] text-[#D70015] font-semibold tabular-nums">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#D70015]" />
                         <span>10+ Crítico</span>
                       </span>
                     </div>
@@ -2421,9 +2420,9 @@ export const DetalhesTurmaScreen: React.FC<DetalhesTurmaScreenProps> = ({
 
                   <table
                     ref={setTableElement}
-                    className="w-full text-left text-[13px] tracking-[-0.008em] min-w-[1160px]"
+                    className="w-full text-left text-[13px] min-w-[1160px]"
                   >
-                    <thead className="bg-[#eef3f9] text-slate-800 font-bold uppercase tracking-[0.03em] text-[11px]">
+                    <thead className="bg-[#F5F5F7] text-[#86868B] font-medium text-xs border-b border-black/[0.06]">
                       <tr>
                         <th className="py-3 px-3 text-center">Nº</th>
                         <th className="py-3 px-3">Estudante</th>

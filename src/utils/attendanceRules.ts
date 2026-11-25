@@ -76,8 +76,8 @@ export const getStudentConsecutiveAlertInfo = (student: Student): ConsecutiveAle
       selectedDates,
       hasFamilyFeedback,
       familyFeedback: familyFeedback || undefined,
-      label: `Crítico 10+ Dias (${effectiveDays}d seguidos)`,
-      shortBadge: `10+ DIAS (${effectiveDays}d)`,
+      label: `Crítico 10+ Dias (${effectiveDays} ${effectiveDays === 1 ? 'dia seguido' : 'dias seguidos'})`,
+      shortBadge: `10+ DIAS (${effectiveDays} ${effectiveDays === 1 ? 'dia' : 'dias'})`,
       actionRequired: 'Acionar Gestão / Conselho Tutelar (Evasão Crítica)',
       rowBgClass: 'bg-rose-50/90 shadow-[0_2px_10px_-4px_rgba(190,18,60,0.12)]',
       rowHoverClass: 'hover:bg-rose-100/80',
@@ -97,8 +97,8 @@ export const getStudentConsecutiveAlertInfo = (student: Student): ConsecutiveAle
       selectedDates,
       hasFamilyFeedback,
       familyFeedback: familyFeedback || undefined,
-      label: `Busca Ativa 5+ Dias (${effectiveDays}d seguidos)`,
-      shortBadge: `5+ DIAS (${effectiveDays}d)`,
+      label: `Busca Ativa 5+ Dias (${effectiveDays} ${effectiveDays === 1 ? 'dia seguido' : 'dias seguidos'})`,
+      shortBadge: `5+ DIAS (${effectiveDays} ${effectiveDays === 1 ? 'dia' : 'dias'})`,
       actionRequired: 'Convocação da Família / Busca Ativa Obrigatória',
       rowBgClass: 'bg-orange-50/90 shadow-[0_2px_10px_-4px_rgba(234,88,12,0.12)]',
       rowHoverClass: 'hover:bg-orange-100/80',
@@ -118,8 +118,8 @@ export const getStudentConsecutiveAlertInfo = (student: Student): ConsecutiveAle
       selectedDates,
       hasFamilyFeedback,
       familyFeedback: familyFeedback || undefined,
-      label: `Atenção 3+ Dias (${effectiveDays}d seguidos)`,
-      shortBadge: `3+ DIAS (${effectiveDays}d)`,
+      label: `Atenção 3+ Dias (${effectiveDays} ${effectiveDays === 1 ? 'dia seguido' : 'dias seguidos'})`,
+      shortBadge: `3+ DIAS (${effectiveDays} ${effectiveDays === 1 ? 'dia' : 'dias'})`,
       actionRequired: 'Contato Preventivo com Responsáveis (WhatsApp/Telefone)',
       rowBgClass: 'bg-amber-50/90 shadow-[0_2px_10px_-4px_rgba(217,119,6,0.12)]',
       rowHoverClass: 'hover:bg-amber-100/80',
@@ -183,8 +183,8 @@ export interface BimesterDefinition {
 export const OFFICIAL_BIMESTERS_2027: BimesterDefinition[] = [
   {
     id: '1bim',
-    label: 'Fev + Mar / 2027 (1º Bimestre)',
-    shortLabel: 'Fev + Mar / 27',
+    label: 'Fevereiro + Março / 2027 (1º Bimestre)',
+    shortLabel: 'Fevereiro + Março / 2027',
     periodLabel: 'Fevereiro + Março de 2027',
     months: [
       { name: 'Fevereiro', defaultDays: 16 },
@@ -193,8 +193,8 @@ export const OFFICIAL_BIMESTERS_2027: BimesterDefinition[] = [
   },
   {
     id: '2bim',
-    label: 'Abr + Mai / 2027 (2º Bimestre)',
-    shortLabel: 'Abr + Mai / 27',
+    label: 'Abril + Maio / 2027 (2º Bimestre)',
+    shortLabel: 'Abril + Maio / 2027',
     periodLabel: 'Abril + Maio de 2027',
     months: [
       { name: 'Abril', defaultDays: 20 },
@@ -203,8 +203,8 @@ export const OFFICIAL_BIMESTERS_2027: BimesterDefinition[] = [
   },
   {
     id: '3bim',
-    label: 'Jun + Jul / 2027 (3º Bimestre)',
-    shortLabel: 'Jun + Jul / 27',
+    label: 'Junho + Julho / 2027 (3º Bimestre)',
+    shortLabel: 'Junho + Julho / 2027',
     periodLabel: 'Junho + Julho de 2027',
     months: [
       { name: 'Junho', defaultDays: 20 },
@@ -213,8 +213,8 @@ export const OFFICIAL_BIMESTERS_2027: BimesterDefinition[] = [
   },
   {
     id: '4bim',
-    label: 'Ago + Set / 2027 (4º Bimestre)',
-    shortLabel: 'Ago + Set / 27',
+    label: 'Agosto + Setembro / 2027 (4º Bimestre)',
+    shortLabel: 'Agosto + Setembro / 2027',
     periodLabel: 'Agosto + Setembro de 2027',
     months: [
       { name: 'Agosto', defaultDays: 22 },
@@ -223,8 +223,8 @@ export const OFFICIAL_BIMESTERS_2027: BimesterDefinition[] = [
   },
   {
     id: '5bim',
-    label: 'Out + Nov / 2027 (5º Bimestre)',
-    shortLabel: 'Out + Nov / 27',
+    label: 'Outubro + Novembro / 2027 (5º Bimestre)',
+    shortLabel: 'Outubro + Novembro / 2027',
     periodLabel: 'Outubro + Novembro de 2027',
     months: [
       { name: 'Outubro', defaultDays: 20 },
@@ -233,8 +233,8 @@ export const OFFICIAL_BIMESTERS_2027: BimesterDefinition[] = [
   },
   {
     id: 'anual',
-    label: 'Consolidado Fev a Nov / 2027',
-    shortLabel: 'Fev a Nov / 27',
+    label: 'Consolidado Fevereiro a Novembro / 2027',
+    shortLabel: 'Fevereiro a Novembro / 2027',
     periodLabel: 'Fevereiro a Novembro de 2027',
     months: [
       { name: 'Fevereiro', defaultDays: 16 },
@@ -323,7 +323,7 @@ export const calculateStudentEnrolledDaysInMonth = (
     const clamped = Math.max(1, Math.min(maxDays, student.diasLetivosRecorte));
     if (clamped < maxDays) {
       const reason = student.dataMovimentacao
-        ? `Saída/Transf. em ${student.dataMovimentacao}`
+        ? `Saída/Transferência em ${student.dataMovimentacao}`
         : student.dataMatriculaSed && !student.dataMatriculaSed.startsWith('03/02')
         ? `Entrada em ${student.dataMatriculaSed}`
         : 'Recorte parcial no mês';
@@ -449,8 +449,8 @@ export const getStudentAttendanceMetrics = (
   const isBelowLegalThreshold = frequenciaPercent < minLegalPresencePercent;
   const legalAlertReason = isBelowLegalThreshold
     ? isEducacaoInfantil
-      ? `Alerta Ed. Infantil: Presença (${frequenciaPercent}%) abaixo do mínimo legal de 60%`
-      : `Alerta Ens. Fundamental: Presença (${frequenciaPercent}%) abaixo do mínimo legal de 75%`
+      ? `Alerta Educação Infantil: Presença (${frequenciaPercent}%) abaixo do mínimo legal de 60%`
+      : `Alerta Ensino Fundamental: Presença (${frequenciaPercent}%) abaixo do mínimo legal de 75%`
     : 'Frequência Regular';
 
   return {

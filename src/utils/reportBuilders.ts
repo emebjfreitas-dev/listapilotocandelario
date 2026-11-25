@@ -74,7 +74,6 @@ export function buildHomeSchoolOverviewReport(params: {
     const activeCount = cls.students.filter((s) => !isStudentMoved(s)).length;
     const consecCount = cls.students.filter((s) => s.consecutiveAbsenceAlert?.active).length;
     return [
-      cls.turmaAbrev || cls.id.toUpperCase(),
       cls.name,
       cls.shift.replace('Turno ', ''),
       cls.room || '—',
@@ -106,7 +105,6 @@ export function buildHomeSchoolOverviewReport(params: {
         sheetName: 'Turmas_Consolidado',
         sectionTitle: 'Quadro Consolidado das Turmas',
         headers: [
-          'Cód.',
           'Turma',
           'Turno',
           'Sala',
@@ -144,7 +142,6 @@ export function buildTurmasOverviewReport(params: {
     totalFaltas += cm.totalFaltasTurma;
 
     return [
-      cls.turmaAbrev || cls.id.toUpperCase(),
       cls.name,
       cls.grade,
       cls.shift.replace('Turno ', ''),
@@ -176,7 +173,6 @@ export function buildTurmasOverviewReport(params: {
         sheetName: 'Turmas',
         sectionTitle: 'Turmas, Docentes e Frequência',
         headers: [
-          'Cód.',
           'Turma',
           'Etapa',
           'Turno',
@@ -325,7 +321,7 @@ export function buildStudentIndividualReport(params: {
       { label: 'Frequência', value: `${metrics.frequenciaPercent}%`, detail: `${metrics.presencas}/${metrics.diasLetivosMatriculados} dias` },
       { label: 'Total Faltas', value: String(metrics.faltas), detail: `${metrics.atestados} atestado(s)` },
       { label: 'Situação', value: student.situacao || 'ATIVO', detail: classGroup.name },
-      { label: 'Busca Ativa', value: `${occs.length} reg.`, detail: 'Ocorrências no ano' },
+      { label: 'Busca Ativa', value: `${occs.length} ${occs.length === 1 ? 'registro' : 'registros'}`, detail: 'Ocorrências no ano' },
     ],
     sheets,
   };
@@ -380,7 +376,7 @@ export function buildMonthlyAttendanceReport(params: {
     orientation: 'landscape',
     summaryMetrics: [
       { label: 'Estudantes', value: String(sorted.length) },
-      { label: 'Dias Letivos', value: `${diasLetivosMes}d`, detail: `Mês de ${monthName}` },
+      { label: 'Dias Letivos', value: `${diasLetivosMes} ${diasLetivosMes === 1 ? 'dia' : 'dias'}`, detail: `Mês de ${monthName}` },
       { label: 'Presença Turma', value: `${avgPres}%`, detail: `${sumPresencas}/${sumDias} presenças` },
       { label: 'Faltas / Atestados', value: `${sumFaltas} / ${sumAtestados}`, detail: `${belowCount} abaixo da meta` },
     ],
@@ -396,7 +392,7 @@ export function buildMonthlyAttendanceReport(params: {
           'Presenças',
           'Faltas',
           'Atestados',
-          'Faltas s/ Just.',
+          'Faltas sem Justificativa',
           '% Presença',
           'Meta Legal',
           'Observações / Atestado',
@@ -464,7 +460,7 @@ export function buildConsecutiveAbsencesReport(params: {
         String(student.number).padStart(2, '0'),
         student.name,
         student.totalAbsencesMonth || 0,
-        `${occ.sequenceNumber || idx + 1}ª (${occ.selectedDates.length}d)`,
+        `${occ.sequenceNumber || idx + 1}ª (${occ.selectedDates.length} ${occ.selectedDates.length === 1 ? 'dia' : 'dias'})`,
         occ.selectedDates.join(', ') || '—',
         hasFeedback
           ? occ.contactStatus === 'justificado_atestado'
@@ -574,7 +570,7 @@ export function buildMultiStudentFamiliesReport(params: {
           'Núcleo',
           'Vínculo',
           'Responsáveis Compartilhados',
-          'Qtd Filhos',
+          'Quantidade de Filhos',
           'Turmas',
           'Telefones',
           'Estudantes (Nome · Turma · Frequência)',
@@ -607,7 +603,7 @@ export function buildBolsaFamiliaNominalReport(params: {
   const anonymize = Boolean(getStoredLgpdConfig().maskSensitiveDataByDefault);
 
   const monthNames =
-    rows[0]?.rep.monthsBreakdown.map((mb) => mb.monthName.slice(0, 3).toUpperCase()) || [];
+    rows[0]?.rep.monthsBreakdown.map((mb) => mb.monthName.toUpperCase()) || [];
 
   const headers = [
     'Ordem',
@@ -615,8 +611,8 @@ export function buildBolsaFamiliaNominalReport(params: {
     'Estudante',
     'Etapa',
     'Meta Legal',
-    ...monthNames.flatMap((m) => [`${m} %`, `${m} (F/A)`]),
-    'Faltas Bim.',
+    ...monthNames.flatMap((m) => [`${m} %`, `${m} (Faltas / Atestados)`]),
+    'Faltas no Bimestre',
     'Atestados',
     '% Presença',
     'Status Meta',
@@ -639,11 +635,11 @@ export function buildBolsaFamiliaNominalReport(params: {
       index + 1,
       r.cls.name,
       r.student.name,
-      r.rep.isEducacaoInfantil ? 'Ed. Infantil' : 'Ens. Fundamental',
+      r.rep.isEducacaoInfantil ? 'Educação Infantil' : 'Ensino Fundamental',
       `>=${r.rep.minLegalPresencePercent}%`,
       ...r.rep.monthsBreakdown.flatMap((mb) => [
         `${mb.frequenciaPercent}%`,
-        `${mb.faltas}F/${mb.atestados}A`,
+        `${mb.faltas} faltas / ${mb.atestados} atestados`,
       ]),
       r.rep.totalFaltasBimestre,
       r.rep.totalAtestadosBimestre,
@@ -660,7 +656,7 @@ export function buildBolsaFamiliaNominalReport(params: {
   return {
     fileNameBase: `Listas_Nominais_Bolsa_Familia_${bimesterId}_2027`,
     title: `Estudantes Beneficiados do Bolsa Família — ${bimesterShortLabel}`,
-    subtitle: `${bimesterLabel} · Meta MEC/LDB: >=60% Ed. Infantil / >=75% Ens. Fundamental`,
+    subtitle: `${bimesterLabel} · Meta MEC/LDB: >=60% Educação Infantil / >=75% Ensino Fundamental`,
     orientation: 'landscape',
     summaryMetrics: [
       { label: 'Estudantes Listados', value: String(rows.length) },
@@ -724,7 +720,7 @@ export function buildCalendar200DaysReport(params: {
       {
         sheetName: 'Resumo_Mensal',
         sectionTitle: 'Distribuição de Dias Letivos por Mês',
-        headers: ['Mês', 'Qtd. Dias Letivos'],
+        headers: ['Mês', 'Quantidade de Dias Letivos'],
         columnWidths: [24, 20],
         rows: Array.from(monthCounts.entries()).map(([month, count]) => [month, count]),
       },
@@ -756,7 +752,6 @@ export function buildOfficialMatrixReport(
     const periodo = cls.shift.toUpperCase().includes('TARDE') ? 'TARDE' : 'MANHÃ';
 
     return [
-      cls.turmaAbrev || cls.id.toUpperCase(),
       cls.name,
       cls.room || '—',
       periodo,
@@ -807,19 +802,18 @@ export function buildOfficialMatrixReport(
         sheetName: 'Quadro_Turmas_Docentes',
         sectionTitle: 'Quadro Oficial de Turmas e Professores',
         headers: [
-          'Abrev.',
           'Turma',
           'Sala',
           'Período',
           'Professor(a) Regente',
           'E-mail Regente',
           'Ativos',
-          'BXTR',
-          'Reman.',
+          'Transferidos',
+          'Remanejados',
           'Arte',
-          'Ed. Física',
+          'Educação Física',
           'Inglês',
-          'Cód. SED',
+          'Código SED',
         ],
         rows: matrixRows,
       },

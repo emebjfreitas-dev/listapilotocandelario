@@ -31,6 +31,8 @@ import {
   NameGenderEntry,
   getStoredNameGenderEntries,
 } from '../utils/genderDictionary';
+import { isBackendApiAvailable } from './apiEnvironment';
+import { getActiveUserAuthHeadersAsync } from './authSessionService';
 
 const SYNC_QUEUE_STORAGE_KEY = 'emeb_candelario_sheet_sync_queue_v2';
 const SYNC_QUEUE_LOCK_KEY = 'emeb_candelario_sheet_sync_lock_v2';
@@ -851,19 +853,46 @@ class CentralizedSyncQueueManager {
 
             const classesToCommit = Array.from(reconciledClassesMap.values());
             const commitTimestamp = batchUpdatedAtMs || Date.now();
+            const payloadClasses =
+              classesToCommit.length > 0 ? classesToCommit : latestClasses;
 
-            const firestoreOk =
-              classesToCommit.length > 0
-                ? await this.withTimeout(
-                    saveClassesToFirestoreCloud(classesToCommit, commitTimestamp),
-                    CLOUD_WRITE_TIMEOUT_MS,
-                    'salvar turmas na nuvem'
-                  )
-                : await this.withTimeout(
-                    saveClassesToFirestoreCloud(latestClasses, commitTimestamp),
-                    CLOUD_WRITE_TIMEOUT_MS,
-                    'salvar turmas na nuvem'
-                  );
+            let cloudOk = false;
+            if (isBackendApiAvailable()) {
+              const authHeaders = await getActiveUserAuthHeadersAsync();
+              const opId = `op-queue-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+              const res = await this.withTimeout(
+                fetch('/api/school-state/classes', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders,
+                  },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    classes: payloadClasses,
+                    classesUpdatedAtMs: commitTimestamp,
+                    opId,
+                  }),
+                }),
+                CLOUD_WRITE_TIMEOUT_MS,
+                'salvar turmas no servidor'
+              );
+              if (!res.ok) {
+                throw new Error(
+                  `Falha ao salvar dados no servidor da escola (HTTP ${res.status}) — retentativa agendada.`
+                );
+              }
+              cloudOk = true;
+              if (!isFirestoreQuotaExceeded()) {
+                void saveClassesToFirestoreCloud(payloadClasses, commitTimestamp).catch(() => {});
+              }
+            } else {
+              cloudOk = await this.withTimeout(
+                saveClassesToFirestoreCloud(payloadClasses, commitTimestamp),
+                CLOUD_WRITE_TIMEOUT_MS,
+                'salvar turmas na nuvem'
+              );
+            }
 
             if (hasLinkedSheet) {
               for (const clsToSync of classesToCommit) {
@@ -875,7 +904,7 @@ class CentralizedSyncQueueManager {
               }
             }
 
-            if (!firestoreOk) {
+            if (!cloudOk) {
               throw new Error(
                 'Falha ao salvar dados na nuvem da escola — retentativa agendada.'
               );
@@ -914,10 +943,12 @@ class CentralizedSyncQueueManager {
             this.persistToStorage();
             continue;
           } catch (err: any) {
-            const isQuota = isFirestoreQuotaExceeded() || isFirestoreQuotaExceededError(err);
+            const isQuota =
+              !isBackendApiAvailable() &&
+              (isFirestoreQuotaExceeded() || isFirestoreQuotaExceededError(err));
             const errorMessage = isQuota
               ? 'Cota diária de gravação gratuita do Firestore atingida (dados 100% seguros localmente e na planilha). A cota reinicia amanhã.'
-              : err?.message || 'Falha de comunicação com a nuvem — retentativa agendada';
+              : err?.message || 'Falha de comunicação com o servidor — retentativa agendada';
             let maxAttemptsObserved = 1;
             let maxBackoffObserved = isQuota ? 15 * 60 * 1000 : BASE_BACKOFF_MS;
             let anyTaskFailed = false;
@@ -1007,14 +1038,76 @@ class CentralizedSyncQueueManager {
               this.pendingUsersSnapshot?.users || getStoredAuthorizedUsers();
             const latestLogs =
               this.pendingUsersSnapshot?.sessionLogs || getStoredAccessSessionLogs();
-            const firestoreOk = await this.withTimeout(
-              saveConfigMetaToFirestoreCloud({
-                authorizedUsers: latestUsers,
-                accessSessionLogs: latestLogs,
-              }),
-              CLOUD_WRITE_TIMEOUT_MS,
-              'salvar acessos na nuvem'
+            const isTelemetry = Boolean(
+              taskSnapshot.silent ||
+                /heartbeat|sess[aã]o|login|logout/i.test(taskSnapshot.description || '')
             );
+
+            if (isBackendApiAvailable()) {
+              const authHeaders = await getActiveUserAuthHeadersAsync();
+              if (isTelemetry) {
+                const res = await this.withTimeout(
+                  fetch('/api/school-state/logs', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...authHeaders,
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                      accessSessionLogs: latestLogs,
+                      authorizedUsers: latestUsers,
+                    }),
+                  }),
+                  CLOUD_WRITE_TIMEOUT_MS,
+                  'salvar telemetria de sessão no servidor'
+                );
+                if (!res.ok) {
+                  console.warn(
+                    `Sincronização silenciosa (${taskSnapshot.description}) preservada localmente.`
+                  );
+                }
+              } else {
+                const res = await this.withTimeout(
+                  fetch('/api/school-state/users', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...authHeaders,
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ authorizedUsers: latestUsers }),
+                  }),
+                  CLOUD_WRITE_TIMEOUT_MS,
+                  'salvar acessos no servidor'
+                );
+                if (!res.ok) {
+                  throw new Error(
+                    `Falha ao salvar acessos no servidor (HTTP ${res.status}) — retentativa agendada.`
+                  );
+                }
+                if (!isFirestoreQuotaExceeded()) {
+                  void saveConfigMetaToFirestoreCloud({
+                    authorizedUsers: latestUsers,
+                  }).catch(() => {});
+                }
+              }
+            } else {
+              const firestoreOk = await this.withTimeout(
+                saveConfigMetaToFirestoreCloud({
+                  authorizedUsers: latestUsers,
+                  accessSessionLogs: latestLogs,
+                }),
+                CLOUD_WRITE_TIMEOUT_MS,
+                'salvar acessos na nuvem'
+              );
+              if (!firestoreOk) {
+                console.warn(
+                  `Sincronização de acessos (${taskSnapshot.description}) mantida localmente.`
+                );
+              }
+            }
+
             if (hasLinkedSheet) {
               await this.withTimeout(
                 syncAuthorizedUsersToGoogleSheet(latestUsers, latestLogs),
@@ -1022,42 +1115,54 @@ class CentralizedSyncQueueManager {
                 'sincronizar usuários na planilha'
               ).catch(() => false);
             }
-            if (!firestoreOk) {
-              const isTelemetry =
-                taskSnapshot.silent ||
-                taskSnapshot.category === 'users_access' ||
-                /heartbeat|sess[aã]o|login|logout/i.test(taskSnapshot.description || '');
-              if (isTelemetry) {
-                console.warn(
-                  `Sincronização silenciosa (${taskSnapshot.description}) preservada localmente e no servidor.`
-                );
-              } else {
-                console.warn(
-                  `Sincronização de acessos na nuvem mantida localmente e no servidor backend.`
-                );
-              }
-            }
           } else if (taskSnapshot.category === 'gender_dictionary') {
             const entries =
               this.pendingGenderSnapshot?.entries || getStoredNameGenderEntries();
-            const firestoreOk = await this.withTimeout(
-              saveConfigMetaToFirestoreCloud({
-                genderDictionary: entries,
-              }),
-              CLOUD_WRITE_TIMEOUT_MS,
-              'salvar dicionário de gênero na nuvem'
-            );
+            if (isBackendApiAvailable()) {
+              const authHeaders = await getActiveUserAuthHeadersAsync();
+              const res = await this.withTimeout(
+                fetch('/api/school-state/links', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders,
+                  },
+                  credentials: 'include',
+                  body: JSON.stringify({ genderDictionary: entries }),
+                }),
+                CLOUD_WRITE_TIMEOUT_MS,
+                'salvar dicionário de gênero no servidor'
+              );
+              if (!res.ok) {
+                throw new Error(
+                  `Falha ao salvar dicionário de gênero no servidor (HTTP ${res.status}) — retentativa agendada.`
+                );
+              }
+              if (!isFirestoreQuotaExceeded()) {
+                void saveConfigMetaToFirestoreCloud({
+                  genderDictionary: entries,
+                }).catch(() => {});
+              }
+            } else {
+              const firestoreOk = await this.withTimeout(
+                saveConfigMetaToFirestoreCloud({
+                  genderDictionary: entries,
+                }),
+                CLOUD_WRITE_TIMEOUT_MS,
+                'salvar dicionário de gênero na nuvem'
+              );
+              if (!firestoreOk) {
+                throw new Error(
+                  'Falha ao salvar dicionário de gênero na nuvem — retentativa agendada.'
+                );
+              }
+            }
             if (hasLinkedSheet) {
               await this.withTimeout(
                 syncGenderDictionaryToGoogleSheet(getStoredClasses(), entries),
                 CLOUD_WRITE_TIMEOUT_MS,
                 'sincronizar gênero na planilha'
               ).catch(() => false);
-            }
-            if (!firestoreOk) {
-              throw new Error(
-                'Falha ao salvar dicionário de gênero na nuvem — retentativa agendada.'
-              );
             }
           } else if (taskSnapshot.category === 'json_import') {
             const snapData = this.pendingJsonImportSnapshot;
@@ -1113,12 +1218,14 @@ class CentralizedSyncQueueManager {
           );
           this.persistToStorage();
         } catch (err: any) {
-          const isQuota = isFirestoreQuotaExceeded() || isFirestoreQuotaExceededError(err);
+          const isQuota =
+            !isBackendApiAvailable() &&
+            (isFirestoreQuotaExceeded() || isFirestoreQuotaExceededError(err));
           const nextAttempts = isQuota ? taskSnapshot.attempts : (taskSnapshot.attempts || 0) + 1;
           const maxAllowedAttempts = 5;
           const errorMessage = isQuota
             ? 'Cota diária de gravação gratuita do Firestore atingida (dados 100% seguros localmente e na planilha). A cota reinicia amanhã.'
-            : err?.message || 'Falha de comunicação com a nuvem — retentativa agendada';
+            : err?.message || 'Falha de comunicação com o servidor — retentativa agendada';
 
           const currentIdx = this.queue.findIndex(
             (t) => t.dedupeKey === taskSnapshot.dedupeKey

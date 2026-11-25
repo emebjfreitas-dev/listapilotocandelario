@@ -112,7 +112,7 @@ export const exportOfficialMatrixToXLS = async (
     );
     const periodo = cls.shift.toUpperCase().includes('TARDE') ? 'TARDE' : 'MANHÃ';
 
-    return {
+    return sanitizeSpreadsheetRow({
       'TURMA ABREV': cls.turmaAbrev || cls.id.toUpperCase(),
       'PROFESSOR(A)': regenteUser?.name || cls.teacherName || '',
       'E-MAIL INSTITUCIONAL REGENTE': regenteUser?.email || cls.teacherEmail || '',
@@ -133,7 +133,7 @@ export const exportOfficialMatrixToXLS = async (
       'E-MAIL EDUCAÇÃO FÍSICA': cls.peTeacherEmail || '',
       'LÍNGUA INGLESA': cls.englishTeacher || '',
       'E-MAIL LÍNGUA INGLESA': cls.englishTeacherEmail || '',
-    };
+    });
   });
 
   const wsMatrix = XLSX.utils.json_to_sheet(matrixRows);
@@ -161,34 +161,36 @@ export const exportOfficialMatrixToXLS = async (
   ];
   XLSX.utils.book_append_sheet(wb, wsMatrix, 'QUADRO TURMAS E PROFESSORES');
 
-  const accessRows = authorizedUsers.map((u, idx) => ({
-    'ORDEM': idx + 1,
-    'NOME DO(A) SERVIDOR(A)': u.name,
-    'PRONOME': u.pronoun || '',
-    'PRINOME': u.firstName || '',
-    'E-MAIL INSTITUCIONAL': u.email,
-    'PERFIL / FUNÇÃO':
-      u.role === 'admin'
-        ? 'ADMINISTRADOR (Acesso Pleno)'
-        : u.role === 'usuario'
-        ? 'PROFESSOR(A) REGENTE PEB I'
-        : `ESPECIALISTA PEB II (${u.subjectName || 'Arte / Ed. Física / Inglês'})`,
-    'TURMAS VINCULADAS':
-      u.assignedClassNames && u.assignedClassNames.length > 0
-        ? u.assignedClassNames.join(' + ')
-        : u.assignedClassName,
-    'STATUS': isUserAccessExpired(u)
-      ? 'EXPIRADO'
-      : u.active
-      ? 'ATIVO'
-      : 'BLOQUEADO',
-    'VALIDADE DO ACESSO': u.accessExpiresAt
-      ? formatAccessExpirationDateBR(u.accessExpiresAt)
-      : 'Permanente',
-    'ACESSOS TOTAIS': u.totalAccessCount || 0,
-    'TEMPO CONECTADO': formatDurationHuman(u.totalDurationSeconds || 0),
-    'ÚLTIMO ACESSO': u.lastLoginAt || 'Ainda não acessou',
-  }));
+  const accessRows = authorizedUsers.map((u, idx) =>
+    sanitizeSpreadsheetRow({
+      'ORDEM': idx + 1,
+      'NOME DO(A) SERVIDOR(A)': u.name,
+      'PRONOME': u.pronoun || '',
+      'PRINOME': u.firstName || '',
+      'E-MAIL INSTITUCIONAL': u.email,
+      'PERFIL / FUNÇÃO':
+        u.role === 'admin'
+          ? 'ADMINISTRADOR (Acesso Pleno)'
+          : u.role === 'usuario'
+          ? 'PROFESSOR(A) REGENTE PEB I'
+          : `ESPECIALISTA PEB II (${u.subjectName || 'Arte / Educação Física / Inglês'})`,
+      'TURMAS VINCULADAS':
+        u.assignedClassNames && u.assignedClassNames.length > 0
+          ? u.assignedClassNames.join(' + ')
+          : u.assignedClassName,
+      'STATUS': isUserAccessExpired(u)
+        ? 'EXPIRADO'
+        : u.active
+        ? 'ATIVO'
+        : 'BLOQUEADO',
+      'VALIDADE DO ACESSO': u.accessExpiresAt
+        ? formatAccessExpirationDateBR(u.accessExpiresAt)
+        : 'Permanente',
+      'ACESSOS TOTAIS': u.totalAccessCount || 0,
+      'TEMPO CONECTADO': formatDurationHuman(u.totalDurationSeconds || 0),
+      'ÚLTIMO ACESSO': u.lastLoginAt || 'Ainda não acessou',
+    })
+  );
   const wsAccess = XLSX.utils.json_to_sheet(accessRows);
   wsAccess['!cols'] = [
     { wch: 8 },
@@ -618,11 +620,11 @@ export const downloadSpreadsheetXLSX = async (
       'Total de Estudantes': c.totalStudents,
       'Dias Letivos do Mês': cm.diasLetivosMes,
       'Soma Dias Letivos (Recorte Matrículas)': cm.totalDiasMatriculadosTurma,
-      'Qtd Presenças Acumuladas': cm.totalPresencasTurma,
+      'Quantidade de Presenças Acumuladas': cm.totalPresencasTurma,
       '% Presença Média (Recorte)': `${cm.presenceRate}%`,
-      'Qtd Faltas Acumuladas': cm.totalFaltasTurma,
+      'Quantidade de Faltas Acumuladas': cm.totalFaltasTurma,
       '% Faltas da Turma': `${percentFaltasTurma}%`,
-      'Qtd Atestados Apresentados': cm.totalAtestadosTurma,
+      'Quantidade de Atestados Apresentados': cm.totalAtestadosTurma,
       '% Atestados sobre Faltas': `${percentAtestadosTurma}%`,
       'Status Fechamento': c.isPending ? 'Pendente' : 'Concluído',
     };
@@ -774,7 +776,7 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   {
     id: 'genero',
     label: 'GÊNERO',
-    shortLabel: 'Gênero (Fem./Masc.)',
+    shortLabel: 'Gênero (Feminino / Masculino)',
     category: 'Identificação & Matrícula',
     width: 14,
     getValue: (s) => getStudentGenderLabel(s).label.toUpperCase(),
@@ -782,7 +784,7 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   {
     id: 'situacao',
     label: 'SITUAÇÃO',
-    shortLabel: 'Situação (Ativo/Transf./Reman.)',
+    shortLabel: 'Situação (Ativo / Transferido / Remanejado)',
     category: 'Identificação & Matrícula',
     width: 18,
     getValue: (s) => s.situacao || 'ATIVO',
@@ -841,7 +843,7 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   {
     id: 'filiacao1',
     label: 'FILIAÇÃO 1',
-    shortLabel: 'Filiação 1 (Mãe / Resp.)',
+    shortLabel: 'Filiação 1 (Mãe / Responsável)',
     category: 'Filiação (Mãe e Pai) & Contatos',
     width: 34,
     getValue: (s) => {
@@ -854,7 +856,7 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   {
     id: 'filiacao2',
     label: 'FILIAÇÃO 2',
-    shortLabel: 'Filiação 2 (Pai / Resp.)',
+    shortLabel: 'Filiação 2 (Pai / Responsável)',
     category: 'Filiação (Mãe e Pai) & Contatos',
     width: 34,
     getValue: (s) => {
@@ -924,8 +926,8 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   },
   {
     id: 'faltasQtd',
-    label: 'FALTA TOTAL (QTD)',
-    shortLabel: 'Falta Total (Qtd)',
+    label: 'QUANTIDADE TOTAL DE FALTAS',
+    shortLabel: 'Falta Total (Quantidade)',
     category: 'Frequência, Presença & Faltas',
     width: 16,
     getValue: (s, cls, cal) =>
@@ -948,8 +950,8 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   },
   {
     id: 'atestadosQtd',
-    label: 'QTD ATESTADOS APRESENTADOS',
-    shortLabel: 'Atestados (Qtd)',
+    label: 'QUANTIDADE DE ATESTADOS APRESENTADOS',
+    shortLabel: 'Atestados (Quantidade)',
     category: 'Frequência, Presença & Faltas',
     width: 18,
     getValue: (s, cls, cal) =>
@@ -958,7 +960,7 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   {
     id: 'atestadosPercent',
     label: '% ATESTADOS SOBRE FALTAS',
-    shortLabel: '% Atestados s/ Faltas',
+    shortLabel: '% Atestados sobre Faltas',
     category: 'Frequência, Presença & Faltas',
     width: 18,
     getValue: (s, cls, cal) => {
@@ -969,8 +971,8 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   },
   {
     id: 'faltasSemAtestado',
-    label: 'QTD FALTAS SEM ATESTADO',
-    shortLabel: 'Faltas s/ Atestado',
+    label: 'QUANTIDADE DE FALTAS SEM ATESTADO',
+    shortLabel: 'Faltas sem Atestado',
     category: 'Frequência, Presença & Faltas',
     width: 18,
     getValue: (s, cls, cal) => {
@@ -1141,7 +1143,7 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   {
     id: 'logradouro',
     label: 'LOGRADOURO',
-    shortLabel: 'Logradouro (Rua/Av.)',
+    shortLabel: 'Logradouro (Rua / Avenida)',
     category: 'Endereço',
     width: 28,
     getValue: (s) => s.logradouro || '',
@@ -1197,7 +1199,7 @@ export const CLASS_EXPORT_COLUMNS: ClassExportColumnDef[] = [
   {
     id: 'categoriaProfissionalCenso',
     label: 'CATEGORIA PROFISSIONAL CENSO',
-    shortLabel: 'Cat. Profissional Censo',
+    shortLabel: 'Categoria Profissional Censo',
     category: 'Outros Campos SED',
     width: 22,
     getValue: (s) => s.categoriaProfissionalCenso || '',

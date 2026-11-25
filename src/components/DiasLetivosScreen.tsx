@@ -214,7 +214,7 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
     }
   };
 
-  // Pull initial calendar state from backend once
+  // Pull initial calendar state from backend once and listen for realtime updates
   useEffect(() => {
     let isMounted = true;
     setIsLoadingServer(true);
@@ -238,8 +238,27 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
         if (isMounted) setIsLoadingServer(false);
       });
 
+    const handleRealtimeCalendarUpdate = () => {
+      if (!isMounted) return;
+      const latestCal = getStoredOfficialCalendarConfig();
+      const latestHolidays = getStoredHolidays();
+      const latestLogs = getStoredCalendarAuditLogs();
+      setCalendarConfig(latestCal);
+      setHolidays(latestHolidays);
+      setAuditLogs(latestLogs);
+      if (!hasUnsavedRef.current) {
+        setSelectedYear(latestCal.year || 2027);
+        const joined = latestCal.schoolDays.join('\n');
+        setRawDatesInput(joined);
+        setParsedResult(parseAndValidateSchoolDates(joined, latestHolidays));
+      }
+    };
+
+    window.addEventListener('emeb-calendar-updated', handleRealtimeCalendarUpdate);
+
     return () => {
       isMounted = false;
+      window.removeEventListener('emeb-calendar-updated', handleRealtimeCalendarUpdate);
     };
   }, []);
 
@@ -927,10 +946,10 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('calendario')}
-            className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+            className={`min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all whitespace-nowrap shrink-0 border border-black/[0.06] ${
               activeTab === 'calendario'
-                ? 'bg-[#14428c] text-white'
-                : 'bg-[#eef3f9] text-slate-800 hover:bg-[#e8f0fe]'
+                ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
+                : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
             }`}
           >
             <CalendarDays className="w-3.5 h-3.5" />
@@ -940,10 +959,10 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('editor')}
-            className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+            className={`min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all whitespace-nowrap shrink-0 border border-black/[0.06] ${
               activeTab === 'editor'
-                ? 'bg-[#14428c] text-white'
-                : 'bg-[#eef3f9] text-slate-800 hover:bg-[#e8f0fe]'
+                ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
+                : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
             }`}
           >
             <ListChecks className="w-3.5 h-3.5" />
@@ -954,10 +973,10 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('feriados')}
-            className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+            className={`min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all whitespace-nowrap shrink-0 border border-black/[0.06] ${
               activeTab === 'feriados'
-                ? 'bg-[#14428c] text-white'
-                : 'bg-[#eef3f9] text-slate-800 hover:bg-[#e8f0fe]'
+                ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
+                : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
             }`}
           >
             <CalendarPlus className="w-3.5 h-3.5" />
@@ -968,10 +987,10 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('auditoria')}
-            className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+            className={`min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all whitespace-nowrap shrink-0 border border-black/[0.06] ${
               activeTab === 'auditoria'
-                ? 'bg-[#14428c] text-white'
-                : 'bg-[#eef3f9] text-slate-800 hover:bg-[#e8f0fe]'
+                ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
+                : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
             }`}
           >
             <History className="w-3.5 h-3.5" />
@@ -985,12 +1004,12 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
       {/* ABA 1: PLANEJADOR VISUAL INTERATIVO (MÊS A MÊS + CLIQUE NO DIA)       */}
       {/* ===================================================================== */}
       {activeTab === 'calendario' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start animate-fade-in">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start animate-fade-in text-[#1D1D1F]">
           {/* Coluna Esquerda: Navegador Dinâmico de Meses & Metas SME */}
-          <section className="lg:col-span-4 bg-white rounded-3xl p-4 sm:p-5 shadow-[0_12px_34px_-8px_rgba(2,6,23,0.34)] space-y-3">
+          <section className="lg:col-span-4 bg-white rounded-3xl p-4 sm:p-5 border border-black/[0.06] shadow-sm space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-950">Distribuição por Mês</h3>
-              <span className="text-xs font-mono font-bold tabular-nums text-slate-700">
+              <h3 className="text-sm font-semibold text-[#1D1D1F]">Distribuição por Mês</h3>
+              <span className="text-xs font-mono font-medium tabular-nums text-[#86868B]">
                 Meta: 200d
               </span>
             </div>
@@ -1010,8 +1029,8 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
                     onClick={() => setVisualCalendarMonth(monthNum)}
                     className={`p-2.5 rounded-2xl text-left transition-all duration-200 cursor-pointer flex flex-col gap-1 ${
                       isSelected
-                        ? 'bg-[#14428c] text-white shadow-[0_8px_18px_rgba(11,59,140,0.3)]'
-                        : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-950'
+                        ? 'bg-[#0071E3] text-white shadow-xs'
+                        : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F]'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
@@ -1019,7 +1038,7 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
                       {target > 0 && matchesTarget && (
                         <CheckCircle2
                           className={`w-3.5 h-3.5 shrink-0 ${
-                            isSelected ? 'text-emerald-300' : 'text-[#047857]'
+                            isSelected ? 'text-white' : 'text-[#1B873F]'
                           }`}
                         />
                       )}
@@ -1173,27 +1192,27 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
                   }
 
                   let cellClass =
-                    'bg-[#eef3f9] text-slate-900 hover:bg-[#e8f0fe]';
+                    'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05] border border-black/[0.06]';
                   let statusLabel = 'Não letivo';
 
                   if (slot.holiday && slot.isSchoolDay) {
                     cellClass =
-                      'bg-amber-200 text-amber-950 hover:bg-amber-300 shadow-[0_4px_12px_rgba(217,119,6,0.2)]';
+                      'bg-[#FFF5E5] text-[#B25000] hover:bg-[#FFE8CC] border border-[#B25000]/30';
                     statusLabel = `Conflito: ${slot.holiday.name}`;
                   } else if (slot.holiday) {
-                    cellClass = 'bg-rose-100 text-rose-950 hover:bg-rose-200';
+                    cellClass = 'bg-[#FFEBEB] text-[#D70015] hover:bg-[#FFD6D6] border border-[#D70015]/30';
                     statusLabel = slot.holiday.name;
                   } else if (slot.schoolDayType === 'sabado_letivo') {
                     cellClass =
-                      'bg-[#0f766e] text-white hover:bg-[#115e59] shadow-[0_6px_14px_rgba(15,118,110,0.28)]';
+                      'bg-[#1B873F] text-white hover:bg-[#156a31] shadow-xs';
                     statusLabel = 'Sáb. Letivo';
                   } else if (slot.isSchoolDay) {
                     cellClass =
-                      'bg-[#14428c] text-white hover:bg-[#0f3370] shadow-[0_6px_14px_rgba(9,15,29,0.22)]';
+                      'bg-[#0071E3] text-white hover:bg-[#0077ED] shadow-xs';
                     statusLabel = 'Dia Letivo';
                   } else if (slot.isWeekend) {
                     cellClass =
-                      'bg-[#f3f6fb] text-slate-700 hover:bg-[#e2e8f0] hover:text-slate-950';
+                      'bg-[#F5F5F7] text-[#86868B] hover:bg-black/[0.05] hover:text-[#1D1D1F] border border-black/[0.04]';
                     statusLabel = slot.dayOfWeek.startsWith('Sáb') ? 'Sábado' : 'Domingo';
                   }
 
@@ -1203,10 +1222,10 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
                       type="button"
                       onClick={() => handleCalendarDayClick(slot)}
                       title={`${slot.dateStr} (${slot.dayOfWeek}) — ${statusLabel}`}
-                      className={`min-h-[64px] p-2 rounded-xl flex flex-col justify-between text-left transition-all duration-150 hover:-translate-y-0.5 cursor-pointer select-none ${cellClass}`}
+                      className={`min-h-[64px] p-2 rounded-2xl flex flex-col justify-between text-left transition-all cursor-pointer select-none ${cellClass}`}
                     >
                       <div className="flex items-center justify-between gap-1 w-full">
-                        <span className="font-mono text-xs font-bold tabular-nums">
+                        <span className="font-mono text-xs font-semibold tabular-nums">
                           {slot.dayNumber}
                         </span>
                         {slot.isSchoolDay && !slot.holiday && (
@@ -1223,13 +1242,13 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
             </div>
 
             {/* Legenda Limpa Sem Contorno */}
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 p-3 rounded-2xl bg-[#f3f6fb] text-xs font-semibold text-slate-800">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 p-3.5 rounded-2xl bg-[#F5F5F7] text-xs font-medium text-[#1D1D1F] border border-black/[0.06]">
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-xs bg-[#14428c] inline-block" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#0071E3] inline-block" />
                 Dia Letivo Regular
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-xs bg-[#0f766e] inline-block" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#1B873F] inline-block" />
                 Sábado Letivo
               </span>
               <span className="inline-flex items-center gap-1.5">

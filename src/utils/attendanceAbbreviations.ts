@@ -1,60 +1,34 @@
 /**
  * Utilitário oficial de constantes e funções de formatação para padronizar
- * as abreviações de dias letivos, faltas e frequências em todo o app.
- *
- * Padrão adotado:
- * - DL = Dias Letivos
- * - F = Faltas
- * - P = Presenças
- * - Freq. = Frequência
- * - At. = Atestados
- * - FJ = Faltas Justificadas
- * - FNJ = Faltas Não Justificadas
+ * os rótulos por extenso de dias letivos, faltas e frequências em todo o app.
  */
 
 export const ATTENDANCE_ABBREVIATIONS = {
-  DIAS_LETIVOS: 'DL',
+  DIAS_LETIVOS: 'Dias Letivos',
   DIAS_LETIVOS_FULL: 'Dias Letivos',
-  FALTAS: 'F',
+  FALTAS: 'Faltas',
   FALTAS_FULL: 'Faltas',
-  PRESENCAS: 'P',
+  PRESENCAS: 'Presenças',
   PRESENCAS_FULL: 'Presenças',
-  FREQUENCIA: 'Freq.',
+  FREQUENCIA: 'Frequência',
   FREQUENCIA_FULL: 'Frequência',
-  ATESTADOS: 'At.',
+  ATESTADOS: 'Atestados',
   ATESTADOS_FULL: 'Atestados',
-  FALTAS_JUSTIFICADAS: 'FJ',
+  FALTAS_JUSTIFICADAS: 'Faltas Justificadas',
   FALTAS_JUSTIFICADAS_FULL: 'Faltas Justificadas',
-  FALTAS_NAO_JUSTIFICADAS: 'FNJ',
+  FALTAS_NAO_JUSTIFICADAS: 'Faltas Não Justificadas',
   FALTAS_NAO_JUSTIFICADAS_FULL: 'Faltas Não Justificadas',
-  PORCENTAGEM_FREQUENCIA: '% Freq.',
+  PORCENTAGEM_FREQUENCIA: '% Frequência',
   PORCENTAGEM_FALTAS: '% Faltas',
 } as const;
 
 export type AttendanceMetricType = 'DL' | 'F' | 'P' | 'Freq' | 'At' | 'FJ' | 'FNJ';
 
 /**
- * Retorna a abreviação padronizada correspondente a uma métrica de frequência.
+ * Retorna o rótulo por extenso correspondente a uma métrica de frequência.
  */
 export function getAttendanceAbbr(type: AttendanceMetricType): string {
-  switch (type) {
-    case 'DL':
-      return ATTENDANCE_ABBREVIATIONS.DIAS_LETIVOS;
-    case 'F':
-      return ATTENDANCE_ABBREVIATIONS.FALTAS;
-    case 'P':
-      return ATTENDANCE_ABBREVIATIONS.PRESENCAS;
-    case 'Freq':
-      return ATTENDANCE_ABBREVIATIONS.FREQUENCIA;
-    case 'At':
-      return ATTENDANCE_ABBREVIATIONS.ATESTADOS;
-    case 'FJ':
-      return ATTENDANCE_ABBREVIATIONS.FALTAS_JUSTIFICADAS;
-    case 'FNJ':
-      return ATTENDANCE_ABBREVIATIONS.FALTAS_NAO_JUSTIFICADAS;
-    default:
-      return '';
-  }
+  return getAttendanceFullLabel(type);
 }
 
 /**
@@ -82,48 +56,52 @@ export function getAttendanceFullLabel(type: AttendanceMetricType): string {
 }
 
 /**
- * Formata Dias Letivos no padrão conciso: ex: "20 DL" ou "DL: 20"
+ * Formata Dias Letivos por extenso: ex: "20 Dias Letivos" ou "Dias Letivos: 20"
  */
 export function formatDL(value: number, prefix: boolean = false): string {
   const safeVal = Math.max(0, Math.round(value || 0));
-  return prefix ? `DL: ${safeVal}` : `${safeVal} DL`;
+  const unit = safeVal === 1 ? 'Dia Letivo' : 'Dias Letivos';
+  return prefix ? `Dias Letivos: ${safeVal}` : `${safeVal} ${unit}`;
 }
 
 /**
- * Formata Faltas no padrão conciso: ex: "2 F" ou "F: 2"
+ * Formata Faltas por extenso: ex: "2 Faltas" ou "Faltas: 2"
  */
 export function formatFaltas(value: number, prefix: boolean = false): string {
   const safeVal = Math.max(0, Math.round(value || 0));
-  return prefix ? `F: ${safeVal}` : `${safeVal} F`;
+  const unit = safeVal === 1 ? 'Falta' : 'Faltas';
+  return prefix ? `Faltas: ${safeVal}` : `${safeVal} ${unit}`;
 }
 
 /**
- * Formata Presenças no padrão conciso: ex: "18 P" ou "P: 18"
+ * Formata Presenças por extenso: ex: "18 Presenças" ou "Presenças: 18"
  */
 export function formatPresencas(value: number, prefix: boolean = false): string {
   const safeVal = Math.max(0, Math.round(value || 0));
-  return prefix ? `P: ${safeVal}` : `${safeVal} P`;
+  const unit = safeVal === 1 ? 'Presença' : 'Presenças';
+  return prefix ? `Presenças: ${safeVal}` : `${safeVal} ${unit}`;
 }
 
 /**
- * Formata Atestados no padrão conciso: ex: "1 At." ou "At: 1"
+ * Formata Atestados por extenso: ex: "1 Atestado" ou "Atestados: 1"
  */
 export function formatAtestados(value: number, prefix: boolean = false): string {
   const safeVal = Math.max(0, Math.round(value || 0));
-  return prefix ? `At: ${safeVal}` : `${safeVal} At.`;
+  const unit = safeVal === 1 ? 'Atestado' : 'Atestados';
+  return prefix ? `Atestados: ${safeVal}` : `${safeVal} ${unit}`;
 }
 
 /**
- * Formata porcentagem de frequência no padrão conciso: ex: "90% Freq." ou "Freq: 90%"
+ * Formata porcentagem de frequência por extenso: ex: "90% Frequência" ou "Frequência: 90%"
  */
 export function formatFreqPercent(percent: number, prefix: boolean = false): string {
   const safeVal = Math.max(0, Math.min(100, Math.round(percent || 0)));
-  return prefix ? `Freq: ${safeVal}%` : `${safeVal}% Freq.`;
+  return prefix ? `Frequência: ${safeVal}%` : `${safeVal}% Frequência`;
 }
 
 /**
  * Formata linha de métricas resumidas para cartões de turmas e estudantes:
- * Ex: "20 DL · 18 P · 2 F · 90% Freq."
+ * Ex: "20 Dias Letivos · 18 Presenças · 2 Faltas · 90% Frequência"
  */
 export function formatAttendanceSummaryLine(
   diasLetivos: number,

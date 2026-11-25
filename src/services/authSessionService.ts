@@ -2,10 +2,12 @@ import { getAuth } from 'firebase/auth';
 import { AuthorizedUser } from '../types';
 import { isBackendApiAvailable } from './apiEnvironment';
 import { CLEAN_DB_RESET_EPOCH_ID } from './firebaseSync';
+import { getRealtimeClientId } from './realtimeClient';
 
 export const getActiveUserAuthHeaders = (): Record<string, string> => {
+  const clientId = getRealtimeClientId();
   try {
-    const raw = localStorage.getItem('emeb_candelario_active_session_2027_v1');
+    const raw = sessionStorage.getItem('emeb_candelario_tab_session_2027_v2');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.email) {
@@ -20,6 +22,8 @@ export const getActiveUserAuthHeaders = (): Record<string, string> => {
           'x-user-role': role,
           'x-user-name': encodeURIComponent(String(parsed.name || '')),
           'x-clean-epoch': CLEAN_DB_RESET_EPOCH_ID,
+          'x-realtime-client-id': clientId,
+          'X-Requested-With': 'XMLHttpRequest',
         };
       }
     }
@@ -28,6 +32,8 @@ export const getActiveUserAuthHeaders = (): Record<string, string> => {
   }
   return {
     'x-clean-epoch': CLEAN_DB_RESET_EPOCH_ID,
+    'x-realtime-client-id': clientId,
+    'X-Requested-With': 'XMLHttpRequest',
   };
 };
 
@@ -52,28 +58,57 @@ export const getActiveUserAuthHeadersAsync = async (
   return base;
 };
 
+export interface SessionEstablishResult {
+  ok: boolean;
+  status: number;
+  code?: string;
+  error?: string;
+}
+
 export const establishServerAuthSessionCookie = async (
   explicitIdToken?: string
 ): Promise<boolean> => {
-  if (!isBackendApiAvailable()) return false;
+  const res = await establishServerAuthSessionCookieDetailed(explicitIdToken);
+  return res.ok;
+};
+
+export const establishServerAuthSessionCookieDetailed = async (
+  explicitIdToken?: string
+): Promise<SessionEstablishResult> => {
+  if (!isBackendApiAvailable()) return { ok: false, status: 0, error: 'Backend offline' };
   try {
     const token =
       explicitIdToken ||
       (await getAuth().currentUser?.getIdToken().catch(() => null)) ||
       '';
-    if (!token) return false;
+    if (!token) return { ok: false, status: 401, error: 'Missing token' };
     const res = await fetch('/api/auth/session', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        'X-Requested-With': 'XMLHttpRequest',
+        'x-realtime-client-id': getRealtimeClientId(),
       },
       credentials: 'include',
       body: JSON.stringify({ idToken: token }),
     });
-    return res.ok;
-  } catch {
-    return false;
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      return { ok: true, status: res.status };
+    }
+    return {
+      ok: false,
+      status: res.status,
+      code: data.code || 'SESSION_REJECTED',
+      error: data.error || 'Falha na autenticação da sessão',
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 500,
+      error: err instanceof Error ? err.message : 'Network error',
+    };
   }
 };
 
@@ -82,6 +117,10 @@ export const clearServerAuthSessionCookie = async (): Promise<void> => {
   try {
     await fetch('/api/auth/logout', {
       method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'x-realtime-client-id': getRealtimeClientId(),
+      },
       credentials: 'include',
     });
   } catch {

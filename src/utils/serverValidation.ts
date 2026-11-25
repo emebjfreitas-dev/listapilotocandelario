@@ -438,11 +438,17 @@ export const validateSchoolStateLinksPayload = (
   cloudLinks?: Record<string, any>;
   discoveredNominalPdfs?: any[];
   discoveredDrivePhotos?: any[];
+  genderDictionary?: Array<{ name: string; gender: 'M' | 'F'; relationshipHint?: string }>;
 }> => {
   const base = ensureSafePayloadObject(body);
   if (!base.ok) return base;
-  const { cloudLinks, discoveredNominalPdfs, discoveredDrivePhotos } = base.data;
-  if (cloudLinks === undefined && discoveredNominalPdfs === undefined && discoveredDrivePhotos === undefined) {
+  const { cloudLinks, discoveredNominalPdfs, discoveredDrivePhotos, genderDictionary } = base.data;
+  if (
+    cloudLinks === undefined &&
+    discoveredNominalPdfs === undefined &&
+    discoveredDrivePhotos === undefined &&
+    genderDictionary === undefined
+  ) {
     return { ok: false, error: 'Nenhum parâmetro de vínculo informado para atualização.' };
   }
   if (cloudLinks !== undefined && !isPlainObject(cloudLinks)) {
@@ -454,7 +460,43 @@ export const validateSchoolStateLinksPayload = (
   if (discoveredDrivePhotos !== undefined && (!Array.isArray(discoveredDrivePhotos) || discoveredDrivePhotos.length > 5000)) {
     return { ok: false, error: 'discoveredDrivePhotos inválido ou acima de 5000 itens.' };
   }
-  return { ok: true, data: { cloudLinks, discoveredNominalPdfs, discoveredDrivePhotos } };
+  let normalizedGenderDict:
+    | Array<{ name: string; gender: 'M' | 'F'; relationshipHint?: string }>
+    | undefined;
+  if (genderDictionary !== undefined) {
+    if (!Array.isArray(genderDictionary) || genderDictionary.length > 5000) {
+      return { ok: false, error: 'genderDictionary inválido ou acima de 5000 itens.' };
+    }
+    normalizedGenderDict = [];
+    for (let i = 0; i < genderDictionary.length; i++) {
+      const entry = genderDictionary[i];
+      if (!isPlainObject(entry)) {
+        return { ok: false, error: `genderDictionary[${i}] inválido.` };
+      }
+      const nameCheck = requireTrimmedString(entry.name, `genderDictionary[${i}].name`, 160);
+      if (!nameCheck.ok) return nameCheck;
+      const g = String(entry.gender || '').trim().toUpperCase();
+      if (g !== 'M' && g !== 'F') {
+        return { ok: false, error: `genderDictionary[${i}].gender deve ser M ou F.` };
+      }
+      const hintCheck = optionalTrimmedString(entry.relationshipHint, `genderDictionary[${i}].relationshipHint`, 80);
+      if (!hintCheck.ok) return hintCheck;
+      normalizedGenderDict.push({
+        name: nameCheck.data,
+        gender: g,
+        ...(hintCheck.data ? { relationshipHint: hintCheck.data } : {}),
+      });
+    }
+  }
+  return {
+    ok: true,
+    data: {
+      cloudLinks,
+      discoveredNominalPdfs,
+      discoveredDrivePhotos,
+      genderDictionary: normalizedGenderDict,
+    },
+  };
 };
 
 const VALID_USER_ROLES = new Set(['admin', 'usuario', 'peb2']);
@@ -883,3 +925,52 @@ export const validateFcmSendWindowAlertPayload = (
   }
   return { ok: true, data: { alert } };
 };
+
+export const validateLgpdConfigPayload = (
+  body: unknown
+): ValidationResult<{ lgpdConfig: Record<string, any> }> => {
+  const base = ensureSafePayloadObject(body);
+  if (!base.ok) return base;
+  const cfg = isPlainObject(base.data.lgpdConfig) ? base.data.lgpdConfig : base.data;
+  if (!isPlainObject(cfg)) {
+    return { ok: false, error: 'Configuração LGPD inválida.' };
+  }
+  const maskSensitiveDataByDefault =
+    typeof cfg.maskSensitiveDataByDefault === 'boolean' ? cfg.maskSensitiveDataByDefault : true;
+  const requireMfaForAdmin =
+    typeof cfg.requireMfaForAdmin === 'boolean' ? cfg.requireMfaForAdmin : true;
+  const anonymizeExportedSpreadsheets =
+    typeof cfg.anonymizeExportedSpreadsheets === 'boolean' ? cfg.anonymizeExportedSpreadsheets : true;
+
+  const retentionCheck =
+    cfg.dataRetentionDays !== undefined
+      ? requireFiniteNonNegativeNumber(cfg.dataRetentionDays, 'dataRetentionDays', 3650)
+      : ({ ok: true, data: 1825 } as const);
+  if (!retentionCheck.ok) return retentionCheck;
+
+  const autoLogoutCheck =
+    cfg.autoLogoutMinutes !== undefined
+      ? requireFiniteNonNegativeNumber(cfg.autoLogoutMinutes, 'autoLogoutMinutes', 240)
+      : ({ ok: true, data: 60 } as const);
+  if (!autoLogoutCheck.ok) return autoLogoutCheck;
+
+  const autoLogoutMinutes = Math.max(5, Math.round(autoLogoutCheck.data || 60));
+  const dpoCheck = optionalTrimmedString(cfg.complianceOfficer, 'complianceOfficer', 180);
+  if (!dpoCheck.ok) return dpoCheck;
+
+  return {
+    ok: true,
+    data: {
+      lgpdConfig: {
+        maskSensitiveDataByDefault,
+        requireMfaForAdmin,
+        anonymizeExportedSpreadsheets,
+        dataRetentionDays: Math.max(30, Math.round(retentionCheck.data || 1825)),
+        autoLogoutMinutes,
+        complianceOfficer: dpoCheck.data || 'Encarregado de Dados DPO / EMEB Candelário',
+        lastAuditedAtISO: new Date().toISOString(),
+      },
+    },
+  };
+};
+

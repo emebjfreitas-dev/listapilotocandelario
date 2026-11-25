@@ -19,6 +19,11 @@ import {
   pushClassesToServer,
   saveStoredClasses,
 } from '../services/db';
+import { isBackendApiAvailable } from '../services/apiEnvironment';
+import {
+  subscribeToRealtimeConnectionStatus,
+  RealtimeConnectionStatus,
+} from '../services/realtimeClient';
 import {
   Activity,
   AlertCircle,
@@ -134,11 +139,24 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
   const [queueSnapshot, setQueueSnapshot] = useState<SyncQueueManagerSnapshot>(() =>
     SyncQueueManager.getSnapshot()
   );
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeConnectionStatus>({
+    connected: false,
+    transport: 'disconnected',
+    lastEventAtMs: null,
+  });
+  const backendActive = isBackendApiAvailable();
 
   useEffect(() => {
-    return SyncQueueManager.subscribe((snap) => {
+    const unsubQueue = SyncQueueManager.subscribe((snap) => {
       setQueueSnapshot(snap);
     });
+    const unsubRealtime = subscribeToRealtimeConnectionStatus((status) => {
+      setRealtimeStatus(status);
+    });
+    return () => {
+      unsubQueue();
+      unsubRealtime();
+    };
   }, []);
 
   const baseReport = useMemo(
@@ -283,7 +301,7 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
                 studentNumber: st.number,
                 studentName: st.name,
                 affectedField: `Coerência Mensal (${monthName})`,
-                currentValue: `${mEntry.faltas}F / ${mEntry.atestados}A / ${mEntry.diasLetivosRecorte}DL`,
+                currentValue: `${mEntry.faltas} faltas / ${mEntry.atestados} atestados / ${mEntry.diasLetivosRecorte} dias letivos`,
                 expectedValue: 'Atestados ≤ Faltas ≤ Dias Letivos',
                 description: `Registro histórico de ${monthName} de ${st.name} apresenta contagem inconsistente entre faltas, atestados e dias letivos.`,
                 suggestedAction: 'Abrir o diário mensal da turma no referido mês e salvar novamente.',
@@ -753,32 +771,40 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
           </button>
 
           <div className="p-3.5 sm:p-4 rounded-2xl bg-[#f3f6fb] min-w-0 break-words">
-            <span className="text-xs font-medium text-slate-700 block">RAs Duplicados</span>
+            <span className="text-xs font-medium text-slate-700 block">Registros Duplicados</span>
             <span className="text-2xl sm:text-3xl font-semibold text-slate-950 tabular-nums block mt-0.5">
               {structuralAnalysis.duplicateRaCount}
             </span>
             <span className="text-xs text-slate-700 block mt-0.5">
-              {structuralAnalysis.attendanceMismatchCount} diverg. faltas
+              {structuralAnalysis.attendanceMismatchCount} divergências de faltas
             </span>
           </div>
 
           <div className="p-3.5 sm:p-4 rounded-2xl bg-[#f3f6fb] min-w-0 break-words">
-            <span className="text-xs font-medium text-slate-700 block">Nuvem Firebase</span>
+            <span className="text-xs font-medium text-slate-700 block">
+              {backendActive ? 'Servidor em Tempo Real' : 'Nuvem Firebase'}
+            </span>
             <span className="text-base sm:text-lg font-semibold text-slate-950 block mt-1 break-words">
-              {syncSnapshot.pendingCount > 0
+              {backendActive
+                ? queueSnapshot.pendingTasksCount > 0
+                  ? `${queueSnapshot.pendingTasksCount} pendente(s)`
+                  : realtimeStatus.connected
+                  ? 'Sincronizado (Tempo Real)'
+                  : 'Conectando...'
+                : syncSnapshot.pendingCount > 0
                 ? `${syncSnapshot.pendingCount} pendente(s)`
                 : syncSnapshot.status === 'error'
                 ? 'Atenção'
                 : 'Sincronizado'}
             </span>
             <span className="text-xs text-slate-700 block mt-0.5">
-              {structuralAnalysis.aeeCount} alunos com AEE
+              {structuralAnalysis.aeeCount} estudantes com Atendimento Educacional Especializado
             </span>
           </div>
         </div>
 
-        {/* Aviso de Cota do Firestore Excedida */}
-        {(syncSnapshot.isQuotaExceeded || isFirestoreQuotaExceeded()) && (
+        {/* Aviso de Cota do Firestore Excedida (apenas quando não houver servidor dedicado) */}
+        {!backendActive && (syncSnapshot.isQuotaExceeded || isFirestoreQuotaExceeded()) && (
           <div className="p-4 rounded-2xl bg-[#eef3f9] flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-[#071e46] shadow-2xs">
             <div className="flex items-start gap-2.5">
               <CloudOff className="w-5 h-5 text-[#14428c] shrink-0 mt-0.5" />
@@ -1149,7 +1175,7 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
                                 : 'bg-[#e8f0fe] text-[#0f3370]'
                             }`}
                           >
-                            {isCrit ? 'Crítica' : isWarn ? 'Alerta' : 'Info'}
+                            {isCrit ? 'Crítica' : isWarn ? 'Alerta' : 'Informativa'}
                           </span>
                         </td>
                         <td className="py-3 px-3 align-top text-slate-800 font-medium whitespace-nowrap">
@@ -1228,7 +1254,11 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
       <div className="flex flex-wrap items-center justify-between gap-2 px-2 text-xs text-slate-700 font-medium">
         <span className="inline-flex items-center gap-1.5">
           <Database className="w-4 h-4 shrink-0 text-[#14428c]" />
-          <span>Auditoria local + Firestore em tempo real</span>
+          <span>
+            {backendActive
+              ? 'Auditoria local + Servidor em tempo real sem limite de cotas'
+              : 'Auditoria local + Firestore em tempo real'}
+          </span>
         </span>
         <span className="inline-flex items-center gap-1.5">
           <Activity className="w-4 h-4 shrink-0 text-[#047857]" />

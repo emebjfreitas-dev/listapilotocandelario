@@ -486,6 +486,7 @@ export interface LgpdProtectionConfig {
   lastAuditedAtISO: string;
   complianceOfficer: string;
   anonymizeExportedSpreadsheets: boolean;
+  autoLogoutMinutes?: number;
 }
 
 export interface FcmDeviceSubscription {

@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   CheckCircle2,
   Database,
   HardDrive,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   Trash2,
   X,
@@ -15,8 +17,11 @@ import {
   clearSpecificClassPhotoCacheFromIndexedDb,
   clearStudentPhotoIndexedDbCache,
   inspectDetailedPhotoCacheUsage,
+  PhotoCacheBatchVerificationProgress,
+  PhotoCacheBatchVerificationResult,
   PhotoCacheDetailedUsageReport,
   pruneLegacyClassPhotoCacheFromIndexedDb,
+  verifyAndCleanPhotoIndexedDbCache,
 } from '../services/photoIndexedDbCache';
 import { addSecurityAuditLog } from '../services/db';
 import { ModalPortal } from './ui/ModalPortal';
@@ -60,6 +65,12 @@ export const IndexedDbPhotoStorageModal: React.FC<IndexedDbPhotoStorageModalProp
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [confirmPruneLegacy, setConfirmPruneLegacy] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
+  const [isVerifyingBatch, setIsVerifyingBatch] = useState(false);
+  const [verificationProgress, setVerificationProgress] =
+    useState<PhotoCacheBatchVerificationProgress | null>(null);
+  const [lastVerificationResult, setLastVerificationResult] =
+    useState<PhotoCacheBatchVerificationResult | null>(null);
+  const verifyAbortRef = useRef<AbortController | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState<ClassCacheFilter>('all');
   const [statusBanner, setStatusBanner] = useState<{
@@ -85,11 +96,21 @@ export const IndexedDbPhotoStorageModal: React.FC<IndexedDbPhotoStorageModalProp
   }, [classes]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      verifyAbortRef.current?.abort();
+      verifyAbortRef.current = null;
+      return;
+    }
     setConfirmClearAll(false);
     setConfirmPruneLegacy(false);
     setStatusBanner(null);
+    setVerificationProgress(null);
+    setLastVerificationResult(null);
     void loadStorageReport();
+    return () => {
+      verifyAbortRef.current?.abort();
+      verifyAbortRef.current = null;
+    };
   }, [isOpen, loadStorageReport]);
 
   useEffect(() => {
@@ -103,6 +124,95 @@ export const IndexedDbPhotoStorageModal: React.FC<IndexedDbPhotoStorageModalProp
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen, onClose]);
+
+  const handleVerifyAndCleanBatch = async () => {
+    if (isVerifyingBatch || isPruningLegacy || isClearingAll) return;
+    const controller = new AbortController();
+    verifyAbortRef.current = controller;
+    setConfirmClearAll(false);
+    setConfirmPruneLegacy(false);
+    setStatusBanner(null);
+    setLastVerificationResult(null);
+    setVerificationProgress({
+      phase: 'scanning',
+      processed: 0,
+      total: 0,
+      accessibleCount: 0,
+      inaccessibleCount: 0,
+      corruptedCount: 0,
+      orphanedCount: 0,
+      skippedCount: 0,
+      removedUrlRecords: 0,
+      removedBlobRecords: 0,
+      freedBytes: 0,
+    });
+    setIsVerifyingBatch(true);
+
+    try {
+      const result = await verifyAndCleanPhotoIndexedDbCache({
+        activeClasses: classes,
+        checkRemoteUrls: true,
+        verifyBlobDecode: true,
+        verifySha256Integrity: true,
+        pruneUnreferencedObsoleteBlobs: true,
+        concurrency: 4,
+        signal: controller.signal,
+        onProgress: (prog) => setVerificationProgress(prog),
+      });
+
+      if (result.aborted) {
+        setStatusBanner({
+          type: 'info',
+          text: 'Verificação em lote cancelada. Nenhuma entrada foi removida do armazenamento local.',
+        });
+        return;
+      }
+
+      setLastVerificationResult(result);
+      await loadStorageReport();
+
+      const totalRemoved = result.removedUrlRecords + result.removedBlobRecords;
+      const offlineNote = result.offlineModeUsed
+        ? ' Sem conexão com a internet: foi verificada apenas a integridade local dos arquivos.'
+        : '';
+
+      const msg =
+        totalRemoved > 0
+          ? `Verificação em lote concluída: ${result.removedUrlRecords} índice(s) e ${result.removedBlobRecords} arquivo(s) obsoleto(s) ou corrompido(s) removido(s), liberando ${formatStorageBytes(result.freedBytes)} de armazenamento local.${offlineNote}`
+          : `Verificação em lote concluída: ${result.uniqueUrlsChecked.toLocaleString('pt-BR')} endereço(s) e ${result.totalBlobRecordsChecked.toLocaleString('pt-BR')} arquivo(s) em cache verificados sem falhas.${offlineNote}`;
+
+      setStatusBanner({
+        type: totalRemoved > 0 ? 'success' : 'info',
+        text: msg,
+      });
+
+      if (totalRemoved > 0) {
+        addSecurityAuditLog({
+          userEmail: currentUserEmail || 'admin@escola',
+          userName: 'Administrador Escolar',
+          userRole: 'admin',
+          eventType: 'SYSTEM_CONFIG_UPDATED',
+          actionTitle: 'Verificação e Limpeza em Lote do Cache IndexedDB',
+          details: msg,
+          targetResource: 'IndexedDB Photo Cache',
+          severity: 'info',
+        });
+        onCacheUpdated?.(msg);
+      }
+    } catch {
+      setStatusBanner({
+        type: 'error',
+        text: 'Não foi possível concluir a verificação em lote do armazenamento local.',
+      });
+    } finally {
+      verifyAbortRef.current = null;
+      setIsVerifyingBatch(false);
+    }
+  };
+
+  const handleCancelBatchVerification = () => {
+    verifyAbortRef.current?.abort();
+  };
 
   const handlePruneLegacyOneClick = async () => {
     if (isPruningLegacy) return;
@@ -397,6 +507,30 @@ export const IndexedDbPhotoStorageModal: React.FC<IndexedDbPhotoStorageModalProp
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleVerifyAndCleanBatch}
+                  disabled={
+                    isVerifyingBatch ||
+                    isPruningLegacy ||
+                    isClearingAll ||
+                    isLoading ||
+                    ((report?.urlRecordsCount || 0) === 0 && (report?.blobRecordsCount || 0) === 0)
+                  }
+                  className="min-h-[42px] px-4 py-2 rounded-xl bg-white hover:bg-[#e8f0fe] text-[#0f3370] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 shadow-xs disabled:opacity-45 disabled:cursor-not-allowed"
+                >
+                  {isVerifyingBatch ? (
+                    <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
+                  )}
+                  <span>
+                    {isVerifyingBatch
+                      ? 'Verificando em Lote...'
+                      : 'Verificar Integridade e Endereços'}
+                  </span>
+                </button>
+
                 {!confirmPruneLegacy ? (
                   <button
                     type="button"
@@ -408,7 +542,7 @@ export const IndexedDbPhotoStorageModal: React.FC<IndexedDbPhotoStorageModalProp
                         void handlePruneLegacyOneClick();
                       }
                     }}
-                    disabled={isPruningLegacy || isLoading}
+                    disabled={isPruningLegacy || isLoading || isVerifyingBatch}
                     className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 ${
                       hasLegacyCache
                         ? 'bg-[#14428c] hover:bg-[#0f3370] text-white'
@@ -456,7 +590,11 @@ export const IndexedDbPhotoStorageModal: React.FC<IndexedDbPhotoStorageModalProp
                       setConfirmPruneLegacy(false);
                       setConfirmClearAll(true);
                     }}
-                    disabled={isClearingAll || totalBytes === 0 && (report?.urlRecordsCount || 0) === 0}
+                    disabled={
+                      isClearingAll ||
+                      isVerifyingBatch ||
+                      (totalBytes === 0 && (report?.urlRecordsCount || 0) === 0)
+                    }
                     className="min-h-[42px] px-3.5 py-2 rounded-xl bg-rose-100/90 hover:bg-rose-200 text-rose-950 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 disabled:opacity-45"
                   >
                     <Trash2 className="w-3.5 h-3.5 shrink-0" />
@@ -503,6 +641,152 @@ export const IndexedDbPhotoStorageModal: React.FC<IndexedDbPhotoStorageModalProp
                 />
               )}
             </div>
+
+            {isVerifyingBatch && verificationProgress && (
+              <div className="p-3.5 rounded-xl bg-white shadow-xs space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <RefreshCw className="w-4 h-4 text-[#0071e3] animate-spin shrink-0" />
+                    <span className="text-xs font-semibold text-slate-950">
+                      {verificationProgress.phase === 'scanning'
+                        ? 'Mapeando registros armazenados no IndexedDB...'
+                        : verificationProgress.phase === 'verifying_blobs'
+                        ? 'Verificando integridade dos arquivos e assinatura criptográfica...'
+                        : verificationProgress.phase === 'verifying_urls'
+                        ? 'Validando acessibilidade dos endereços em lote...'
+                        : 'Removendo entradas obsoletas e corrompidas...'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-mono font-semibold text-slate-800 tabular-nums">
+                      {verificationProgress.processed.toLocaleString('pt-BR')} /{' '}
+                      {verificationProgress.total.toLocaleString('pt-BR')} (
+                      {verificationProgress.total > 0
+                        ? Math.min(
+                            100,
+                            Math.round(
+                              (verificationProgress.processed / verificationProgress.total) * 100
+                            )
+                          )
+                        : 0}
+                      %)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCancelBatchVerification}
+                      className="min-h-[30px] px-2.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-950 hover:text-rose-950 text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#0071e3] transition-all duration-200"
+                    style={{
+                      width: `${
+                        verificationProgress.total > 0
+                          ? Math.min(
+                              100,
+                              Math.round(
+                                (verificationProgress.processed / verificationProgress.total) * 100
+                              )
+                            )
+                          : 15
+                      }%`,
+                    }}
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-700 tabular-nums">
+                  <span>
+                    Acessíveis:{' '}
+                    <strong className="text-[#047857]">
+                      {verificationProgress.accessibleCount.toLocaleString('pt-BR')}
+                    </strong>
+                  </span>
+                  <span>
+                    Inacessíveis:{' '}
+                    <strong className="text-amber-800">
+                      {verificationProgress.inaccessibleCount.toLocaleString('pt-BR')}
+                    </strong>
+                  </span>
+                  <span>
+                    Corrompidos:{' '}
+                    <strong className="text-rose-800">
+                      {verificationProgress.corruptedCount.toLocaleString('pt-BR')}
+                    </strong>
+                  </span>
+                  {verificationProgress.skippedCount > 0 && (
+                    <span>
+                      Preservados sem rede:{' '}
+                      <strong className="text-slate-900">
+                        {verificationProgress.skippedCount.toLocaleString('pt-BR')}
+                      </strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!isVerifyingBatch && lastVerificationResult && !lastVerificationResult.aborted && (
+              <div className="p-3.5 rounded-xl bg-white shadow-xs space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {lastVerificationResult.removedUrlRecords +
+                      lastVerificationResult.removedBlobRecords >
+                    0 ? (
+                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    ) : (
+                      <ShieldCheck className="w-4 h-4 text-[#047857] shrink-0" />
+                    )}
+                    <span className="text-xs font-bold text-slate-950">
+                      Resultado da Auditoria em Lote ({(lastVerificationResult.durationMs / 1000).toFixed(1)} segundos)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLastVerificationResult(null)}
+                    className="text-xs font-semibold text-slate-700 hover:text-slate-950 cursor-pointer"
+                  >
+                    Ocultar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs tabular-nums">
+                  <div className="p-2.5 rounded-lg bg-[#f3f6fb]">
+                    <span className="text-slate-700 block">Endereços acessíveis</span>
+                    <strong className="text-sm font-mono text-[#047857]">
+                      {lastVerificationResult.accessibleUrlsCount.toLocaleString('pt-BR')} /{' '}
+                      {lastVerificationResult.uniqueUrlsChecked.toLocaleString('pt-BR')}
+                    </strong>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#f3f6fb]">
+                    <span className="text-slate-700 block">Links inacessíveis</span>
+                    <strong className="text-sm font-mono text-amber-800">
+                      {lastVerificationResult.inaccessibleUrlsCount.toLocaleString('pt-BR')}
+                    </strong>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#f3f6fb]">
+                    <span className="text-slate-700 block">Corrompidos ou órfãos</span>
+                    <strong className="text-sm font-mono text-rose-800">
+                      {(
+                        lastVerificationResult.corruptedUrlRecordsCount +
+                        lastVerificationResult.corruptedBlobsCount +
+                        lastVerificationResult.orphanedAliasesCount
+                      ).toLocaleString('pt-BR')}
+                    </strong>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#f3f6fb]">
+                    <span className="text-slate-700 block">Espaço liberado</span>
+                    <strong className="text-sm font-mono text-[#14428c]">
+                      {formatStorageBytes(lastVerificationResult.freedBytes)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Destaque direto para remoção de Turmas Antigas se houver resíduos */}

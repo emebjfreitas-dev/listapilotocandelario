@@ -34,6 +34,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { getStoredLgpdConfig, maskSensitiveText, addSecurityAuditLog } from '../services/db';
 import { StudentAvatar } from './StudentAvatar';
 import { ModalPortal } from './ui/ModalPortal';
 import { PaginationBar } from './ui/PaginationBar';
@@ -91,10 +92,10 @@ interface SchoolGroupMeta {
 }
 
 const SCHOOL_GROUPS: SchoolGroupMeta[] = [
-  { id: 'all', label: 'Todas as Turmas (40)', shortLabel: 'Todas (40)', description: 'Todas as 40 turmas da escola' },
-  { id: 'infantil', label: 'Educação Infantil · G4 e G5 (16)', shortLabel: 'Ed. Infantil (16)', description: 'G4 e G5 (Manhã e Tarde)' },
+  { id: 'all', label: 'Todas as Turmas (40)', shortLabel: 'Todas as Turmas (40)', description: 'Todas as 40 turmas da escola' },
+  { id: 'infantil', label: 'Educação Infantil · Grupo 04 e Grupo 05 (16)', shortLabel: 'Educação Infantil (16)', description: 'Grupo 04 e Grupo 05 (Manhã e Tarde)' },
   { id: 'anos1e2', label: '1º e 2º Anos · Alfabetização (8)', shortLabel: '1º e 2º Anos (8)', description: 'Ciclo de Alfabetização' },
-  { id: 'anos3a5', label: '3º ao 5º Ano · Fundamental (12)', shortLabel: '3º ao 5º Ano (12)', description: 'Anos Iniciais do Fundamental' },
+  { id: 'anos3a5', label: '3º ao 5º Ano · Ensino Fundamental (12)', shortLabel: '3º ao 5º Ano (12)', description: 'Anos Iniciais do Ensino Fundamental' },
   { id: 'manha', label: 'Turno Manhã (20)', shortLabel: 'Manhã (20)', description: 'Turmas do período matutino' },
   { id: 'tarde', label: 'Turno Tarde (20)', shortLabel: 'Tarde (20)', description: 'Turmas do período vespertino' },
 ];
@@ -546,6 +547,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
       return;
     }
 
+    const anonymize = Boolean(getStoredLgpdConfig().anonymizeExportedSpreadsheets);
     const orderedRows: EvaluatedRow[] = groupedByClass.flatMap((g) => g.rows);
     const exportObjects = orderedRows.map((r, index) => {
       const monthCols: Record<string, string | number> = {};
@@ -555,7 +557,12 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
         monthCols[`${shortM} (FALTAS / ATEST.)`] = `${mb.faltas}F / ${mb.atestados}A`;
       });
 
-      return {
+      const rawNis = r.student.nis || '';
+      const rawPhone = r.student.telefones || r.student.guardianPhone || '';
+      const safeNis = anonymize && rawNis ? maskSensitiveText(rawNis, 'nis') : (rawNis || '—');
+      const safePhone = anonymize && rawPhone ? maskSensitiveText(rawPhone, 'phone') : (rawPhone || '—');
+
+      const obj = {
         'ORDEM': index + 1,
         'TURMA': r.cls.name,
         'ESTUDANTE (A-Z)': r.student.name,
@@ -577,9 +584,30 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
           ? `ABAIXO DA META (<${r.rep.minLegalPresencePercent}%)`
           : `DENTRO DA META (≥${r.rep.minLegalPresencePercent}%)`,
         'RA': `${r.student.ra}-${r.student.digRa}`,
-        'NIS (BOLSA FAMÍLIA)': r.student.nis || '—',
-        'RESPONSÁVEL / TELEFONE': `${r.student.filiacao1 || r.student.guardianName || '—'} (${r.student.telefones || r.student.guardianPhone || '—'})`,
+        'NIS (BOLSA FAMÍLIA)': safeNis,
+        'RESPONSÁVEL / TELEFONE': `${r.student.filiacao1 || r.student.guardianName || '—'} (${safePhone})`,
       };
+
+      const sanitizedObj: Record<string, any> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === 'string' && /^[=+\-@\t\r]/.test(v)) {
+          sanitizedObj[k] = `'${v}`;
+        } else {
+          sanitizedObj[k] = v;
+        }
+      }
+      return sanitizedObj;
+    });
+
+    addSecurityAuditLog({
+      userEmail: 'emebjfreitas@jundiai.sp.gov.br',
+      userName: 'Gestão Escolar / Administração',
+      userRole: 'admin',
+      eventType: 'STUDENT_DATA_EXPORTED',
+      actionTitle: 'Exportação Nominal Bolsa Família (.XLS)',
+      details: `Exportadas listas nominais (${exportObjects.length} registros) do bimestre ${currentBimester.shortLabel}. Anônimo LGPD: ${anonymize}.`,
+      targetResource: 'Listas Nominais Bolsa Família',
+      severity: 'info',
     });
 
     const XLSX = await import('xlsx');
@@ -614,12 +642,12 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
     searchQuery.trim() !== '';
 
   return (
-    <div className="flex flex-col w-full min-w-0 max-w-6xl mx-auto space-y-5 pb-16 animate-gentle-fade">
+    <div className="flex flex-col w-full min-w-0 max-w-6xl mx-auto space-y-5 pb-16 animate-gentle-fade text-[#1D1D1F]">
       {toastMsg && (
         <ModalPortal>
           <div className="fixed bottom-20 lg:bottom-6 left-4 right-4 z-[125] max-w-md mx-auto animate-in fade-in duration-100 pointer-events-none">
-            <div className="bg-[#14428c] text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 min-w-0">
-              <CheckCircle2 className="w-[19px] h-[19px] text-[#28cd41] shrink-0" />
+            <div className="bg-white/95 backdrop-blur-xl border border-black/[0.08] text-[#1D1D1F] px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 min-w-0">
+              <CheckCircle2 className="w-[19px] h-[19px] text-[#1B873F] shrink-0" />
               <p className="text-sm font-medium leading-snug break-words min-w-0">{toastMsg}</p>
             </div>
           </div>
@@ -627,7 +655,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
       )}
 
       {/* CABEÇALHO DA TELA BOLSA FAMÍLIA */}
-      <header className="bg-white rounded-3xl p-4 sm:p-6 shadow-[0_8px_26px_rgba(0,0,0,0.22)] space-y-4 min-w-0">
+      <header className="bg-white rounded-3xl p-5 sm:p-7 border border-black/[0.06] shadow-sm space-y-4 min-w-0">
         <div className="flex items-center justify-between gap-3 flex-wrap min-w-0">
           <div className="flex items-center gap-3 min-w-0">
             {onBack && (
@@ -635,24 +663,24 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                 type="button"
                 onClick={onBack}
                 aria-label="Voltar"
-                className="w-10 h-10 rounded-full bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                className="w-10 h-10 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] flex items-center justify-center cursor-pointer transition-colors shrink-0 border border-black/[0.06]"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-bold text-[#0f172a] tracking-[-0.028em] leading-tight break-words">
+                <h1 className="text-2xl sm:text-3xl font-semibold text-[#1D1D1F] tracking-tight leading-tight break-words">
                   Estudantes Beneficiados do Bolsa Família
                 </h1>
                 <span
                   data-status="warning"
-                  className="px-2.5 py-0.5 rounded-lg bg-[#b45309] text-white text-xs font-medium uppercase"
+                  className="px-2.5 py-0.5 rounded-full bg-[#B25000] text-white text-xs font-medium uppercase"
                 >
                   Admin · MEC / LDB 2027
                 </span>
               </div>
-              <p className="mt-0.5 text-xs sm:text-[13px] font-medium text-slate-700 tabular-nums tracking-[-0.008em]">
+              <p className="mt-0.5 text-xs sm:text-[13px] font-normal text-[#86868B] tabular-nums">
                 {currentBimester.label} · Meta MEC: ≥60% Infantil / ≥75% Fundamental · {filteredRows.length}{' '}
                 {filteredRows.length === 1 ? 'estudante' : 'estudantes'} listados
               </p>
@@ -661,31 +689,31 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
 
           <div className="flex items-center gap-2 shrink-0">
             {/* Seletor de Modo: Grade vs Lista */}
-            <div className="flex items-center gap-1 p-1 bg-[#f1f5f9] rounded-2xl">
+            <div className="inline-flex items-center gap-0.5 p-1 bg-[#F5F5F7] rounded-full border border-black/[0.06]">
               <button
                 type="button"
                 onClick={() => setViewMode('grid')}
-                className={`min-h-[34px] px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`min-h-[32px] px-3.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === 'grid'
-                    ? 'bg-white text-[#14428c] shadow-2xs'
-                    : 'text-slate-700 hover:text-slate-950'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F]'
                 }`}
                 title="Exibir grade de cartões"
               >
-                <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Grade</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('compact')}
-                className={`min-h-[34px] px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`min-h-[32px] px-3.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === 'compact'
-                    ? 'bg-white text-[#14428c] shadow-2xs'
-                    : 'text-slate-700 hover:text-slate-950'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F]'
                 }`}
                 title="Exibir lista compacta"
               >
-                <List className="w-4 h-4" />
+                <List className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Lista</span>
               </button>
             </div>
@@ -717,33 +745,33 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
             <button
               type="button"
               onClick={() => window.print()}
-              className="min-h-[40px] px-3.5 rounded-2xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a] font-semibold text-xs sm:text-[13px] tracking-[-0.01em] flex items-center gap-1.5 cursor-pointer transition-colors"
+              className="min-h-[40px] px-4 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-medium text-xs sm:text-[13px] flex items-center gap-1.5 cursor-pointer transition-colors border border-black/[0.06]"
             >
-              <Printer className="w-[18px] h-[18px]" />
+              <Printer className="w-4 h-4" />
               <span className="hidden min-[400px]:inline">Imprimir</span>
             </button>
           </div>
         </div>
 
-        {/* BARRA DE BUSCA RÁPIDA (NOME, RA, NIS BOLSA FAMÍLIA, RESPONSÁVEL) */}
+        {/* BARRA DE BUSCA RÁPIDA */}
         <div className="relative min-w-0">
-          <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" />
+          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#86868B]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar por nome, RA, NIS (Bolsa Família) ou responsável..."
             aria-label="Buscar estudante nas listas nominais do Bolsa Família"
-            className="w-full min-h-[48px] pl-11 pr-11 rounded-2xl bg-[#f1f5f9] focus:bg-[#e2e8f0]/60 text-sm sm:text-[15px] font-normal tracking-[-0.012em] text-slate-950 placeholder:text-slate-600 transition-colors"
+            className="w-full min-h-[44px] pl-11 pr-11 rounded-full bg-white text-sm text-[#1D1D1F] placeholder:text-[#86868B] border border-black/[0.08] shadow-2xs focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 focus:outline-hidden transition-all"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-950 cursor-pointer"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] cursor-pointer"
               aria-label="Limpar busca"
             >
-              <X className="w-[18px] h-[18px]" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -818,36 +846,36 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
           <div className="min-w-0 space-y-0.5">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base sm:text-lg font-semibold text-[#0f172a] tracking-[-0.02em] flex items-center gap-2">
-                <ClipboardCheck className="w-5 h-5 text-[#14428c] shrink-0" />
+                <ClipboardCheck className="w-5 h-5 text-[#0071E3] shrink-0" />
                 <span>Computar Lista Colada de Beneficiários no Bimestre</span>
               </h2>
               {computedRawList.trim().length > 0 && (
                 <span
                   data-status="info"
-                  className="px-2.5 py-0.5 rounded-lg bg-[#14428c] text-white text-xs font-medium tabular-nums"
+                  className="px-2.5 py-0.5 rounded-full bg-[#0071E3] text-white text-xs font-medium tabular-nums"
                 >
                   {pastedMatchResult.matchedItems.length} localizado(s) · {currentBimester.shortLabel}
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Cole nomes completos, números de NIS ou RAs (um por linha ou copiados de planilha/Gov.br). O sistema cruza automaticamente com todas as turmas e soma as faltas dentro do <span className="font-semibold text-slate-900">{currentBimester.label}</span>.
+            <p className="text-xs text-[#86868B] leading-relaxed">
+              Cole nomes completos, números de NIS ou RAs (um por linha ou copiados de planilha/Gov.br). O sistema cruza automaticamente com todas as turmas e soma as faltas dentro do <span className="font-semibold text-[#1D1D1F]">{currentBimester.label}</span>.
             </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             {computedRawList.trim().length > 0 && (
-              <div className="flex items-center gap-1 p-1 bg-[#f1f5f9] rounded-2xl">
+              <div className="flex items-center gap-1 p-1 bg-[#F5F5F7] rounded-full border border-black/[0.06]">
                 <button
                   type="button"
                   onClick={() => {
                     setSourceScope('pasted_beneficiaries');
                     setOnlyBelowTarget(false);
                   }}
-                  className={`min-h-[34px] px-3 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
+                  className={`min-h-[34px] px-3.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
                     sourceScope === 'pasted_beneficiaries'
-                      ? 'bg-[#14428c] text-white shadow-2xs'
-                      : 'text-slate-700 hover:text-slate-950'
+                      ? 'bg-[#0071E3] text-white shadow-2xs'
+                      : 'text-[#1D1D1F] hover:text-black'
                   }`}
                 >
                   Lista Colada ({pastedMatchResult.matchedItems.length})
@@ -855,10 +883,10 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                 <button
                   type="button"
                   onClick={() => setSourceScope('all_school')}
-                  className={`min-h-[34px] px-3 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
+                  className={`min-h-[34px] px-3.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
                     sourceScope === 'all_school'
-                      ? 'bg-[#14428c] text-white shadow-2xs'
-                      : 'text-slate-700 hover:text-slate-950'
+                      ? 'bg-[#0071E3] text-white shadow-2xs'
+                      : 'text-[#1D1D1F] hover:text-black'
                   }`}
                 >
                   Base Completa ({allSchoolEvaluatedRows.length})
@@ -870,7 +898,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
               type="button"
               onClick={() => setIsPastePanelOpen((prev) => !prev)}
               aria-expanded={isPastePanelOpen}
-              className="min-h-[36px] px-3 rounded-xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-slate-800 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+              className="min-h-[36px] px-3.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors border border-black/[0.06]"
             >
               <span>{isPastePanelOpen ? 'Ocultar campo' : 'Colar / Editar lista'}</span>
               {isPastePanelOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -889,7 +917,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
               value={pastedListText}
               onChange={(e) => setPastedListText(e.target.value)}
               placeholder={"Cole aqui a lista dos beneficiários (um por linha — nome, NIS ou RA).\nExemplo:\nANA CLARA DE OLIVEIRA\n16254897123\nJOÃO PEDRO SANTOS"}
-              className="w-full p-3.5 rounded-2xl bg-[#f3f6fb] focus:bg-[#eef3f9] text-xs sm:text-sm text-slate-950 placeholder:text-slate-600 font-medium leading-relaxed resize-y transition-colors"
+              className="w-full p-3.5 rounded-2xl bg-[#F5F5F7] focus:bg-white text-xs sm:text-sm text-[#1D1D1F] placeholder:text-[#86868B] font-medium leading-relaxed resize-y border border-black/[0.06] transition-colors"
             />
 
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -897,7 +925,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                 <button
                   type="button"
                   onClick={handleComputePastedList}
-                  className="min-h-[42px] px-4 py-2 rounded-2xl bg-[#047857] hover:bg-[#065f46] text-white text-xs sm:text-sm font-semibold inline-flex items-center gap-2 cursor-pointer transition-colors shadow-xs"
+                  className="min-h-[42px] px-5 py-2 rounded-full bg-[#1B873F] hover:bg-[#156d32] text-white text-xs sm:text-sm font-semibold inline-flex items-center gap-2 cursor-pointer transition-colors shadow-xs"
                 >
                   <Sparkles className="w-4 h-4 text-white shrink-0" />
                   <span>Computar Faltas no {currentBimester.shortLabel}</span>
@@ -907,10 +935,10 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                   <button
                     type="button"
                     onClick={handleCopyComputedList}
-                    className="min-h-[42px] px-3.5 py-2 rounded-2xl bg-[#eef3f9] hover:bg-[#e2e8f0] text-[#0f3370] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                    className="min-h-[42px] px-4 py-2 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#0071E3] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors border border-black/[0.06]"
                   >
                     {copiedComputedSummary ? (
-                      <Check className="w-4 h-4 text-[#047857] shrink-0" />
+                      <Check className="w-4 h-4 text-[#1B873F] shrink-0" />
                     ) : (
                       <Copy className="w-4 h-4 shrink-0" />
                     )}
@@ -973,7 +1001,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowUnmatchedDetails((prev) => !prev)}
-                      className="text-xs font-semibold text-[#14428c] hover:underline cursor-pointer"
+                      className="text-xs font-semibold text-[#0071E3] hover:underline cursor-pointer"
                     >
                       {showUnmatchedDetails ? 'Ocultar' : 'Ver nomes'}
                     </button>
@@ -983,7 +1011,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
             </div>
 
             {showUnmatchedDetails && pastedMatchResult.unmatchedLines.length > 0 && (
-              <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-950 space-y-2 text-xs">
+              <div className="p-3.5 rounded-2xl bg-[#FFF5E5] text-[#B25000] space-y-2 text-xs">
                 <p className="font-semibold">
                   Linhas coladas não encontradas na base atual da escola ({pastedMatchResult.unmatchedLines.length}):
                 </p>
@@ -991,7 +1019,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                   {pastedMatchResult.unmatchedLines.map((line, idx) => (
                     <span
                       key={`${line}-${idx}`}
-                      className="px-2.5 py-1 rounded-lg bg-white text-slate-900 font-medium shadow-2xs"
+                      className="px-2.5 py-1 rounded-lg bg-white text-[#1D1D1F] font-medium shadow-2xs"
                     >
                       {line}
                     </span>
@@ -1010,16 +1038,16 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
         {/* Nível 1: Seletor Segmentado de Grupo Escolar */}
         <div className="space-y-2 min-w-0">
           <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-              <Folder className="w-[17px] h-[17px] text-[#14428c]" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#1D1D1F] flex items-center gap-1.5">
+              <Folder className="w-[17px] h-[17px] text-[#0071E3]" />
               <span>Grupos Escolares</span>
             </span>
-            <span className="text-xs font-medium text-slate-700 tabular-nums">
-              {visibleTabClasses.length} turmas disponíveis · <strong className="text-rose-800">{totalBelowInVisibleGroup}</strong> em alerta no grupo
+            <span className="text-xs font-medium text-[#86868B] tabular-nums">
+              {visibleTabClasses.length} turmas disponíveis · <strong className="text-[#D70015]">{totalBelowInVisibleGroup}</strong> em alerta no grupo
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#f1f5f9] rounded-2xl">
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#F5F5F7] rounded-full border border-black/[0.06]">
             {SCHOOL_GROUPS.map((grp) => {
               const isSelected = selectedSchoolGroup === grp.id;
               return (
@@ -1037,10 +1065,10 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                       }
                     }
                   }}
-                  className={`min-h-[36px] px-3.5 rounded-xl text-xs sm:text-[13px] font-semibold cursor-pointer transition-all duration-100 ${
+                  className={`min-h-[36px] px-4 rounded-full text-xs sm:text-[13px] font-semibold cursor-pointer transition-all duration-100 ${
                     isSelected
-                      ? 'bg-[#14428c] text-white shadow-2xs'
-                      : 'text-[#475569] hover:text-[#0f172a] hover:bg-white/60'
+                      ? 'bg-[#0071E3] text-white shadow-2xs'
+                      : 'text-[#1D1D1F] hover:text-black hover:bg-white/60'
                   }`}
                   title={grp.description}
                 >
@@ -1054,15 +1082,15 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
         {/* Nível 2: Barra de Abas Horizontais por Turma */}
         <div className="space-y-2 min-w-0">
           <div className="flex items-center justify-between gap-2 min-w-0">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#475569] flex items-center gap-1.5">
-              <PanelsTopLeft className="w-[17px] h-[17px] text-[#14428c]" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#1D1D1F] flex items-center gap-1.5">
+              <PanelsTopLeft className="w-[17px] h-[17px] text-[#0071E3]" />
               <span>Abas de Turmas</span>
             </span>
             {selectedClassFilter !== 'all' && (
               <button
                 type="button"
                 onClick={() => setSelectedClassFilter('all')}
-                className="text-xs font-semibold text-[#14428c] hover:underline cursor-pointer flex items-center gap-1"
+                className="text-xs font-semibold text-[#0071E3] hover:underline cursor-pointer flex items-center gap-1"
               >
                 <LayoutGrid className="w-[15px] h-[15px]" />
                 <span>Ver Todas as Turmas Juntas</span>
@@ -1076,10 +1104,10 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setSelectedClassFilter('all')}
-                className={`min-h-[44px] px-4 rounded-2xl text-xs sm:text-[13px] font-semibold flex items-center gap-2 shrink-0 cursor-pointer transition-all duration-100 ${
+                className={`min-h-[42px] px-4 rounded-full text-xs sm:text-[13px] font-semibold flex items-center gap-2 shrink-0 cursor-pointer transition-all duration-100 ${
                   selectedClassFilter === 'all'
-                    ? 'bg-[#14428c] text-white shadow-xs'
-                    : 'bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a]'
+                    ? 'bg-[#0071E3] text-white shadow-xs'
+                    : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] border border-black/[0.06]'
                 }`}
               >
                 <LayoutDashboard className="w-[18px] h-[18px]" />
@@ -1087,10 +1115,10 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                 {totalBelowInVisibleGroup > 0 && (
                   <span
                     data-status={selectedClassFilter === 'all' ? undefined : 'danger'}
-                    className={`px-2 py-0.5 rounded-lg text-xs font-semibold tabular-nums ${
+                    className={`px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums ${
                       selectedClassFilter === 'all'
                         ? 'bg-white/20 text-white'
-                        : 'bg-[#be123c] text-white'
+                        : 'bg-[#D70015] text-white'
                     }`}
                   >
                     {totalBelowInVisibleGroup}
@@ -1103,26 +1131,26 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                 const isSelected = selectedClassFilter === cls.id;
                 const stats = classStatsMap.get(cls.id) || { total: 0, belowTarget: 0, withAtestado: 0 };
                 const hasAlert = stats.belowTarget > 0;
-                const shiftAbbr = cls.shift === 'Turno Manhã' ? 'M' : 'T';
+                const shiftFull = cls.shift.replace('Turno ', '');
 
                 return (
                   <button
                     key={cls.id}
                     type="button"
                     onClick={() => setSelectedClassFilter(cls.id)}
-                    className={`min-h-[44px] px-3.5 rounded-2xl text-xs sm:text-[13px] font-semibold flex items-center gap-2 shrink-0 cursor-pointer transition-all duration-100 ${
+                    className={`min-h-[42px] px-4 rounded-full text-xs sm:text-[13px] font-semibold flex items-center gap-2 shrink-0 cursor-pointer transition-all duration-100 ${
                       isSelected
-                        ? 'bg-[#14428c] text-white shadow-xs'
-                        : 'bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0f172a]'
+                        ? 'bg-[#0071E3] text-white shadow-xs'
+                        : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] border border-black/[0.06]'
                     }`}
                   >
-                    <span>{cls.turmaAbrev || cls.name}</span>
+                    <span>{cls.name}</span>
                     <span
                       className={`text-[11px] font-medium ${
                         isSelected ? 'text-blue-100' : 'text-slate-700'
                       }`}
                     >
-                      {shiftAbbr}
+                      {shiftFull}
                     </span>
                     <span
                       data-status={hasAlert ? 'danger' : undefined}
@@ -1187,18 +1215,18 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
 
       {/* PAINEL HERO DA TURMA ATIVA (QUANDO UMA TURMA INDIVIDUAL ESTÁ SELECIONADA) */}
       {activeSelectedClass && (
-        <section className="bg-gradient-to-br from-[#14428c] to-[#0f3370] text-white rounded-3xl p-5 sm:p-6 shadow-[0_14px_34px_-10px_rgba(11,59,140,0.32)] space-y-4 animate-gentle-fade">
+        <section className="bg-white rounded-3xl p-6 sm:p-7 border border-black/[0.06] shadow-sm space-y-4 animate-gentle-fade text-[#1D1D1F]">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-lg bg-white/15 text-white text-xs font-semibold uppercase">
+                <span className="px-3 py-0.5 rounded-full bg-[#F5F5F7] text-[#1D1D1F] text-xs font-medium uppercase border border-black/[0.06]">
                   {activeSelectedClass.shift.replace('Turno ', '').toUpperCase()}
                 </span>
                 {activeSelectedClass.room && (
-                  <span className="text-xs text-slate-200">Sala {activeSelectedClass.room}</span>
+                  <span className="text-xs text-[#86868B]">Sala {activeSelectedClass.room}</span>
                 )}
-                <span className="text-slate-300">·</span>
-                <span className="text-xs text-slate-200">
+                <span className="text-[#86868B]">·</span>
+                <span className="text-xs text-[#86868B]">
                   {activeSelectedClass.name.toUpperCase().startsWith('GRUPO') ||
                   activeSelectedClass.grade.toUpperCase().includes('INFANTIL')
                     ? 'Meta LDB Educação Infantil: ≥ 60%'
@@ -1206,11 +1234,11 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                 </span>
               </div>
 
-              <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white">
+              <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F]">
                 {activeSelectedClass.name}
               </h2>
-              <p className="text-xs sm:text-sm text-slate-300">
-                Regente PEB I: <strong className="text-white">{activeSelectedClass.teacherName || 'Não informado'}</strong>
+              <p className="text-xs sm:text-sm text-[#86868B]">
+                Regente PEB I: <strong className="text-[#1D1D1F] font-semibold">{activeSelectedClass.teacherName || 'Não informado'}</strong>
               </p>
             </div>
 
@@ -1219,10 +1247,10 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setOnlyBelowTarget(true)}
-                className={`min-h-[42px] px-4 rounded-2xl text-xs sm:text-[13px] font-semibold cursor-pointer transition-all duration-100 flex items-center gap-2 ${
+                className={`min-h-[40px] px-4 rounded-full text-xs sm:text-[13px] font-medium cursor-pointer transition-all flex items-center gap-2 ${
                   onlyBelowTarget
-                    ? 'bg-[#be123c] text-white shadow-xs'
-                    : 'bg-white/10 hover:bg-white/20 text-slate-100'
+                    ? 'bg-[#D70015] text-white shadow-xs font-semibold'
+                    : 'bg-[#FFEBEB] text-[#D70015] hover:bg-[#FFD6D6]'
                 }`}
               >
                 <AlertTriangle className="w-4 h-4" />
@@ -1232,10 +1260,10 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setOnlyBelowTarget(false)}
-                className={`min-h-[42px] px-4 rounded-2xl text-xs sm:text-[13px] font-semibold cursor-pointer transition-all duration-100 flex items-center gap-2 ${
+                className={`min-h-[40px] px-4 rounded-full text-xs sm:text-[13px] font-medium cursor-pointer transition-all flex items-center gap-2 ${
                   !onlyBelowTarget
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'bg-white/10 hover:bg-white/20 text-slate-200'
+                    ? 'bg-[#0071E3] text-white shadow-xs font-semibold'
+                    : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -1267,7 +1295,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setOnlyBelowTarget(false)}
-                className="min-h-[40px] px-5 rounded-2xl bg-[#14428c] hover:bg-[#0f3370] text-white text-xs font-semibold cursor-pointer shadow-xs"
+                className="min-h-[44px] px-6 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold cursor-pointer shadow-xs"
               >
                 Ver todos os {classStatsMap.get(activeSelectedClass.id)?.total || 0} estudantes desta turma
               </button>
@@ -1334,7 +1362,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                                 student={student}
                                 size="lg"
                                 onUploadPhotoClick={() => onOpenPhotoModal(student, cls.name)}
-                                className="bg-[#eef3f9]"
+                                className="bg-[#F5F5F7]"
                               />
 
                               <div className="min-w-0 flex-1">
@@ -1438,7 +1466,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                                         : 'bg-slate-100 text-[#475569]'
                                     }`}
                                   >
-                                    {mb.monthName.slice(0, 3)}: {formatFreqPercent(mb.frequenciaPercent)} ({formatFaltas(mb.faltas)})
+                                    {mb.monthName}: {formatFreqPercent(mb.frequenciaPercent)} ({formatFaltas(mb.faltas)})
                                   </span>
                                 ))}
                               </div>
@@ -1472,10 +1500,10 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                             <button
                               type="button"
                               onClick={() => onOpenStudentPdf(student, cls.name)}
-                                className={`min-h-[40px] px-2 rounded-2xl font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                                className={`min-h-[40px] px-3 rounded-full font-semibold text-[13px] tracking-[-0.01em] flex items-center justify-center gap-1.5 cursor-pointer transition-colors border border-black/[0.06] ${
                                   hasPdf
-                                    ? 'bg-[#e8f0fe] hover:bg-[#d4e2fc] text-[#0f3370]'
-                                    : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-700'
+                                    ? 'bg-[#0071E3]/10 hover:bg-[#0071E3]/15 text-[#0071E3]'
+                                    : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F]'
                                 }`}
                                 title="Abrir PDF nominal"
                               >
@@ -1513,7 +1541,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                                 student={student}
                                 size="md"
                                 onUploadPhotoClick={() => onOpenPhotoModal(student, cls.name)}
-                                className="bg-[#eef3f9]"
+                                className="bg-[#F5F5F7]"
                               />
 
                               <div className="min-w-0 flex-1">
@@ -1586,19 +1614,19 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
                                   onClick={() =>
                                     onOpenStudentGrid(student, cls.id, cls.name, cls.classesHeld || 20)
                                   }
-                                  className="min-h-[36px] px-3 rounded-xl bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-950 font-semibold text-xs tracking-[-0.01em] flex items-center gap-1 cursor-pointer transition-colors"
+                                  className="min-h-[36px] px-3.5 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-semibold text-xs tracking-[-0.01em] flex items-center gap-1 cursor-pointer transition-colors border border-black/[0.06]"
                                 >
-                                  <LayoutGrid className="w-[15px] h-[15px] text-slate-700" />
+                                  <LayoutGrid className="w-[15px] h-[15px] text-[#86868B]" />
                                   <span>Ficha</span>
                                 </button>
 
                                 <button
                                   type="button"
                                   onClick={() => onOpenStudentPdf(student, cls.name)}
-                                  className={`min-h-[36px] px-3 rounded-xl font-semibold text-xs tracking-[-0.01em] flex items-center gap-1 transition-colors cursor-pointer ${
+                                  className={`min-h-[36px] px-3.5 rounded-full font-semibold text-xs tracking-[-0.01em] flex items-center gap-1 transition-colors cursor-pointer border border-black/[0.06] ${
                                     hasPdf
-                                      ? 'bg-[#e8f0fe] hover:bg-[#d4e2fc] text-[#0f3370]'
-                                      : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-700'
+                                      ? 'bg-[#0071E3]/10 hover:bg-[#0071E3]/15 text-[#0071E3]'
+                                      : 'bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F]'
                                   }`}
                                 >
                                   <FileText className="w-[15px] h-[15px]" />

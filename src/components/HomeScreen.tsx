@@ -271,12 +271,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     });
 
     const mapped = filtered.map((c) => {
-      const compactLabel =
-        c.turmaAbrev ||
-        c.name
-          .replace(/GRUPO\s*0?(\d)\s*/i, 'G$1')
-          .replace(/(\d+º)\s*ANO\s*/i, '$1')
-          .replace(/\s+/g, '');
       const presenceVal =
         c.students.length === 0
           ? 0
@@ -287,7 +281,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         id: c.id,
         classRef: c,
         name: c.name,
-        shortName: compactLabel,
+        shortName: c.name,
         presence: presenceVal,
         studentsCount: c.students.length,
         shift: c.shift || 'Integral',
@@ -374,8 +368,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             ? `${primaryTeacherClass.name} · ${schoolStats.activeStudents} estudantes`
             : `${schoolStats.totalClasses} turma(s) · ${schoolStats.activeStudents} ativos`,
         icon: <SFSymbol name="groups" filled size={20} weight={500} />,
-        accentBg: 'bg-[#0e3a8a]',
-        accentText: 'text-white shadow-[0_4px_12px_rgba(14,58,138,0.24)]',
+        accentBg: 'bg-[#0071E3]',
+        accentText: 'text-white shadow-[0_4px_12px_rgba(0,113,227,0.24)]',
         onClick: () => {
           triggerMenuHaptic('light');
           if (userRole === 'usuario') onNavigateToScreen('detalhes');
@@ -392,8 +386,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           windowEval.isAllowedToLaunch ? 'Janela aberta' : 'Consultar prazo'
         }`,
         icon: <SFSymbol name="event_available" filled size={20} weight={500} />,
-        accentBg: 'bg-[#047857]',
-        accentText: 'text-white shadow-[0_4px_12px_rgba(4,120,87,0.24)]',
+        accentBg: 'bg-[#1B873F]',
+        accentText: 'text-white shadow-[0_4px_12px_rgba(27,135,63,0.24)]',
         onClick: () => {
           triggerMenuHaptic('light');
           onNavigateToScreen('frequencia_mensal');
@@ -406,8 +400,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       title: 'Busca Ativa (ECA)',
       subtitle: `${schoolStats.criticalConsecutiveCount} caso(s) em atenção`,
       icon: <SFSymbol name="gpp_maybe" filled size={20} weight={500} />,
-      accentBg: 'bg-[#be123c]',
-      accentText: 'text-white shadow-[0_4px_12px_rgba(190,18,60,0.24)]',
+      accentBg: 'bg-[#D70015]',
+      accentText: 'text-white shadow-[0_4px_12px_rgba(215,0,21,0.24)]',
       onClick: () => {
         triggerMenuHaptic('light');
         onNavigateToScreen('faltas_consecutivas');
@@ -421,8 +415,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           title: 'Central Administrativa',
           subtitle: `Acessos, ano letivo ${activeSchoolYear} (200 dias) e ${schoolStats.aeeCount} AEE`,
           icon: <SFSymbol name="admin_panel_settings" filled size={20} weight={500} />,
-          accentBg: 'bg-[#071e46]',
-          accentText: 'text-white shadow-[0_4px_12px_rgba(7,30,70,0.26)]',
+          accentBg: 'bg-[#1D1D1F]',
+          accentText: 'text-white shadow-[0_4px_12px_rgba(29,29,31,0.26)]',
           onClick: () => {
             triggerMenuHaptic('light');
             onNavigateToScreen('usuarios_acesso');
@@ -433,8 +427,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           title: 'Bolsa Família',
           subtitle: 'Beneficiários e apuração bimestral de faltas',
           icon: <SFSymbol name="volunteer_activism" filled size={20} weight={500} />,
-          accentBg: 'bg-[#b45309]',
-          accentText: 'text-white shadow-[0_4px_12px_rgba(180,83,9,0.24)]',
+          accentBg: 'bg-[#B25000]',
+          accentText: 'text-white shadow-[0_4px_12px_rgba(178,80,0,0.24)]',
           onClick: () => {
             triggerMenuHaptic('light');
             onNavigateToScreen('bolsa_familia');
@@ -447,8 +441,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         title: 'Quadro de Avisos da Direção',
         subtitle: `${schoolNotices.filter((n) => n.active !== false).length} comunicado(s) ativo(s)`,
         icon: <SFSymbol name="campaign" filled size={20} weight={500} />,
-        accentBg: 'bg-[#0e3a8a]',
-        accentText: 'text-white shadow-[0_4px_12px_rgba(14,58,138,0.24)]',
+        accentBg: 'bg-[#0071E3]',
+        accentText: 'text-white shadow-[0_4px_12px_rgba(0,113,227,0.24)]',
         onClick: () => {
           triggerMenuHaptic('light');
           document.getElementById('quadro-avisos-direcao')?.scrollIntoView({ behavior: 'smooth' });
@@ -474,28 +468,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     formattedGreetingName.trim().toLowerCase() !== roleLabel.trim().toLowerCase();
 
   return (
-    <div className="flex flex-col w-full min-w-0 max-w-[1600px] mx-auto space-y-5 pb-20 text-[#0f172a] animate-gentle-fade">
-      {/* 1. CABEÇALHO INSTITUCIONAL NAVY + INDICADORES ESSENCIAIS */}
-      <section className="bg-white rounded-3xl p-5 sm:p-7 shadow-[0_14px_38px_-12px_rgba(7,30,70,0.18)] space-y-5 min-w-0">
+    <div className="flex flex-col w-full min-w-0 max-w-[1600px] mx-auto space-y-6 pb-20 text-[#1D1D1F] animate-gentle-fade">
+      {/* 1. CABEÇALHO INSTITUCIONAL APPLE HIG + INDICADORES ESSENCIAIS */}
+      <section className="bg-white rounded-3xl p-6 sm:p-8 border border-black/[0.06] shadow-sm space-y-6 min-w-0">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
           <div className="space-y-1.5 min-w-0 flex-1">
-            <p className="text-xs sm:text-[13px] font-semibold text-[#0e3a8a] text-balance break-words flex items-center gap-1.5">
-              <SFSymbol name="school" filled size={15} className="text-[#0e3a8a] shrink-0" />
+            <p className="text-xs sm:text-[13px] font-semibold text-[#86868B] tracking-tight text-balance break-words flex items-center gap-1.5 uppercase">
+              <SFSymbol name="school" filled size={15} className="text-[#0071E3] shrink-0" />
               <span>EMEB Prof. Joaquim Candelário de Freitas · Ano Letivo {activeSchoolYear}</span>
             </p>
-            <h1 className="text-2xl sm:text-[32px] font-bold tracking-tight text-[#071e46] text-balance break-words leading-tight">
+            <h1 className="text-2xl sm:text-[32px] font-semibold tracking-tight text-[#1D1D1F] text-balance break-words leading-tight">
               Olá, {formattedGreetingName}
             </h1>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-slate-600 break-words">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-[#86868B] break-words">
               {showRoleInSubline && (
                 <>
-                  <span className="font-semibold text-[#0a2d6b]">{roleLabel}</span>
+                  <span className="font-semibold text-[#1D1D1F]">{roleLabel}</span>
                   <span aria-hidden="true">·</span>
                 </>
               )}
-              <span className="font-medium text-slate-700">{todayFormatted}</span>
+              <span className="font-normal text-[#424245]">{todayFormatted}</span>
               <span aria-hidden="true">·</span>
-              <span className="font-medium text-[#047857]">
+              <span className="font-medium text-[#1B873F]">
                 {windowEval.isAllowedToLaunch ? 'Chamada aberta' : 'Consulta ativa'}
               </span>
             </div>
@@ -529,9 +523,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   triggerMenuHaptic('medium');
                   onNavigateToScreen('frequencia_mensal');
                 }}
-                className="w-full sm:w-auto min-h-[48px] py-2.5 px-5 rounded-2xl bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] hover:from-[#0a2d6b] hover:to-[#0e3a8a] text-white text-sm font-semibold inline-flex items-center justify-center text-center whitespace-nowrap gap-2 cursor-pointer transition-all duration-150 shadow-[0_10px_24px_-4px_rgba(14,58,138,0.34)]"
+                className="w-full sm:w-auto min-h-[44px] py-2 px-5 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-sm font-semibold inline-flex items-center justify-center text-center whitespace-nowrap gap-2 cursor-pointer transition-all duration-150 active:scale-95 shadow-xs"
               >
-                <SFSymbol name="event_available" filled size={19} weight={500} className="shrink-0" />
+                <SFSymbol name="event_available" filled size={18} weight={500} className="shrink-0" />
                 <span>Informar Faltas · {referencePeriod.monthName}</span>
               </motion.button>
             ) : (
@@ -542,9 +536,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   triggerMenuHaptic('light');
                   onNavigateToScreen('turmas');
                 }}
-                className="w-full sm:w-auto min-h-[48px] py-2.5 px-5 rounded-2xl bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] hover:from-[#0a2d6b] hover:to-[#0e3a8a] text-white text-sm font-semibold inline-flex items-center justify-center text-center whitespace-nowrap gap-2 cursor-pointer transition-all duration-150 shadow-[0_10px_24px_-4px_rgba(14,58,138,0.34)]"
+                className="w-full sm:w-auto min-h-[44px] py-2 px-5 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-sm font-semibold inline-flex items-center justify-center text-center whitespace-nowrap gap-2 cursor-pointer transition-all duration-150 active:scale-95 shadow-xs"
               >
-                <SFSymbol name="groups" filled size={19} weight={500} className="shrink-0" />
+                <SFSymbol name="groups" filled size={18} weight={500} className="shrink-0" />
                 <span>Ver Turmas ({schoolStats.totalClasses})</span>
               </motion.button>
             )}
@@ -552,21 +546,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
 
 
-        {/* Faixa Unificada de KPIs com Ícones SF Symbols e Hierarquia Tonal */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 min-w-0 items-stretch">
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#f1f5fb] min-w-0 flex flex-col justify-between h-full">
+        {/* Faixa Unificada de KPIs com Ícones SF Symbols e Hierarquia Apple HIG */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 min-w-0 items-stretch">
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] min-w-0 flex flex-col justify-between h-full">
             <div className="flex items-start justify-between gap-2">
-              <span className="text-xs sm:text-[13px] font-semibold text-slate-700 leading-snug">
+              <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                 Estudantes Ativos
               </span>
-              <span className="w-7 h-7 rounded-lg bg-white text-[#0e3a8a] flex items-center justify-center shrink-0 shadow-xs">
-                <SFSymbol name="groups" filled size={16} weight={500} />
+              <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 border border-black/[0.06]">
+                <SFSymbol name="groups" filled size={15} weight={500} />
               </span>
             </div>
-            <span className="text-2xl sm:text-[28px] font-semibold text-[#071e46] tabular-nums block my-1.5 leading-tight">
+            <span className="text-2xl sm:text-[28px] font-semibold text-[#1D1D1F] tabular-nums block my-1.5 leading-tight">
               {schoolStats.activeStudents}
             </span>
-            <span className="text-xs text-slate-600 font-medium tabular-nums block">
+            <span className="text-xs text-[#86868B] font-normal tabular-nums block">
               {schoolStats.aeeCount} em AEE
             </span>
           </div>
@@ -579,20 +573,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 triggerMenuHaptic('light');
                 onNavigateToScreen('detalhes');
               }}
-              className="text-left p-4 sm:p-5 rounded-2xl bg-[#f1f5fb] hover:bg-[#e5edf9] card-interactive cursor-pointer min-w-0 flex flex-col justify-between h-full"
+              className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.04] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
             >
               <div className="flex items-start justify-between gap-2 w-full">
-                <span className="text-xs sm:text-[13px] font-semibold text-slate-700 leading-snug">
+                <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                   Minha Turma
                 </span>
-                <span className="w-7 h-7 rounded-lg bg-white text-[#1649a8] flex items-center justify-center shrink-0 shadow-xs">
-                  <SFSymbol name="school" filled size={16} weight={500} />
+                <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 border border-black/[0.06]">
+                  <SFSymbol name="school" filled size={15} weight={500} />
                 </span>
               </div>
-              <span className="text-xl sm:text-2xl font-semibold text-[#071e46] block my-1.5 leading-tight truncate">
+              <span className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] block my-1.5 leading-tight truncate">
                 {primaryTeacherClass.name}
               </span>
-              <span className="text-xs text-slate-600 font-medium block truncate">
+              <span className="text-xs text-[#86868B] font-normal block truncate">
                 {primaryTeacherClass.shift.replace('Turno ', '')} · {primaryTeacherClass.room || 'Sala'}
               </span>
             </motion.button>
@@ -604,38 +598,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 triggerMenuHaptic('light');
                 onNavigateToScreen('turmas');
               }}
-              className="text-left p-4 sm:p-5 rounded-2xl bg-[#f1f5fb] hover:bg-[#e5edf9] card-interactive cursor-pointer min-w-0 flex flex-col justify-between h-full"
+              className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.04] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
             >
               <div className="flex items-start justify-between gap-2 w-full">
-                <span className="text-xs sm:text-[13px] font-semibold text-slate-700 leading-snug">
+                <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                   Turmas
                 </span>
-                <span className="w-7 h-7 rounded-lg bg-white text-[#1649a8] flex items-center justify-center shrink-0 shadow-xs">
-                  <SFSymbol name="school" filled size={16} weight={500} />
+                <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 border border-black/[0.06]">
+                  <SFSymbol name="school" filled size={15} weight={500} />
                 </span>
               </div>
-              <span className="text-2xl sm:text-[28px] font-semibold text-[#071e46] tabular-nums block my-1.5 leading-tight">
+              <span className="text-2xl sm:text-[28px] font-semibold text-[#1D1D1F] tabular-nums block my-1.5 leading-tight">
                 {schoolStats.totalClasses}
               </span>
-              <span className="text-xs text-slate-600 font-medium tabular-nums block">
+              <span className="text-xs text-[#86868B] font-normal tabular-nums block">
                 {schoolStats.morningCount} manhã · {schoolStats.afternoonCount} tarde
               </span>
             </motion.button>
           )}
 
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#ecfdf5] min-w-0 flex flex-col justify-between h-full">
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] min-w-0 flex flex-col justify-between h-full">
             <div className="flex items-start justify-between gap-2">
-              <span className="text-xs sm:text-[13px] font-semibold text-[#065f46] leading-snug">
+              <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                 Presença Média
               </span>
-              <span className="w-7 h-7 rounded-lg bg-[#047857] text-white flex items-center justify-center shrink-0 shadow-xs">
-                <SFSymbol name="verified" filled size={16} weight={500} />
+              <span className="w-7 h-7 rounded-full bg-[#EAF7EE] text-[#1B873F] flex items-center justify-center shrink-0 border border-[#1B873F]/20">
+                <SFSymbol name="verified" filled size={15} weight={500} />
               </span>
             </div>
-            <span className="text-2xl sm:text-[28px] font-semibold text-[#047857] tabular-nums block my-1.5 leading-tight">
+            <span className="text-2xl sm:text-[28px] font-semibold text-[#1B873F] tabular-nums block my-1.5 leading-tight">
               {schoolStats.avgPresence}%
             </span>
-            <span className="text-xs text-[#065f46] font-medium block">Meta MEC ≥ 75%</span>
+            <span className="text-xs text-[#86868B] font-normal block">Meta MEC ≥ 75%</span>
           </div>
 
           <motion.button
@@ -645,41 +639,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               triggerMenuHaptic('light');
               onNavigateToScreen('faltas_consecutivas');
             }}
-            className="text-left p-4 sm:p-5 rounded-2xl bg-[#fff1f2] hover:bg-[#ffe4e6] card-interactive cursor-pointer min-w-0 flex flex-col justify-between h-full"
+            className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.04] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
           >
             <div className="flex items-start justify-between gap-2 w-full">
-              <span className="text-xs sm:text-[13px] font-semibold text-[#9f1239] leading-snug">
+              <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                 Busca Ativa (ECA)
               </span>
-              <span className="w-7 h-7 rounded-lg bg-[#be123c] text-white flex items-center justify-center shrink-0 shadow-xs">
-                <SFSymbol name="gpp_maybe" filled size={16} weight={500} />
+              <span className="w-7 h-7 rounded-full bg-[#FFEBEB] text-[#D70015] flex items-center justify-center shrink-0 border border-[#D70015]/20">
+                <SFSymbol name="gpp_maybe" filled size={15} weight={500} />
               </span>
             </div>
-            <span className="text-2xl sm:text-[28px] font-semibold text-[#be123c] tabular-nums block my-1.5 leading-tight">
+            <span className="text-2xl sm:text-[28px] font-semibold text-[#D70015] tabular-nums block my-1.5 leading-tight">
               {schoolStats.criticalConsecutiveCount}
             </span>
-            <span className="text-xs text-[#9f1239] font-medium flex items-center justify-between gap-1 w-full">
+            <span className="text-xs text-[#86868B] font-normal flex items-center justify-between gap-1 w-full">
               <span>Casos em atenção</span>
-              <SFSymbol name="chevron_right" size={15} weight={500} className="text-[#be123c]" />
+              <SFSymbol name="chevron_right" size={15} weight={500} className="text-[#86868B]" />
             </span>
           </motion.button>
 
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#e8f0fe] col-span-2 sm:col-span-1 min-w-0 flex flex-col justify-between h-full">
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] col-span-2 sm:col-span-1 min-w-0 flex flex-col justify-between h-full">
             <div className="flex items-start justify-between gap-2">
-              <span className="text-xs sm:text-[13px] font-semibold text-[#0a2d6b] leading-snug">
+              <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                 Referência
               </span>
-              <span className="w-7 h-7 rounded-lg bg-[#0e3a8a] text-white flex items-center justify-center shrink-0 shadow-xs">
-                <SFSymbol name="calendar_month" filled size={16} weight={500} />
+              <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 border border-black/[0.06]">
+                <SFSymbol name="calendar_month" filled size={15} weight={500} />
               </span>
             </div>
-            <span className="text-lg sm:text-xl font-semibold text-[#071e46] block my-1.5 leading-tight whitespace-nowrap">
+            <span className="text-lg sm:text-xl font-semibold text-[#1D1D1F] block my-1.5 leading-tight whitespace-nowrap">
               {referencePeriod.monthName}/{referencePeriod.year}
             </span>
             <div className="flex items-center">
               <span
-                data-status={windowEval.isAllowedToLaunch ? 'success' : 'info'}
-                className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium text-white leading-tight"
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium leading-tight ${
+                  windowEval.isAllowedToLaunch
+                    ? 'bg-[#EAF7EE] text-[#1B873F]'
+                    : 'bg-white text-[#424245] border border-black/[0.06]'
+                }`}
               >
                 {windowEval.isAllowedToLaunch ? 'Janela aberta' : 'Consulta disponível'}
               </span>
@@ -692,26 +689,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {missingFichasSummary.totalMissing > 0 && (
         <section
           aria-label="Aviso de Fichas Informativas Pendentes"
-          className="bg-white rounded-3xl p-5 sm:p-6 shadow-xs space-y-4 min-w-0"
+          className="bg-white rounded-3xl p-5 sm:p-6 border border-black/[0.06] shadow-sm space-y-4 min-w-0"
         >
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
             <div className="flex items-start gap-3.5 min-w-0 flex-1">
-              <div className="w-10 h-10 rounded-xl bg-[#b45309] text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+              <div className="w-10 h-10 rounded-2xl bg-[#FFF5E5] text-[#B25000] border border-[#B25000]/15 flex items-center justify-center shrink-0 mt-0.5">
                 <SFSymbol name="description" filled size={20} weight={500} />
               </div>
               <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-semibold text-[#071e46] tracking-tight break-words">
+                  <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F] tracking-tight break-words">
                     Fichas Informativas não preenchidas · Repassar pedido às famílias
                   </h2>
                 </div>
-                <p className="text-xs sm:text-[13.5px] text-slate-700 leading-relaxed break-words">
+                <p className="text-xs sm:text-[13.5px] text-[#424245] leading-relaxed break-words">
                   Há{' '}
-                  <strong className="font-semibold text-[#b45309] tabular-nums">
+                  <strong className="font-semibold text-[#B25000] tabular-nums">
                     {missingFichasSummary.totalMissing} estudante(s) ativo(s)
                   </strong>{' '}
                   em{' '}
-                  <strong className="font-semibold text-slate-900 tabular-nums">
+                  <strong className="font-semibold text-[#1D1D1F] tabular-nums">
                     {missingFichasSummary.classesWithMissing.length} turma(s)
                   </strong>{' '}
                   ainda sem Ficha Informativa preenchida/anexada. Por favor, repasse o pedido de
@@ -728,16 +725,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   triggerMenuHaptic('light');
                   void handleCopyFamilyFichaRequest();
                 }}
-                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#eef3fa] hover:bg-[#dfe9f7] text-[#0a2d6b] text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors"
+                className="min-h-[38px] px-4 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.06] text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors active:scale-95"
               >
                 {copiedFamilyFichaPrompt ? (
                   <>
-                    <SFSymbol name="check" size={16} weight={600} className="text-[#047857]" />
+                    <SFSymbol name="check" size={16} weight={600} className="text-[#1B873F]" />
                     <span>Recado copiado</span>
                   </>
                 ) : (
                   <>
-                    <SFSymbol name="content_copy" size={16} weight={500} className="text-[#0e3a8a]" />
+                    <SFSymbol name="content_copy" size={16} weight={500} className="text-[#0071E3]" />
                     <span>Copiar recado para família</span>
                   </>
                 )}
@@ -757,7 +754,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       onNavigateToScreen('detalhes');
                     }
                   }}
-                  className="min-h-[40px] px-4 py-2 rounded-xl bg-[#b45309] hover:bg-[#92400e] text-white text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors"
+                  className="min-h-[38px] px-4 py-1.5 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors active:scale-95"
                 >
                   <span>Ver pendentes</span>
                   <SFSymbol name="chevron_right" size={16} weight={500} />
@@ -768,8 +765,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           {/* Lista compacta de estudantes/turmas com Ficha Informativa pendente */}
           {userRole === 'usuario' && missingFichasSummary.classesWithMissing[0] ? (
-            <div className="p-3.5 rounded-2xl bg-amber-50/70 space-y-2">
-              <span className="text-xs font-semibold text-amber-950 block">
+            <div className="p-3.5 rounded-2xl bg-[#FFF8EB] border border-[#B25000]/15 space-y-2">
+              <span className="text-xs font-semibold text-[#B25000] block">
                 Estudantes sem Ficha Informativa em {missingFichasSummary.classesWithMissing[0].classGroup.name}:
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -785,7 +782,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         ? onOpenStudentPdf(st, missingFichasSummary.classesWithMissing[0].classGroup.name)
                         : onOpenClassPendingFichas?.(missingFichasSummary.classesWithMissing[0].classGroup)
                     }
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-amber-100/70 text-xs font-medium text-slate-900 tabular-nums cursor-pointer transition-colors"
+                    className="px-2.5 py-1 rounded-full bg-white hover:bg-[#FFF5E5] border border-black/[0.06] text-xs font-medium text-[#1D1D1F] tabular-nums cursor-pointer transition-colors"
                   >
                     {st.number.toString().padStart(2, '0')} · {st.name}
                   </button>
@@ -794,7 +791,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowAllMissingFichasClasses((prev) => !prev)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[#14428c] hover:underline cursor-pointer"
+                    className="px-2.5 py-1 rounded-full text-xs font-semibold text-[#0071E3] hover:underline cursor-pointer"
                   >
                     {showAllMissingFichasClasses
                       ? 'Mostrar menos'
@@ -822,10 +819,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       onNavigateToScreen('detalhes');
                     }
                   }}
-                  className="min-h-[34px] px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-950 text-xs font-semibold inline-flex items-center gap-1.5 tabular-nums cursor-pointer transition-colors"
+                  className="min-h-[34px] px-3.5 py-1 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.06] text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1.5 tabular-nums cursor-pointer transition-colors"
                 >
                   <span>{cls.name}</span>
-                  <span data-status="warning" className="px-1.5 py-0.5 rounded text-[11px] font-medium text-white">
+                  <span className="px-1.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#B25000] text-white">
                     {missingStudents.length}
                   </span>
                 </button>
@@ -834,7 +831,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAllMissingFichasClasses((prev) => !prev)}
-                  className="px-2.5 py-1.5 text-xs font-semibold text-[#14428c] hover:underline cursor-pointer"
+                  className="px-2.5 py-1.5 text-xs font-semibold text-[#0071E3] hover:underline cursor-pointer"
                 >
                   {showAllMissingFichasClasses
                     ? 'Ocultar turmas extras'
@@ -857,14 +854,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onMarkNoticesRead={onMarkNoticeRead}
       />
 
-      {/* 2. ACESSO RÁPIDO (ÍCONES SF SYMBOLS E PALETA NAVY INSTITUCIONAL) */}
+      {/* 2. ACESSO RÁPIDO (ÍCONES SF SYMBOLS E PALETA APPLE HIG) */}
       <section className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 px-1">
           <div>
-            <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight">
               Acesso Rápido
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 font-medium">
+            <p className="text-xs sm:text-sm text-[#86868B] font-normal">
               Ferramentas principais para {isStrictAdmin ? 'gestão escolar' : 'rotina docente'}
             </p>
           </div>
@@ -877,19 +874,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               type="button"
               whileTap={tapAnimation}
               onClick={item.onClick}
-              className="w-full h-full min-w-0 min-h-[84px] text-left bg-white hover:bg-[#f6f9fe] card-interactive rounded-2xl p-4 sm:p-5 shadow-[0_10px_28px_-8px_rgba(7,30,70,0.22)] cursor-pointer flex items-center justify-between gap-3.5 group"
+              className="w-full h-full min-w-0 min-h-[84px] text-left bg-white hover:bg-[#FAFAFC] border border-black/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer flex items-center justify-between gap-3.5 group transition-all duration-150 active:scale-[0.98]"
             >
               <div className="flex items-center gap-3.5 min-w-0 flex-1">
                 <div
-                  className={`w-11 h-11 rounded-2xl ${item.accentBg} ${item.accentText} flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105`}
+                  className="w-11 h-11 rounded-2xl bg-[#0071E3] text-white flex items-center justify-center shrink-0 transition-transform duration-150 group-hover:scale-105"
                 >
                   {item.icon}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-[15px] sm:text-base font-semibold text-[#071e46] break-words leading-snug">
+                  <h3 className="text-[15px] sm:text-base font-semibold text-[#1D1D1F] group-hover:text-[#0071E3] transition-colors break-words leading-snug">
                     {item.title}
                   </h3>
-                  <p className="text-xs sm:text-[13px] text-slate-600 break-words leading-snug mt-0.5">{item.subtitle}</p>
+                  <p className="text-xs sm:text-[13px] text-[#86868B] break-words leading-snug mt-0.5">{item.subtitle}</p>
                 </div>
               </div>
 
@@ -897,7 +894,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 name="chevron_right"
                 size={20}
                 weight={500}
-                className="text-slate-600 group-hover:text-[#0e3a8a] group-hover:translate-x-1 transition-all duration-200 shrink-0"
+                className="text-[#86868B] group-hover:text-[#0071E3] group-hover:translate-x-0.5 transition-all duration-150 shrink-0"
               />
             </motion.button>
           ))}
@@ -906,29 +903,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* 3. SELETOR DIRETO DE TURMAS (Apenas para quem gerencia múltiplas turmas) */}
       {userRole !== 'usuario' && (
-      <section ref={classesSectionRef} className="bg-white rounded-3xl p-5 sm:p-6 shadow-[0_12px_34px_-10px_rgba(7,30,70,0.18)] space-y-5 min-w-0 scroll-mt-24">
+      <section ref={classesSectionRef} className="bg-white rounded-3xl p-5 sm:p-6 border border-black/[0.06] shadow-sm space-y-5 min-w-0 scroll-mt-24">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 min-w-0">
           <div className="min-w-0">
-            <h2 className="text-xl sm:text-2xl font-semibold text-[#071e46] break-words">
+            <h2 className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] break-words">
               Turmas da Escola ({filteredClasses.length})
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 break-words">
+            <p className="text-xs sm:text-sm text-[#86868B] mt-0.5 break-words">
               Toque em uma turma para abrir a lista nominal, chamadas e Fichas Informativas
             </p>
           </div>
 
           {visibleBaseClasses.length > 1 && (
-            <div className="grid grid-cols-3 sm:inline-flex w-full sm:w-auto max-w-full min-w-0 p-1.5 bg-[#eef3fa] rounded-2xl gap-1">
+            <div className="grid grid-cols-3 sm:inline-flex w-full sm:w-auto max-w-full min-w-0 p-1 bg-[#F5F5F7] rounded-full border border-black/[0.06] gap-1">
               <button
                 type="button"
                 onClick={() => {
                   triggerMenuHaptic('light');
                   setSelectedShiftFilter('TODOS');
                 }}
-                className={`min-h-[40px] px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-[13px] font-semibold inline-flex items-center justify-center text-center whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                className={`min-h-[34px] px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-[13px] font-semibold inline-flex items-center justify-center text-center whitespace-nowrap transition-all duration-150 cursor-pointer ${
                   selectedShiftFilter === 'TODOS'
-                    ? 'bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] text-white shadow-[0_4px_14px_rgba(14,58,138,0.28)]'
-                    : 'text-[#0a2d6b] hover:bg-white/75'
+                    ? 'bg-white text-[#1D1D1F] shadow-2xs font-semibold'
+                    : 'text-[#424245] hover:text-[#1D1D1F]'
                 }`}
               >
                 Todas ({schoolStats.totalClasses})
@@ -939,17 +936,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   triggerMenuHaptic('light');
                   setSelectedShiftFilter('MANHÃ');
                 }}
-                className={`min-h-[40px] px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-[13px] font-semibold inline-flex items-center justify-center text-center whitespace-nowrap gap-1.5 transition-all duration-200 cursor-pointer ${
+                className={`min-h-[34px] px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-[13px] font-semibold inline-flex items-center justify-center text-center whitespace-nowrap gap-1.5 transition-all duration-150 cursor-pointer ${
                   selectedShiftFilter === 'MANHÃ'
-                    ? 'bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] text-white shadow-[0_4px_14px_rgba(14,58,138,0.28)]'
-                    : 'text-[#0a2d6b] hover:bg-white/75'
+                    ? 'bg-white text-[#1D1D1F] shadow-2xs font-semibold'
+                    : 'text-[#424245] hover:text-[#1D1D1F]'
                 }`}
               >
                 <SFSymbol
                   name="light_mode"
                   filled
-                  size={16}
-                  className={selectedShiftFilter === 'MANHÃ' ? 'text-amber-300' : 'text-[#b45309]'}
+                  size={15}
+                  className={selectedShiftFilter === 'MANHÃ' ? 'text-[#B25000]' : 'text-[#86868B]'}
                 />
                 <span>Manhã ({schoolStats.morningCount})</span>
               </button>
@@ -959,17 +956,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   triggerMenuHaptic('light');
                   setSelectedShiftFilter('TARDE');
                 }}
-                className={`min-h-[40px] px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-[13px] font-semibold inline-flex items-center justify-center text-center whitespace-nowrap gap-1.5 transition-all duration-200 cursor-pointer ${
+                className={`min-h-[34px] px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-[13px] font-semibold inline-flex items-center justify-center text-center whitespace-nowrap gap-1.5 transition-all duration-150 cursor-pointer ${
                   selectedShiftFilter === 'TARDE'
-                    ? 'bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] text-white shadow-[0_4px_14px_rgba(14,58,138,0.28)]'
-                    : 'text-[#0a2d6b] hover:bg-white/75'
+                    ? 'bg-white text-[#1D1D1F] shadow-2xs font-semibold'
+                    : 'text-[#424245] hover:text-[#1D1D1F]'
                 }`}
               >
                 <SFSymbol
                   name="nights_stay"
                   filled
-                  size={16}
-                  className={selectedShiftFilter === 'TARDE' ? 'text-sky-200' : 'text-[#0e3a8a]'}
+                  size={15}
+                  className={selectedShiftFilter === 'TARDE' ? 'text-[#0071E3]' : 'text-[#86868B]'}
                 />
                 <span>Tarde ({schoolStats.afternoonCount})</span>
               </button>
@@ -983,57 +980,71 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               name="search"
               size={18}
               weight={500}
-              className="text-[#0e3a8a] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+              className="text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
             />
             <input
               type="text"
               value={turmaSearchInput}
               onChange={(e) => setTurmaSearchInput(e.target.value)}
               placeholder="Buscar turma ou docente (ex: G4 A, 1º B, 5º A)..."
-              className="w-full min-h-[46px] pl-11 pr-4 rounded-xl bg-[#eef3fa] focus:bg-[#e5edf9] text-sm sm:text-[15px] text-[#071e46] placeholder:text-slate-600 transition-colors duration-150"
+              className="w-full min-h-[44px] pl-11 pr-4 rounded-xl bg-[#F5F5F7] border border-black/[0.08] focus:bg-white text-sm sm:text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] transition-colors duration-150"
             />
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 min-w-0">
-          {displayedClasses.map((cls) => {
+        <div
+          key={`${selectedShiftFilter}-${safeClassesPage}`}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 min-w-0"
+        >
+          {displayedClasses.map((cls, index) => {
             const isMorning =
               (cls.shift || '').toUpperCase().includes('MANHÃ') || cls.periodo === 'MANHÃ';
-            const presenceStatus =
+            const presenceBadgeStyle =
               cls.students.length === 0
-                ? 'neutral'
+                ? 'bg-[#F5F5F7] text-[#86868B] border border-black/[0.08]'
                 : cls.presenceRate < 75
-                ? 'danger'
+                ? 'bg-[#FFEBEB] text-[#D70015] border border-[#D70015]/20 font-semibold'
                 : cls.presenceRate < 85
-                ? 'warning'
-                : 'success';
+                ? 'bg-[#FFF5E5] text-[#B25000] border border-[#B25000]/20 font-semibold'
+                : 'bg-[#EAF7EE] text-[#1B873F] border border-[#1B873F]/20 font-semibold';
 
             return (
               <motion.button
                 key={cls.id}
                 type="button"
+                initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.05 }}
+                transition={
+                  prefersReducedMotion
+                    ? { duration: 0.12, ease: 'easeOut' }
+                    : {
+                        duration: 0.32,
+                        delay: Math.min(index, 7) * 0.035,
+                        ease: [0.22, 1, 0.36, 1],
+                      }
+                }
                 whileTap={tapAnimation}
                 onClick={() => {
                   triggerMenuHaptic('light');
                   if (onSelectClassForDetails) onSelectClassForDetails(cls);
                   else onNavigateToScreen('detalhes');
                 }}
-                className="w-full min-w-0 min-h-[122px] text-left bg-[#f1f5fb] hover:bg-[#e5edf9] card-interactive rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-2.5 cursor-pointer group"
+                className="w-full min-w-0 min-h-[122px] text-left bg-[#F5F5F7] hover:bg-[#EFEFF2] border border-black/[0.04] rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-2.5 cursor-pointer group transition-colors"
               >
                 <div className="flex items-start justify-between gap-2 w-full min-w-0">
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-base sm:text-[17px] font-semibold text-[#071e46] leading-snug break-words">
+                    <h3 className="text-base sm:text-[17px] font-semibold text-[#1D1D1F] group-hover:text-[#0071E3] transition-colors leading-snug break-words">
                       {cls.name}
                     </h3>
-                    <p className="text-xs sm:text-[13px] text-slate-600 break-words leading-snug mt-0.5">
+                    <p className="text-xs sm:text-[13px] text-[#86868B] break-words leading-snug mt-0.5">
                       {isMorning ? 'Manhã' : 'Tarde'} · {cls.room || '—'}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0 pt-0.5">
                     <span
-                      data-status={presenceStatus}
-                      className="px-2 py-0.5 rounded-lg font-mono text-xs font-medium tabular-nums text-white"
+                      className={`px-2 py-0.5 rounded-full font-mono text-xs tabular-nums ${presenceBadgeStyle}`}
                     >
                       {cls.students.length === 0 ? '—' : `${cls.presenceRate}%`}
                     </span>
@@ -1041,16 +1052,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       name="chevron_right"
                       size={18}
                       weight={500}
-                      className="text-slate-600 group-hover:text-[#0e3a8a] group-hover:translate-x-0.5 transition-all duration-200"
+                      className="text-[#86868B] group-hover:text-[#0071E3] group-hover:translate-x-0.5 transition-all duration-150"
                     />
                   </div>
                 </div>
 
                 <div className="w-full space-y-0.5 pt-0.5 min-w-0">
-                  <p className="text-xs sm:text-[13px] text-[#0a2d6b] font-semibold break-words leading-snug">
+                  <p className="text-xs sm:text-[13px] text-[#424245] font-semibold break-words leading-snug">
                     {cls.teacherName || 'Professor(a) atribuído'}
                   </p>
-                  <p className="text-xs text-slate-600 font-medium tabular-nums">
+                  <p className="text-xs text-[#86868B] font-normal tabular-nums">
                     {cls.students.length} estudantes
                   </p>
                 </div>
@@ -1073,11 +1084,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
 
         {filteredClasses.length === 0 && (
-          <div className="p-8 text-center bg-[#f1f5fb] rounded-2xl space-y-1">
-            <p className="text-sm font-semibold text-[#071e46]">
+          <div className="p-8 text-center bg-[#F5F5F7] rounded-2xl border border-black/[0.05] space-y-1">
+            <p className="text-sm font-semibold text-[#1D1D1F]">
               Nenhuma turma encontrada com esse termo.
             </p>
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-[#86868B]">
               Tente buscar por &ldquo;G4&rdquo;, &ldquo;1º&rdquo;, &ldquo;Manhã&rdquo; ou limpe a busca.
             </p>
           </div>
@@ -1088,29 +1099,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* 4. PRAZOS E BUSCA ATIVA */}
       <section
         id="central-comunicados"
-        className="bg-white rounded-3xl p-5 sm:p-6 shadow-[0_10px_28px_-10px_rgba(7,30,70,0.16)] space-y-5 min-w-0"
+        className="bg-white rounded-3xl p-5 sm:p-6 border border-black/[0.06] shadow-sm space-y-5 min-w-0"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 min-w-0">
           <div className="min-w-0">
-            <h2 className="text-xl sm:text-2xl font-semibold text-[#071e46] break-words">
+            <h2 className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] break-words">
               Prazos e Busca Ativa
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 break-words">
+            <p className="text-xs sm:text-sm text-[#86868B] mt-0.5 break-words">
               Calendário de chamada mensal e casos prioritários de busca ativa
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:inline-flex w-full sm:w-auto max-w-full min-w-0 p-1.5 bg-[#eef3fa] rounded-2xl text-xs sm:text-[13px] font-semibold gap-1">
+          <div className="grid grid-cols-2 sm:inline-flex w-full sm:w-auto max-w-full min-w-0 p-1 bg-[#F5F5F7] rounded-full border border-black/[0.06] text-xs sm:text-[13px] font-semibold gap-1">
             <button
               type="button"
               onClick={() => {
                 triggerMenuHaptic('light');
                 setActiveHubTab('prazos');
               }}
-              className={`min-h-[42px] px-4 py-2 rounded-xl inline-flex items-center justify-center text-center whitespace-nowrap gap-1.5 transition-all duration-150 cursor-pointer ${
+              className={`min-h-[36px] px-4 py-1.5 rounded-full inline-flex items-center justify-center text-center whitespace-nowrap gap-1.5 transition-all duration-150 cursor-pointer ${
                 activeHubTab === 'prazos'
-                  ? 'bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] text-white shadow-[0_4px_12px_rgba(14,58,138,0.28)]'
-                  : 'text-[#0a2d6b] hover:bg-white/70'
+                  ? 'bg-white text-[#0071E3] shadow-2xs font-semibold'
+                  : 'text-[#424245] hover:text-[#1D1D1F]'
               }`}
             >
               <SFSymbol name="schedule" filled={activeHubTab === 'prazos'} size={17} />
@@ -1122,10 +1133,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 triggerMenuHaptic('light');
                 setActiveHubTab('busca_ativa');
               }}
-              className={`min-h-[42px] px-4 py-2 rounded-xl inline-flex items-center justify-center text-center whitespace-nowrap gap-1.5 transition-all duration-150 cursor-pointer ${
+              className={`min-h-[36px] px-4 py-1.5 rounded-full inline-flex items-center justify-center text-center whitespace-nowrap gap-1.5 transition-all duration-150 cursor-pointer ${
                 activeHubTab === 'busca_ativa'
-                  ? 'bg-[#be123c] text-white shadow-[0_4px_12px_rgba(190,18,60,0.28)]'
-                  : 'text-[#9f1239] hover:bg-[#ffe4e6]'
+                  ? 'bg-white text-[#D70015] shadow-2xs font-semibold'
+                  : 'text-[#424245] hover:text-[#D70015]'
               }`}
             >
               <SFSymbol name="gpp_maybe" filled={activeHubTab === 'busca_ativa'} size={17} />
@@ -1169,49 +1180,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* 5. GRÁFICO COMPARATIVO POR TURMA (Exibido apenas para múltiplas turmas) */}
       {userRole !== 'usuario' && visibleBaseClasses.length > 1 && (
-      <section className="bg-white rounded-3xl p-5 sm:p-6 shadow-[0_12px_34px_-8px_rgba(2,6,23,0.34)] space-y-5 min-w-0">
+      <section className="bg-white rounded-3xl p-5 sm:p-7 border border-black/[0.06] shadow-sm space-y-5 min-w-0">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
           <div className="min-w-0">
-            <h2 className="text-xl sm:text-2xl font-semibold text-[#071e46] flex items-center gap-2.5 min-w-0">
-              <span className="w-9 h-9 rounded-xl bg-[#0e3a8a] text-white flex items-center justify-center shrink-0">
+            <h2 className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight flex items-center gap-2.5 min-w-0">
+              <span className="w-9 h-9 rounded-full bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center shrink-0">
                 <SFSymbol name="bar_chart" filled size={20} weight={500} />
               </span>
               <span>Frequência das Turmas — Meta LDB</span>
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600 mt-1 break-words">
-              Comparativo por turma com referência mínima de 75% · Clique em uma barra para abrir a turma
+            <p className="text-xs sm:text-sm text-[#86868B] mt-1 break-words">
+              Comparativo por turma com referência mínima de 75% · Toque em uma barra para abrir a turma
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => {
                 triggerMenuHaptic('light');
                 setChartSortMode((prev) => (prev === 'default' ? 'asc' : 'default'));
               }}
-              className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer ${
+              className={`min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer ${
                 chartSortMode === 'asc'
-                  ? 'bg-[#0e3a8a] text-white shadow-[0_6px_16px_rgba(14,58,138,0.24)]'
-                  : 'bg-[#eef3fa] text-[#0a2d6b] hover:bg-[#e2e8f0]'
+                  ? 'bg-[#0071E3] text-white shadow-sm'
+                  : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
               }`}
               title="Alternar entre ordem das turmas e menor frequência primeiro"
             >
-              <SFSymbol name="swap_vert" size={16} weight={500} className="shrink-0" />
+              <SFSymbol name="swap_vert" size={15} weight={500} className="shrink-0" />
               <span>{chartSortMode === 'asc' ? 'Menor % primeiro' : 'Ordem das turmas'}</span>
             </button>
 
-            <div className="inline-flex p-1 bg-[#eef3fa] rounded-xl text-xs font-semibold gap-1 shrink-0">
+            <div className="inline-flex p-1 bg-[#F5F5F7] rounded-full text-xs font-medium gap-1 shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   triggerMenuHaptic('light');
                   setChartFilterShift('all');
                 }}
-                className={`min-h-[34px] px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer ${
+                className={`min-h-[32px] px-3.5 py-1 rounded-full whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer ${
                   chartFilterShift === 'all'
-                    ? 'bg-[#0e3a8a] text-white shadow-sm'
-                    : 'text-[#0a2d6b] hover:bg-white/70'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F]'
                 }`}
               >
                 Todas ({schoolStats.totalClasses})
@@ -1222,10 +1233,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   triggerMenuHaptic('light');
                   setChartFilterShift('MANHÃ');
                 }}
-                className={`min-h-[34px] px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer ${
+                className={`min-h-[32px] px-3.5 py-1 rounded-full whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer ${
                   chartFilterShift === 'MANHÃ'
-                    ? 'bg-[#0e3a8a] text-white shadow-sm'
-                    : 'text-[#0a2d6b] hover:bg-white/70'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F]'
                 }`}
               >
                 Manhã ({schoolStats.morningCount})
@@ -1236,10 +1247,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   triggerMenuHaptic('light');
                   setChartFilterShift('TARDE');
                 }}
-                className={`min-h-[34px] px-3 py-1.5 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer ${
+                className={`min-h-[32px] px-3.5 py-1 rounded-full whitespace-nowrap shrink-0 transition-all duration-200 cursor-pointer ${
                   chartFilterShift === 'TARDE'
-                    ? 'bg-[#0e3a8a] text-white shadow-sm'
-                    : 'text-[#0a2d6b] hover:bg-white/70'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F]'
                 }`}
               >
                 Tarde ({schoolStats.afternoonCount})
@@ -1248,53 +1259,54 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </div>
 
-        {/* Faixa de Indicadores Quantitativos (Separação Tonal Sem Linhas) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl bg-[#f1f5fb] text-xs sm:text-[13px]">
+        {/* Faixa de Indicadores Quantitativos */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl bg-[#F5F5F7] text-xs sm:text-[13px]">
           <div className="flex items-baseline justify-between sm:justify-start sm:gap-2.5">
-            <span className="text-slate-700 font-medium">Média do recorte</span>
-            <span className="font-mono font-semibold text-[#071e46] text-sm sm:text-base tabular-nums">
+            <span className="text-[#86868B] font-medium">Média do recorte</span>
+            <span className="font-mono font-semibold text-[#1D1D1F] text-sm sm:text-base tabular-nums">
               {chartBandSummary.avg}%
             </span>
           </div>
           <div className="flex items-baseline justify-between sm:justify-start sm:gap-2.5">
-            <span className="text-slate-700 font-medium">Regular (≥ 85%)</span>
-            <span className="font-mono font-semibold text-[#047857] text-sm sm:text-base tabular-nums">
+            <span className="text-[#86868B] font-medium">Regular (≥ 85%)</span>
+            <span className="font-mono font-semibold text-[#1B873F] text-sm sm:text-base tabular-nums">
               {chartBandSummary.regular}
             </span>
           </div>
           <div className="flex items-baseline justify-between sm:justify-start sm:gap-2.5">
-            <span className="text-slate-700 font-medium">Atenção (75–84%)</span>
-            <span className="font-mono font-semibold text-[#b45309] text-sm sm:text-base tabular-nums">
+            <span className="text-[#86868B] font-medium">Atenção (75–84%)</span>
+            <span className="font-mono font-semibold text-[#B25000] text-sm sm:text-base tabular-nums">
               {chartBandSummary.attention}
             </span>
           </div>
           <div className="flex items-baseline justify-between sm:justify-start sm:gap-2.5">
-            <span className="text-slate-700 font-medium">Abaixo de 75%</span>
-            <span className="font-mono font-semibold text-[#be123c] text-sm sm:text-base tabular-nums">
+            <span className="text-[#86868B] font-medium">Abaixo de 75%</span>
+            <span className="font-mono font-semibold text-[#D70015] text-sm sm:text-base tabular-nums">
               {chartBandSummary.below}
             </span>
           </div>
         </div>
 
         <div className="w-full overflow-x-auto pb-1">
-          <div className="min-w-[680px] sm:min-w-0 w-full h-[270px] sm:h-[310px]">
+          <div className="min-w-[1120px] w-full h-[290px] sm:h-[330px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}
-                margin={{ top: 16, right: 64, left: -12, bottom: 14 }}
+                margin={{ top: 16, right: 36, left: -8, bottom: 18 }}
                 barCategoryGap="18%"
               >
                 <CartesianGrid
                   vertical={false}
-                  stroke="#e2e8f0"
+                  stroke="#000000"
+                  strokeOpacity={0.06}
                   strokeDasharray="3 3"
                 />
                 <XAxis
                   dataKey="shortName"
                   interval={0}
-                  axisLine={{ stroke: '#cbd5e1' }}
+                  axisLine={{ stroke: '#000000', strokeOpacity: 0.1 }}
                   tickLine={false}
-                  height={44}
+                  height={72}
                   tick={(props: any) => {
                     const { x, y, payload } = props;
                     const item = chartData.find((d) => d.shortName === payload?.value);
@@ -1306,10 +1318,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           y={0}
                           dy={10}
                           textAnchor="end"
-                          fill={isBelow ? '#b91c1c' : '#475569'}
-                          fontSize={10.5}
-                          fontWeight={isBelow ? 700 : 600}
-                          transform="rotate(-35)"
+                          fill={isBelow ? '#D70015' : '#86868B'}
+                          fontSize={10}
+                          fontWeight={isBelow ? 700 : 500}
+                          transform="rotate(-38)"
                         >
                           {payload?.value}
                         </text>
@@ -1325,13 +1337,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   width={44}
                   tick={{
                     fontSize: 11,
-                    fill: '#64748b',
-                    fontWeight: 600,
+                    fill: '#86868B',
+                    fontWeight: 500,
                   }}
                   unit="%"
                 />
                 <Tooltip
-                  cursor={{ fill: 'rgba(11, 59, 140, 0.06)' }}
+                  cursor={{ fill: 'rgba(0, 113, 227, 0.05)' }}
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       const data = payload[0].payload;
@@ -1343,26 +1355,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           : 'Frequência regular';
                       const statusColor =
                         data.presence < 75
-                          ? 'text-rose-300'
+                          ? 'text-[#D70015]'
                           : data.presence < 85
-                          ? 'text-amber-300'
-                          : 'text-emerald-300';
+                          ? 'text-[#B25000]'
+                          : 'text-[#1B873F]';
                       return (
-                        <div className="bg-slate-950 text-white px-4 py-3 rounded-2xl text-xs sm:text-[13px] shadow-[0_18px_40px_rgba(2,6,23,0.45)] space-y-1.5 min-w-[200px]">
+                        <div className="bg-white/95 backdrop-blur-xl border border-black/[0.08] text-[#1D1D1F] px-4 py-3 rounded-2xl text-xs sm:text-[13px] shadow-[0_12px_32px_rgba(0,0,0,0.12)] space-y-1.5 min-w-[200px]">
                           <div className="flex items-center justify-between gap-3">
-                            <span className="font-bold text-white">{data.name}</span>
+                            <span className="font-semibold text-[#1D1D1F]">{data.name}</span>
                             <span className={`font-mono font-bold tabular-nums ${statusColor}`}>
                               {data.presence}%
                             </span>
                           </div>
-                          <div className="text-slate-200 text-xs">
+                          <div className="text-[#86868B] text-xs">
                             {data.shift} · {data.teacherName}
                           </div>
-                          <div className="pt-1.5 bg-white/10 -mx-2 px-2 py-1 rounded-xl flex items-center justify-between gap-3 text-[11px]">
-                            <span className={`font-semibold ${statusColor}`}>
+                          <div className="pt-1.5 bg-[#F5F5F7] -mx-2 px-2.5 py-1.5 rounded-xl flex items-center justify-between gap-3 text-[11px]">
+                            <span className={`font-medium ${statusColor}`}>
                               {statusText}
                             </span>
-                            <span className="text-slate-200 tabular-nums">
+                            <span className="text-[#86868B] tabular-nums">
                               {data.studentsCount} estudantes
                             </span>
                           </div>
@@ -1374,21 +1386,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 />
                 <ReferenceLine
                   y={75}
-                  stroke="#dc2626"
+                  stroke="#D70015"
                   strokeWidth={1.5}
-                  strokeDasharray="5 4"
+                  strokeDasharray="4 4"
                   label={{
                     value: 'Meta 75%',
-                    fill: '#dc2626',
+                    fill: '#D70015',
                     fontSize: 11,
-                    fontWeight: 700,
+                    fontWeight: 600,
                     position: 'right',
                   }}
                 />
                 <Bar
                   dataKey="presence"
                   radius={[6, 6, 0, 0]}
-                  maxBarSize={26}
+                  maxBarSize={24}
                   className="cursor-pointer"
                   onClick={(barEntry: any) => {
                     const cls = barEntry?.payload?.classRef || barEntry?.classRef;
@@ -1399,14 +1411,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   }}
                 >
                   {chartData.map((entry) => {
-                    let barColor = '#047857';
-                    if (entry.presence < 75) barColor = '#dc2626';
-                    else if (entry.presence < 85) barColor = '#d97706';
+                    let barColor = '#1B873F';
+                    if (entry.presence < 75) barColor = '#D70015';
+                    else if (entry.presence < 85) barColor = '#B25000';
                     return (
                       <Cell
                         key={`cell-${entry.id}`}
                         fill={barColor}
-                        className="hover:opacity-85 transition-opacity"
+                        className="hover:opacity-80 transition-opacity"
                       />
                     );
                   })}
@@ -1416,22 +1428,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 pt-1 gap-3">
+        <div className="flex flex-wrap items-center justify-between text-xs text-[#86868B] pt-1 gap-3">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <span className="flex items-center gap-2 font-medium">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[#047857] shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#1B873F] shrink-0" />
               ≥ 85% (Regular)
             </span>
             <span className="flex items-center gap-2 font-medium">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[#d97706] shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#B25000] shrink-0" />
               75% a 84% (Atenção)
             </span>
             <span className="flex items-center gap-2 font-medium">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[#dc2626] shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#D70015] shrink-0" />
               &lt; 75% (Abaixo da Meta)
             </span>
           </div>
-          <span className="font-semibold text-slate-900 tabular-nums">
+          <span className="font-semibold text-[#1D1D1F] tabular-nums">
             {chartData.length} turma(s) exibida(s)
           </span>
         </div>

@@ -69,6 +69,14 @@ import {
   UniversalExportReport,
 } from './universalExport';
 import { isStaticHostname } from '../services/apiEnvironment';
+import {
+  evaluateLocalPhotoUrlValidity,
+  planPhotoCacheVerificationDeletions,
+  StudentPhotoUrlRecord,
+  StudentPhotoBlobRecord,
+  UrlProbeOutcome,
+  PhotoCacheInvalidReason,
+} from '../services/photoIndexedDbCache';
 import { AuthorizedUser, ClassGroup, Student } from '../types';
 
 console.log('Iniciando suíte de validação de produção — Lista Piloto 2027...');
@@ -745,6 +753,142 @@ assert.equal(isStaticHostname('emebjfreitas-dev.github.io', 'https:'), true);
 assert.equal(isStaticHostname('localhost', 'http:'), false);
 assert.equal(isStaticHostname('ais-dev-nzv6xtsaejmfs7dugbhwbw-49671311424.us-east1.run.app', 'https:'), false);
 
-console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF e Firebase Hosting passaram com sucesso!');
+// 17. Validação em lote do photoIndexedDbCache (URLs inválidas, blobs corrompidos, aliases órfãos e deduplicação SHA-256)
+assert.equal(evaluateLocalPhotoUrlValidity('').reason, 'empty_url');
+assert.equal(evaluateLocalPhotoUrlValidity('blob:http://localhost/123').reason, 'ephemeral_blob_url');
+assert.equal(evaluateLocalPhotoUrlValidity('https://drive.google.com/drive/folders/abc').reason, 'malformed_url');
+assert.equal(evaluateLocalPhotoUrlValidity('javascript:alert(1)').reason, 'malformed_url');
+assert.equal(evaluateLocalPhotoUrlValidity('data:text/plain;base64,SGVsbG8=').reason, 'corrupted_data_url');
+
+const validApiPhoto = evaluateLocalPhotoUrlValidity('/api/photos/stu_100.webp');
+assert.equal(validApiPhoto.valid, true);
+assert.equal(validApiPhoto.kind, 'api_photo');
+assert.equal(validApiPhoto.apiPhotoFilename, 'stu_100.webp');
+
+const validDriveProxy = evaluateLocalPhotoUrlValidity('/api/drive-photo/1AbC_dEf23');
+assert.equal(validDriveProxy.valid, true);
+assert.equal(validDriveProxy.kind, 'api_drive_photo');
+
+const validExternal = evaluateLocalPhotoUrlValidity('https://lh3.googleusercontent.com/d/1AbC_dEf23=w400');
+assert.equal(validExternal.valid, true);
+assert.equal(validExternal.kind, 'external_http');
+
+const testUrlRows: StudentPhotoUrlRecord[] = [
+  {
+    studentKey: 'id:broken-1',
+    normalizedName: 'ALUNO URL QUEBRADA',
+    photoUrl: '/api/photos/missing.webp',
+    updatedAtMs: 1000,
+  },
+  {
+    studentKey: 'id:healthy-1',
+    normalizedName: 'ALUNO SAUDAVEL',
+    photoUrl: '/api/photos/ok.webp',
+    updatedAtMs: 1000,
+  },
+  {
+    studentKey: 'id:shared-ok',
+    normalizedName: 'ALUNO SHA COMPARTILHADO',
+    photoUrl: '/api/photos/shared_ok.webp',
+    updatedAtMs: 1000,
+  },
+  {
+    studentKey: 'id:skipped-offline',
+    normalizedName: 'ALUNO PRESERVADO OFFLINE',
+    photoUrl: 'https://lh3.googleusercontent.com/d/offline_keep=w400',
+    updatedAtMs: 1000,
+  },
+];
+
+const fakeValidBlob = new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'image/webp' });
+const testBlobRows: StudentPhotoBlobRecord[] = [
+  {
+    cacheKey: 'url:/api/photos/missing.webp',
+    sourceUrl: '/api/photos/missing.webp',
+    blob: fakeValidBlob,
+    contentType: 'image/webp',
+    byteSize: 2048,
+    cachedAtMs: 1000,
+  },
+  {
+    cacheKey: 'url:/api/photos/ok.webp',
+    sourceUrl: '/api/photos/ok.webp',
+    sha256: 'shared_sha_1',
+    blob: fakeValidBlob,
+    contentType: 'image/webp',
+    byteSize: 4096,
+    cachedAtMs: 1000,
+  },
+  {
+    cacheKey: 'url:/api/photos/shared_ok.webp',
+    targetCacheKey: 'url:/api/photos/ok.webp',
+    sourceUrl: '/api/photos/shared_ok.webp',
+    sha256: 'shared_sha_1',
+    contentType: 'image/webp',
+    byteSize: 0,
+    cachedAtMs: 1000,
+  },
+  {
+    cacheKey: 'url:/api/photos/corrupted_blob.webp',
+    sourceUrl: '/api/photos/ok.webp',
+    blob: new Blob([]),
+    contentType: 'image/webp',
+    byteSize: 1024,
+    cachedAtMs: 1000,
+  },
+  {
+    cacheKey: 'alias:dangling_orphan',
+    targetCacheKey: 'url:/api/photos/corrupted_blob.webp',
+    sourceUrl: '/api/photos/corrupted_blob.webp',
+    contentType: 'image/webp',
+    byteSize: 0,
+    cachedAtMs: 1000,
+  },
+  {
+    cacheKey: 'url:https://lh3.googleusercontent.com/d/offline_keep=w400',
+    sourceUrl: 'https://lh3.googleusercontent.com/d/offline_keep=w400',
+    blob: fakeValidBlob,
+    contentType: 'image/webp',
+    byteSize: 3000,
+    cachedAtMs: 1000,
+  },
+];
+
+const testOutcomes = new Map<string, UrlProbeOutcome>([
+  ['/api/photos/missing.webp', { status: 'inaccessible', reason: 'inaccessible_http' }],
+  ['/api/photos/ok.webp', { status: 'accessible' }],
+  ['/api/photos/shared_ok.webp', { status: 'accessible' }],
+  ['https://lh3.googleusercontent.com/d/offline_keep=w400', { status: 'skipped' }],
+]);
+
+const testCorruptedBlobs = new Map<string, PhotoCacheInvalidReason>([
+  ['url:/api/photos/corrupted_blob.webp', 'corrupted_blob'],
+]);
+
+const cleanupPlan = planPhotoCacheVerificationDeletions({
+  urlRows: testUrlRows,
+  blobRows: testBlobRows,
+  urlOutcomes: testOutcomes,
+  corruptedBlobReasons: testCorruptedBlobs,
+});
+
+assert.deepEqual(cleanupPlan.urlsToDelete, ['id:broken-1']);
+assert.ok(cleanupPlan.blobsToDelete.includes('url:/api/photos/missing.webp'), 'Blob de URL inacessível deve ser removido');
+assert.ok(cleanupPlan.blobsToDelete.includes('url:/api/photos/corrupted_blob.webp'), 'Blob corrompido deve ser removido');
+assert.ok(cleanupPlan.blobsToDelete.includes('alias:dangling_orphan'), 'Alias órfão deve ser removido');
+assert.ok(!cleanupPlan.blobsToDelete.includes('url:/api/photos/ok.webp'), 'Blob acessível deve ser preservado');
+assert.ok(!cleanupPlan.blobsToDelete.includes('url:/api/photos/shared_ok.webp'), 'Alias de URL válida deve ser preservado');
+assert.ok(!cleanupPlan.blobsToDelete.includes('url:https://lh3.googleusercontent.com/d/offline_keep=w400'), 'Cache ignorado offline deve ser preservado');
+assert.equal(cleanupPlan.freedBytes, 2048 + 1024);
+assert.equal(cleanupPlan.orphanedAliasesCount, 1);
+
+// Testes adicionais de segurança e LGPD
+const maskedCpf = maskSensitiveText('12345678901', 'cpf');
+assert.ok(maskedCpf.includes('***'), 'CPF deve estar mascarado');
+
+const maskedSus = maskSensitiveText('123456789012345', 'sus');
+assert.ok(maskedSus.includes('***'), 'Cartão SUS deve estar mascarado');
+
+console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting e cache IndexedDB de fotos passaram com sucesso!');
 
 

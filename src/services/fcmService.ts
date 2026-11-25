@@ -44,6 +44,7 @@ import {
   stripUndefinedDeep,
 } from './firebaseSync';
 import { isBackendApiAvailable } from './apiEnvironment';
+import { isRealtimeBusConnected } from './realtimeClient';
 import {
   PushNoticeItem,
   getPushPermissionState,
@@ -749,8 +750,20 @@ export function subscribeToFcmNotifications(params: {
     }
   });
 
-  // 2. Firestore real-time alerts (`school_fcm_alerts_2027`) sincronizado com estado Firebase Auth
+  // 2. Canal instantâneo via WebSocket/SSE do servidor dedicado
+  const handleRealtimeFcmEvent = (evt: Event) => {
+    const customEvt = evt as CustomEvent<FcmWindowAlert>;
+    if (customEvt?.detail) {
+      void processIncomingAlert(customEvt.detail);
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('emeb-realtime-fcm-alert', handleRealtimeFcmEvent);
+  }
+
+  // 3. Firestore real-time alerts (`school_fcm_alerts_2027`) apenas em hospedagem estática (sem backend)
   const attachFirestoreAlertsListener = () => {
+    if (isBackendApiAvailable()) return;
     if (unsubFirestoreAlerts) {
       unsubFirestoreAlerts();
       unsubFirestoreAlerts = null;
@@ -786,25 +799,27 @@ export function subscribeToFcmNotifications(params: {
     }
   };
 
-  try {
-    const auth = getAuth(app);
-    if (auth.currentUser) {
-      attachFirestoreAlertsListener();
-    }
-    unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (cancelled) return;
-      if (user) {
+  if (!isBackendApiAvailable()) {
+    try {
+      const auth = getAuth(app);
+      if (auth.currentUser) {
         attachFirestoreAlertsListener();
-      } else if (unsubFirestoreAlerts) {
-        unsubFirestoreAlerts();
-        unsubFirestoreAlerts = null;
       }
-    });
-  } catch {
-    // ignore
+      unsubAuth = onAuthStateChanged(auth, (user) => {
+        if (cancelled) return;
+        if (user) {
+          attachFirestoreAlertsListener();
+        } else if (unsubFirestoreAlerts) {
+          unsubFirestoreAlerts();
+          unsubFirestoreAlerts = null;
+        }
+      });
+    } catch {
+      // ignore
+    }
   }
 
-  // 3. Backend fallback polling para ambientes embutidos sem Firebase Auth popup
+  // 4. Backend inicial + fallback polling (apenas quando WebSocket/SSE estiver desconectado)
   const pollBackendAlerts = async () => {
     if (cancelled || !isBackendApiAvailable()) return;
     try {
@@ -831,14 +846,17 @@ export function subscribeToFcmNotifications(params: {
   if (isBackendApiAvailable()) {
     void pollBackendAlerts();
     pollIntervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !isRealtimeBusConnected()) {
         void pollBackendAlerts();
       }
-    }, 30000);
+    }, 60000);
   }
 
   return () => {
     cancelled = true;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('emeb-realtime-fcm-alert', handleRealtimeFcmEvent);
+    }
     if (unsubFcmForeground) unsubFcmForeground();
     if (unsubFirestoreAlerts) unsubFirestoreAlerts();
     if (unsubAuth) unsubAuth();
@@ -1320,18 +1338,27 @@ export async function dispatchWindowClosingFcmAlert(params: {
     }
   }
 
-  // 2. Publicar no Firestore `school_fcm_alerts_2027` para entrega realtime aos clientes
-  try {
-    const auth = getAuth(app);
-    if (auth.currentUser && !isFirestoreQuotaExceeded()) {
-      const alertRef = doc(firestoreDb, 'school_fcm_alerts_2027', alertId);
-      const alertPayload = stripUndefinedDeep(alert);
-      await commitViaUnaryTransaction((tx) => {
-        tx.set(alertRef, alertPayload);
-      });
+  // 2. Publicar no Firestore `school_fcm_alerts_2027` apenas como espelho (não bloqueante se backend ativo)
+  if (!isFirestoreQuotaExceeded()) {
+    const mirrorAlert = async () => {
+      try {
+        const auth = getAuth(app);
+        if (auth.currentUser) {
+          const alertRef = doc(firestoreDb, 'school_fcm_alerts_2027', alertId);
+          const alertPayload = stripUndefinedDeep(alert);
+          await commitViaUnaryTransaction((tx) => {
+            tx.set(alertRef, alertPayload);
+          });
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `school_fcm_alerts_2027/${alertId}`);
+      }
+    };
+    if (isBackendApiAvailable()) {
+      void mirrorAlert();
+    } else {
+      await mirrorAlert();
     }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `school_fcm_alerts_2027/${alertId}`);
   }
 
   // 3. Garantir feedback imediato local na central e Service Worker

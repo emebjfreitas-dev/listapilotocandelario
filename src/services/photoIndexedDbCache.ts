@@ -1,5 +1,7 @@
 import { getAuth } from 'firebase/auth';
 import { ClassGroup } from '../types';
+import { isBackendApiAvailable } from './apiEnvironment';
+import { getActiveUserAuthHeadersAsync } from './authSessionService';
 
 const PHOTO_CACHE_DB_NAME = 'emeb_candelario_student_photo_cache_v1';
 const PHOTO_CACHE_DB_VERSION = 2;
@@ -37,7 +39,7 @@ export interface StudentPhotoUrlRecord {
   updatedAtMs: number;
 }
 
-interface StudentPhotoBlobRecord {
+export interface StudentPhotoBlobRecord {
   cacheKey: string;
   targetCacheKey?: string; // Ponteiro leve sem duplicar Blob em disco
   sourceUrl: string;
@@ -2340,4 +2342,1315 @@ export const clearStudentPhotoIndexedDbCache = async (): Promise<void> => {
   } catch {
     // ignore
   }
+};
+
+export type PhotoCacheInvalidReason =
+  | 'empty_url'
+  | 'ephemeral_blob_url'
+  | 'malformed_url'
+  | 'corrupted_data_url'
+  | 'inaccessible_http'
+  | 'non_image_response'
+  | 'corrupted_blob'
+  | 'sha256_mismatch'
+  | 'orphaned_alias'
+  | 'obsolete_source_url';
+
+export type LocalPhotoUrlClassificationKind =
+  | 'empty'
+  | 'ephemeral_blob'
+  | 'data_url'
+  | 'api_photo'
+  | 'api_drive_photo'
+  | 'relative'
+  | 'external_http'
+  | 'malformed';
+
+export interface LocalPhotoUrlValidationResult {
+  valid: boolean;
+  normalizedUrl: string;
+  kind: LocalPhotoUrlClassificationKind;
+  reason?: PhotoCacheInvalidReason;
+  apiPhotoFilename?: string;
+}
+
+export type RemoteUrlProbeStatus =
+  | 'accessible'
+  | 'inaccessible'
+  | 'corrupted'
+  | 'skipped';
+
+export interface UrlProbeOutcome {
+  status: RemoteUrlProbeStatus;
+  reason?: PhotoCacheInvalidReason;
+}
+
+export interface PhotoCacheBatchVerificationProgress {
+  phase: 'scanning' | 'verifying_blobs' | 'verifying_urls' | 'cleaning' | 'done';
+  processed: number;
+  total: number;
+  accessibleCount: number;
+  inaccessibleCount: number;
+  corruptedCount: number;
+  orphanedCount: number;
+  skippedCount: number;
+  removedUrlRecords: number;
+  removedBlobRecords: number;
+  freedBytes: number;
+}
+
+export interface PhotoCacheInvalidEntrySample {
+  store: 'photo_urls' | 'photo_blobs';
+  key: string;
+  url?: string;
+  reason: PhotoCacheInvalidReason;
+  freedBytes: number;
+}
+
+export interface PhotoCacheBatchVerificationResult {
+  totalUrlRecordsChecked: number;
+  totalBlobRecordsChecked: number;
+  uniqueUrlsChecked: number;
+  accessibleUrlsCount: number;
+  inaccessibleUrlsCount: number;
+  corruptedUrlRecordsCount: number;
+  corruptedBlobsCount: number;
+  orphanedAliasesCount: number;
+  skippedNetworkChecksCount: number;
+  removedUrlRecords: number;
+  removedBlobRecords: number;
+  freedBytes: number;
+  obsoleteUrls: string[];
+  affectedStudentKeys: string[];
+  samples: PhotoCacheInvalidEntrySample[];
+  offlineModeUsed: boolean;
+  backendAvailable: boolean;
+  aborted: boolean;
+  durationMs: number;
+}
+
+export interface VerifyAndCleanPhotoCacheOptions {
+  activeClasses?: ClassGroup[];
+  checkRemoteUrls?: boolean;
+  verifyBlobDecode?: boolean;
+  verifySha256Integrity?: boolean;
+  pruneUnreferencedObsoleteBlobs?: boolean;
+  concurrency?: number;
+  requestTimeoutMs?: number;
+  signal?: AbortSignal;
+  onProgress?: (progress: PhotoCacheBatchVerificationProgress) => void;
+}
+
+const KNOWN_CORS_IMAGE_HOSTS = [
+  'drive.google.com',
+  'googleusercontent.com',
+  'docs.google.com',
+];
+
+const isKnownCorsStrictImageUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url, 'https://local.invalid');
+    const host = parsed.hostname.toLowerCase();
+    return KNOWN_CORS_IMAGE_HOSTS.some((domain) => host === domain || host.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
+};
+
+const extractApiPhotoFilename = (pathname: string): string => {
+  const match = pathname.match(/^\/api\/photos\/([^/?#]+)$/);
+  if (!match || !match[1]) return '';
+  try {
+    return decodeURIComponent(match[1]).trim();
+  } catch {
+    return match[1].trim();
+  }
+};
+
+/**
+ * Classifica e valida estruturalmente uma URL de foto sem realizar chamadas de rede.
+ */
+export const evaluateLocalPhotoUrlValidity = (
+  rawUrl?: string,
+  originBase?: string
+): LocalPhotoUrlValidationResult => {
+  const clean = (rawUrl || '').trim();
+  if (!clean) {
+    return {
+      valid: false,
+      normalizedUrl: '',
+      kind: 'empty',
+      reason: 'empty_url',
+    };
+  }
+
+  if (clean.startsWith('blob:')) {
+    return {
+      valid: false,
+      normalizedUrl: clean,
+      kind: 'ephemeral_blob',
+      reason: 'ephemeral_blob_url',
+    };
+  }
+
+  if (clean.startsWith('data:')) {
+    if (!/^data:image\/[a-z0-9.+-]+/i.test(clean) || !clean.includes(',')) {
+      return {
+        valid: false,
+        normalizedUrl: clean,
+        kind: 'data_url',
+        reason: 'corrupted_data_url',
+      };
+    }
+    const decoded = dataUrlToBlob(clean);
+    if (!decoded || decoded.size <= 0) {
+      return {
+        valid: false,
+        normalizedUrl: clean,
+        kind: 'data_url',
+        reason: 'corrupted_data_url',
+      };
+    }
+    return {
+      valid: true,
+      normalizedUrl: clean,
+      kind: 'data_url',
+    };
+  }
+
+  if (clean.includes('/drive/folders/')) {
+    return {
+      valid: false,
+      normalizedUrl: clean,
+      kind: 'malformed',
+      reason: 'malformed_url',
+    };
+  }
+
+  if (/^(javascript|vbscript|file):/i.test(clean)) {
+    return {
+      valid: false,
+      normalizedUrl: clean,
+      kind: 'malformed',
+      reason: 'malformed_url',
+    };
+  }
+
+  const base =
+    originBase ||
+    (typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://local.invalid');
+
+  if (clean.startsWith('/')) {
+    if (clean.includes('..')) {
+      return {
+        valid: false,
+        normalizedUrl: clean,
+        kind: 'malformed',
+        reason: 'malformed_url',
+      };
+    }
+    try {
+      const parsed = new URL(clean, base);
+      if (parsed.pathname.startsWith('/api/photos/')) {
+        const filename = extractApiPhotoFilename(parsed.pathname);
+        if (!filename || filename === '.' || filename === '..') {
+          return {
+            valid: false,
+            normalizedUrl: clean,
+            kind: 'malformed',
+            reason: 'malformed_url',
+          };
+        }
+        return {
+          valid: true,
+          normalizedUrl: clean,
+          kind: 'api_photo',
+          apiPhotoFilename: filename,
+        };
+      }
+      if (parsed.pathname.startsWith('/api/drive-photo/')) {
+        const idPart = parsed.pathname.slice('/api/drive-photo/'.length).trim();
+        if (!idPart) {
+          return {
+            valid: false,
+            normalizedUrl: clean,
+            kind: 'malformed',
+            reason: 'malformed_url',
+          };
+        }
+        return {
+          valid: true,
+          normalizedUrl: clean,
+          kind: 'api_drive_photo',
+        };
+      }
+      return {
+        valid: true,
+        normalizedUrl: clean,
+        kind: 'relative',
+      };
+    } catch {
+      return {
+        valid: false,
+        normalizedUrl: clean,
+        kind: 'malformed',
+        reason: 'malformed_url',
+      };
+    }
+  }
+
+  if (/^https?:\/\//i.test(clean)) {
+    try {
+      const parsed = new URL(clean);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return {
+          valid: false,
+          normalizedUrl: clean,
+          kind: 'malformed',
+          reason: 'malformed_url',
+        };
+      }
+      const isSameOrigin =
+        typeof window !== 'undefined' &&
+        Boolean(window.location?.origin) &&
+        parsed.origin === window.location.origin;
+
+      if (isSameOrigin && parsed.pathname.startsWith('/api/photos/')) {
+        const filename = extractApiPhotoFilename(parsed.pathname);
+        return filename
+          ? {
+              valid: true,
+              normalizedUrl: clean,
+              kind: 'api_photo',
+              apiPhotoFilename: filename,
+            }
+          : {
+              valid: false,
+              normalizedUrl: clean,
+              kind: 'malformed',
+              reason: 'malformed_url',
+            };
+      }
+      if (isSameOrigin && parsed.pathname.startsWith('/api/drive-photo/')) {
+        return {
+          valid: true,
+          normalizedUrl: clean,
+          kind: 'api_drive_photo',
+        };
+      }
+      return {
+        valid: true,
+        normalizedUrl: clean,
+        kind: 'external_http',
+      };
+    } catch {
+      return {
+        valid: false,
+        normalizedUrl: clean,
+        kind: 'malformed',
+        reason: 'malformed_url',
+      };
+    }
+  }
+
+  return {
+    valid: false,
+    normalizedUrl: clean,
+    kind: 'malformed',
+    reason: 'malformed_url',
+  };
+};
+
+export interface PhotoCacheCleanupPlan {
+  urlsToDelete: string[];
+  blobsToDelete: string[];
+  obsoleteUrls: string[];
+  affectedStudentKeys: string[];
+  freedBytes: number;
+  orphanedAliasesCount: number;
+  samples: PhotoCacheInvalidEntrySample[];
+}
+
+/**
+ * Planeja deterministicamente quais registros de URL e Blob devem ser removidos do IndexedDB,
+ * preservando Blobs canônicos deduplicados por SHA-256 que ainda tenham ao menos uma referência válida.
+ */
+export const planPhotoCacheVerificationDeletions = (params: {
+  urlRows: StudentPhotoUrlRecord[];
+  blobRows: StudentPhotoBlobRecord[];
+  urlOutcomes: Map<string, UrlProbeOutcome>;
+  corruptedBlobReasons: Map<string, PhotoCacheInvalidReason>;
+  activeClasses?: ClassGroup[];
+  pruneUnreferencedObsoleteBlobs?: boolean;
+}): PhotoCacheCleanupPlan => {
+  const {
+    urlRows,
+    blobRows,
+    urlOutcomes,
+    corruptedBlobReasons,
+    activeClasses = [],
+    pruneUnreferencedObsoleteBlobs = true,
+  } = params;
+
+  const isUrlBroken = (rawUrl?: string): { broken: boolean; reason?: PhotoCacheInvalidReason } => {
+    const clean = (rawUrl || '').trim();
+    if (!clean) return { broken: true, reason: 'empty_url' };
+    const outcome = urlOutcomes.get(clean);
+    if (!outcome) return { broken: false };
+    if (outcome.status === 'inaccessible' || outcome.status === 'corrupted') {
+      return {
+        broken: true,
+        reason: outcome.reason || 'inaccessible_http',
+      };
+    }
+    return { broken: false };
+  };
+
+  const urlsToDelete: string[] = [];
+  const urlsToDeleteSet = new Set<string>();
+  const obsoleteUrlsSet = new Set<string>();
+  const samples: PhotoCacheInvalidEntrySample[] = [];
+  const survivingUrlRows: StudentPhotoUrlRecord[] = [];
+
+  for (const row of urlRows) {
+    if (!row || !row.studentKey) continue;
+    const primary = (row.photoUrl || '').trim();
+    const secondary = (row.photoDriveUrl || '').trim();
+
+    if (!primary && !secondary) {
+      urlsToDelete.push(row.studentKey);
+      urlsToDeleteSet.add(row.studentKey);
+      if (samples.length < 40) {
+        samples.push({
+          store: 'photo_urls',
+          key: row.studentKey,
+          reason: 'empty_url',
+          freedBytes: 0,
+        });
+      }
+      continue;
+    }
+
+    const primaryCheck = primary ? isUrlBroken(primary) : { broken: true, reason: 'empty_url' as const };
+    const secondaryCheck = secondary ? isUrlBroken(secondary) : { broken: true, reason: 'empty_url' as const };
+
+    if (primary && primaryCheck.broken) {
+      obsoleteUrlsSet.add(primary);
+    }
+    if (secondary && secondaryCheck.broken) {
+      obsoleteUrlsSet.add(secondary);
+    }
+
+    if (primaryCheck.broken && secondaryCheck.broken) {
+      const reason = primaryCheck.reason || secondaryCheck.reason || 'inaccessible_http';
+      urlsToDelete.push(row.studentKey);
+      urlsToDeleteSet.add(row.studentKey);
+      if (samples.length < 40) {
+        samples.push({
+          store: 'photo_urls',
+          key: row.studentKey,
+          url: primary || secondary,
+          reason,
+          freedBytes: 0,
+        });
+      }
+    } else {
+      survivingUrlRows.push(row);
+    }
+  }
+
+  // Coleta chaves de Blob que continuam referenciadas por alguma URL válida ou turma ativa saudável
+  const protectedBlobKeys = new Set<string>();
+  for (const row of survivingUrlRows) {
+    const primary = (row.photoUrl || '').trim();
+    const secondary = (row.photoDriveUrl || '').trim();
+    if (primary && !isUrlBroken(primary).broken) {
+      buildPhotoBlobCacheKeys(primary, row.driveFileId).forEach((k) => protectedBlobKeys.add(k));
+    }
+    if (secondary && !isUrlBroken(secondary).broken) {
+      buildPhotoBlobCacheKeys(secondary, row.driveFileId).forEach((k) => protectedBlobKeys.add(k));
+    }
+  }
+
+  for (const cls of activeClasses) {
+    for (const st of cls.students || []) {
+      const pUrl = (st.photo || '').trim();
+      const dUrl = (st.photoDriveUrl || '').trim();
+      if (pUrl && !isUrlBroken(pUrl).broken) {
+        buildPhotoBlobCacheKeys(pUrl, st.photoDriveId).forEach((k) => protectedBlobKeys.add(k));
+      }
+      if (dUrl && !isUrlBroken(dUrl).broken) {
+        buildPhotoBlobCacheKeys(dUrl, st.photoDriveId).forEach((k) => protectedBlobKeys.add(k));
+      }
+    }
+  }
+
+  const blobByKey = new Map<string, StudentPhotoBlobRecord>();
+  for (const b of blobRows) {
+    if (b?.cacheKey) blobByKey.set(b.cacheKey, b);
+  }
+
+  // Protege chaves canônicas referenciadas por ponteiros sobreviventes
+  const protectedCanonicalKeys = new Set<string>();
+  for (const pk of protectedBlobKeys) {
+    const rec = blobByKey.get(pk);
+    if (!rec || corruptedBlobReasons.has(rec.cacheKey)) continue;
+    if (rec.targetCacheKey) {
+      if (!corruptedBlobReasons.has(rec.targetCacheKey)) {
+        protectedCanonicalKeys.add(rec.targetCacheKey);
+      }
+    } else if (rec.blob && rec.byteSize > 0) {
+      protectedCanonicalKeys.add(rec.cacheKey);
+    }
+  }
+
+  const blobsToDeleteSet = new Set<string>();
+  const blobDeleteReason = new Map<string, PhotoCacheInvalidReason>();
+
+  // 1) Blobs corrompidos são sempre removidos
+  corruptedBlobReasons.forEach((reason, key) => {
+    blobsToDeleteSet.add(key);
+    blobDeleteReason.set(key, reason);
+  });
+
+  // 2) Blobs cuja sourceUrl foi comprovadamente invalidada e não têm outra referência válida
+  if (pruneUnreferencedObsoleteBlobs) {
+    for (const row of blobRows) {
+      if (!row?.cacheKey || blobsToDeleteSet.has(row.cacheKey)) continue;
+      const source = (row.sourceUrl || '').trim();
+      if (!source) continue;
+      const sourceCheck = isUrlBroken(source);
+      if (sourceCheck.broken) {
+        obsoleteUrlsSet.add(source);
+        const isProtected =
+          protectedBlobKeys.has(row.cacheKey) || protectedCanonicalKeys.has(row.cacheKey);
+        if (!isProtected) {
+          blobsToDeleteSet.add(row.cacheKey);
+          blobDeleteReason.set(row.cacheKey, 'obsolete_source_url');
+        }
+      }
+    }
+  }
+
+  // Mapa de blobs canônicos sobreviventes por SHA-256 para resgatar aliases válidos se houver outro canônico íntegro
+  const survivingCanonicalBySha = new Map<string, string>();
+  for (const row of blobRows) {
+    if (!row?.cacheKey || blobsToDeleteSet.has(row.cacheKey)) continue;
+    if (row.blob && row.byteSize > 0 && row.sha256 && !survivingCanonicalBySha.has(row.sha256)) {
+      survivingCanonicalBySha.set(row.sha256, row.cacheKey);
+    }
+  }
+
+  // 3) Aliases órfãos (apontam para chave canônica removida ou inexistente sem substituto)
+  let orphanedAliasesCount = 0;
+  for (const row of blobRows) {
+    if (!row?.cacheKey || blobsToDeleteSet.has(row.cacheKey)) continue;
+    const isCanonical = Boolean(row.blob && row.byteSize > 0);
+    if (isCanonical) continue;
+
+    if (!row.targetCacheKey) {
+      blobsToDeleteSet.add(row.cacheKey);
+      blobDeleteReason.set(row.cacheKey, 'corrupted_blob');
+      continue;
+    }
+
+    const targetExistsAndSurvives =
+      blobByKey.has(row.targetCacheKey) && !blobsToDeleteSet.has(row.targetCacheKey);
+    const shaFallbackExists = Boolean(row.sha256 && survivingCanonicalBySha.has(row.sha256));
+
+    if (!targetExistsAndSurvives && !shaFallbackExists) {
+      blobsToDeleteSet.add(row.cacheKey);
+      blobDeleteReason.set(row.cacheKey, 'orphaned_alias');
+      orphanedAliasesCount++;
+    }
+  }
+
+  let freedBytes = 0;
+  const blobsToDelete: string[] = [];
+  blobsToDeleteSet.forEach((bk) => {
+    blobsToDelete.push(bk);
+    const rec = blobByKey.get(bk);
+    const bytes = rec && rec.blob && rec.byteSize > 0 ? rec.byteSize : 0;
+    freedBytes += bytes;
+    if (samples.length < 40) {
+      samples.push({
+        store: 'photo_blobs',
+        key: bk,
+        url: rec?.sourceUrl,
+        reason: blobDeleteReason.get(bk) || 'corrupted_blob',
+        freedBytes: bytes,
+      });
+    }
+  });
+
+  return {
+    urlsToDelete,
+    blobsToDelete,
+    obsoleteUrls: Array.from(obsoleteUrlsSet),
+    affectedStudentKeys: Array.from(urlsToDeleteSet),
+    freedBytes,
+    orphanedAliasesCount,
+    samples,
+  };
+};
+
+const combineAbortAndTimeout = (
+  timeoutMs: number,
+  externalSignal?: AbortSignal
+): { signal: AbortSignal; cleanup: () => void } => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', onAbort, { once: true });
+    }
+  }
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onAbort);
+      }
+    },
+  };
+};
+
+const probeImageElementAccessibility = (
+  url: string,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<UrlProbeOutcome> => {
+  if (typeof Image === 'undefined') {
+    return Promise.resolve({ status: 'skipped' });
+  }
+  if (signal?.aborted) {
+    return Promise.resolve({ status: 'skipped' });
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return Promise.resolve({ status: 'skipped' });
+  }
+
+  return new Promise<UrlProbeOutcome>((resolve) => {
+    const img = new Image();
+    img.referrerPolicy = 'no-referrer';
+    let settled = false;
+
+    const finish = (outcome: UrlProbeOutcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      img.onload = null;
+      img.onerror = null;
+      try {
+        img.src = '';
+      } catch {
+        // ignore
+      }
+      resolve(outcome);
+    };
+
+    const onAbort = () => finish({ status: 'skipped' });
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+
+    const timer = setTimeout(() => {
+      finish({ status: 'skipped' });
+    }, timeoutMs);
+
+    img.onload = () => {
+      const w = img.naturalWidth || img.width || 0;
+      const h = img.naturalHeight || img.height || 0;
+      if (w > 0 && h > 0) {
+        finish({ status: 'accessible' });
+      } else {
+        finish({ status: 'corrupted', reason: 'non_image_response' });
+      }
+    };
+
+    img.onerror = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        finish({ status: 'skipped' });
+        return;
+      }
+      finish({ status: 'inaccessible', reason: 'inaccessible_http' });
+    };
+
+    img.src = url;
+  });
+};
+
+const verifySingleRemoteUrl = async (
+  url: string,
+  validation: LocalPhotoUrlValidationResult,
+  options: {
+    backendReachable: boolean;
+    authHeaders: Record<string, string>;
+    timeoutMs: number;
+    signal?: AbortSignal;
+  }
+): Promise<UrlProbeOutcome> => {
+  if (options.signal?.aborted) return { status: 'skipped' };
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { status: 'skipped' };
+  }
+
+  // URLs internas /api/* só podem ser verificadas se o servidor Express estiver ativo e acessível
+  if (validation.kind === 'api_photo' || validation.kind === 'api_drive_photo') {
+    if (!options.backendReachable) {
+      return { status: 'skipped' };
+    }
+    const { signal, cleanup } = combineAbortAndTimeout(options.timeoutMs, options.signal);
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: options.authHeaders,
+        signal,
+        cache: 'no-store',
+      });
+      void res.body?.cancel().catch(() => {});
+
+      if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
+        return { status: 'skipped' };
+      }
+      if (res.status === 404 || res.status === 410 || res.status === 400) {
+        return { status: 'inaccessible', reason: 'inaccessible_http' };
+      }
+      if (!res.ok) {
+        return { status: 'skipped' };
+      }
+      const ctype = (res.headers.get('content-type') || '').toLowerCase();
+      if (ctype && !ctype.startsWith('image/') && !ctype.includes('octet-stream')) {
+        return { status: 'corrupted', reason: 'non_image_response' };
+      }
+      return { status: 'accessible' };
+    } catch {
+      return { status: 'skipped' };
+    } finally {
+      cleanup();
+    }
+  }
+
+  // URLs externas conhecidas por bloquear fetch CORS (Google Drive / CDN Google) usam sonda direta via <img>
+  if (isKnownCorsStrictImageUrl(url) || corsBlockedUrls.has(url)) {
+    return probeImageElementAccessibility(url, options.timeoutMs, options.signal);
+  }
+
+  const { signal, cleanup } = combineAbortAndTimeout(options.timeoutMs, options.signal);
+  try {
+    const res = await fetch(url, {
+      method: 'HEAD',
+      mode: 'cors',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      signal,
+      cache: 'no-store',
+    });
+
+    if (res.status === 404 || res.status === 410 || res.status === 400) {
+      return { status: 'inaccessible', reason: 'inaccessible_http' };
+    }
+    if (res.status === 405) {
+      // Alguns servidores/CDNs rejeitam HEAD mas entregam via <img>
+      return probeImageElementAccessibility(url, options.timeoutMs, options.signal);
+    }
+    if (res.status === 401 || res.status === 403) {
+      // CDN pública pode negar HEAD CORS mas permitir tag <img>
+      return probeImageElementAccessibility(url, options.timeoutMs, options.signal);
+    }
+    if (res.status === 429 || res.status >= 500) {
+      return { status: 'skipped' };
+    }
+    if (!res.ok) {
+      return { status: 'skipped' };
+    }
+
+    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+    if (ctype && !ctype.startsWith('image/') && !ctype.includes('octet-stream')) {
+      return { status: 'corrupted', reason: 'non_image_response' };
+    }
+    return { status: 'accessible' };
+  } catch {
+    if (options.signal?.aborted) return { status: 'skipped' };
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return { status: 'skipped' };
+    }
+    corsBlockedUrls.add(url);
+    return probeImageElementAccessibility(url, options.timeoutMs, options.signal);
+  } finally {
+    cleanup();
+  }
+};
+
+const verifyApiPhotoBatchWithServer = async (
+  filenames: string[],
+  authHeaders: Record<string, string>,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<Map<string, UrlProbeOutcome> | null> => {
+  if (filenames.length === 0) return new Map();
+  const result = new Map<string, UrlProbeOutcome>();
+  const CHUNK_SIZE = 400;
+
+  for (let i = 0; i < filenames.length; i += CHUNK_SIZE) {
+    if (signal?.aborted) return null;
+    const chunk = filenames.slice(i, i + CHUNK_SIZE);
+    const { signal: reqSignal, cleanup } = combineAbortAndTimeout(
+      Math.max(timeoutMs, 10000),
+      signal
+    );
+    try {
+      const res = await fetch('/api/photos/verify-batch', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ filenames: chunk }),
+        signal: reqSignal,
+      });
+
+      if (res.status === 404 || res.status === 405) {
+        return null; // Endpoint em lote indisponível: caller fará fallback individual
+      }
+      if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
+        chunk.forEach((name) => result.set(name, { status: 'skipped' }));
+        continue;
+      }
+      if (!res.ok) {
+        return null;
+      }
+      const data = (await res.json()) as {
+        ok?: boolean;
+        results?: Record<string, { accessible?: boolean; reason?: string }>;
+      };
+      const map = data?.results || {};
+      for (const name of chunk) {
+        const entry = map[name];
+        if (!entry) {
+          result.set(name, { status: 'skipped' });
+        } else if (entry.accessible) {
+          result.set(name, { status: 'accessible' });
+        } else {
+          result.set(name, {
+            status: 'inaccessible',
+            reason: entry.reason === 'empty' ? 'corrupted_blob' : 'inaccessible_http',
+          });
+        }
+      }
+    } catch {
+      return null;
+    } finally {
+      cleanup();
+    }
+  }
+
+  return result;
+};
+
+/**
+ * Executa verificação em lote no `photoIndexedDbCache`:
+ * 1. Valida integridade binária dos Blobs em IndexedDB (bytes não nulos, MIME de imagem, decodificação Canvas/ImageBitmap e SHA-256).
+ * 2. Valida estruturalmente todas as URLs em cache e, quando online, testa acessibilidade em lote
+ *    (usando `/api/photos/verify-batch` para fotos locais e sonda HTTP/Image para externas, sem deletar cache offline válido).
+ * 3. Remove entradas obsoletas, corrompidas ou órfãs dos object stores e da memória, liberando armazenamento local.
+ */
+export const verifyAndCleanPhotoIndexedDbCache = async (
+  options: VerifyAndCleanPhotoCacheOptions = {}
+): Promise<PhotoCacheBatchVerificationResult> => {
+  const startedAt = Date.now();
+  const checkRemoteUrls = options.checkRemoteUrls ?? true;
+  const verifyBlobDecode = options.verifyBlobDecode ?? true;
+  const verifySha256Integrity = options.verifySha256Integrity ?? true;
+  const pruneUnreferencedObsoleteBlobs = options.pruneUnreferencedObsoleteBlobs ?? true;
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? MAX_CONCURRENT_BLOB_FETCHES, 8));
+  const requestTimeoutMs = Math.max(2000, Math.min(options.requestTimeoutMs ?? 7000, 20000));
+
+  const isOnline = typeof navigator === 'undefined' || navigator.onLine !== false;
+  const backendConfigured = isBackendApiAvailable();
+  let backendReachable = false;
+
+  const progressState: PhotoCacheBatchVerificationProgress = {
+    phase: 'scanning',
+    processed: 0,
+    total: 0,
+    accessibleCount: 0,
+    inaccessibleCount: 0,
+    corruptedCount: 0,
+    orphanedCount: 0,
+    skippedCount: 0,
+    removedUrlRecords: 0,
+    removedBlobRecords: 0,
+    freedBytes: 0,
+  };
+
+  const emitProgress = () => {
+    options.onProgress?.({ ...progressState });
+  };
+
+  emitProgress();
+
+  let urlRows: StudentPhotoUrlRecord[] = [];
+  let blobRows: StudentPhotoBlobRecord[] = [];
+  let db: IDBDatabase | null = null;
+
+  try {
+    db = await openPhotoCacheDb();
+    await new Promise<void>((resolve) => {
+      const tx = db!.transaction([STORE_PHOTO_URLS, STORE_PHOTO_BLOBS], 'readonly');
+      tx.objectStore(STORE_PHOTO_URLS).getAll().onsuccess = (e: any) => {
+        urlRows = (e?.target?.result || []) as StudentPhotoUrlRecord[];
+      };
+      tx.objectStore(STORE_PHOTO_BLOBS).getAll().onsuccess = (e: any) => {
+        blobRows = (e?.target?.result || []) as StudentPhotoBlobRecord[];
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    });
+  } catch {
+    return {
+      totalUrlRecordsChecked: 0,
+      totalBlobRecordsChecked: 0,
+      uniqueUrlsChecked: 0,
+      accessibleUrlsCount: 0,
+      inaccessibleUrlsCount: 0,
+      corruptedUrlRecordsCount: 0,
+      corruptedBlobsCount: 0,
+      orphanedAliasesCount: 0,
+      skippedNetworkChecksCount: 0,
+      removedUrlRecords: 0,
+      removedBlobRecords: 0,
+      freedBytes: 0,
+      obsoleteUrls: [],
+      affectedStudentKeys: [],
+      samples: [],
+      offlineModeUsed: !isOnline,
+      backendAvailable: false,
+      aborted: Boolean(options.signal?.aborted),
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  // Classifica URLs únicas presentes em `photo_urls` e `photo_blobs`
+  const uniqueUrlsMap = new Map<string, LocalPhotoUrlValidationResult>();
+  const registerCandidateUrl = (raw?: string) => {
+    const clean = (raw || '').trim();
+    if (!clean || uniqueUrlsMap.has(clean)) return;
+    uniqueUrlsMap.set(clean, evaluateLocalPhotoUrlValidity(clean));
+  };
+
+  for (const row of urlRows) {
+    if (!row) continue;
+    registerCandidateUrl(row.photoUrl);
+    registerCandidateUrl(row.photoDriveUrl);
+  }
+  for (const row of blobRows) {
+    if (!row) continue;
+    if (row.sourceUrl) registerCandidateUrl(row.sourceUrl);
+  }
+
+  const canonicalBlobRows = blobRows.filter((b) => b && b.cacheKey && !b.targetCacheKey);
+  const urlOutcomes = new Map<string, UrlProbeOutcome>();
+  const corruptedBlobReasons = new Map<string, PhotoCacheInvalidReason>();
+
+  const remoteCheckList: Array<{ url: string; validation: LocalPhotoUrlValidationResult }> = [];
+  const dataUrlCheckList: string[] = [];
+  let corruptedUrlRecordsCount = 0;
+
+  uniqueUrlsMap.forEach((validation, url) => {
+    if (!validation.valid) {
+      urlOutcomes.set(url, {
+        status: 'corrupted',
+        reason: validation.reason || 'malformed_url',
+      });
+      corruptedUrlRecordsCount++;
+      return;
+    }
+    if (validation.kind === 'data_url') {
+      dataUrlCheckList.push(url);
+    } else {
+      remoteCheckList.push({ url, validation });
+    }
+  });
+
+  const shouldRunRemoteChecks = checkRemoteUrls && isOnline && remoteCheckList.length > 0;
+  progressState.total =
+    canonicalBlobRows.length +
+    dataUrlCheckList.length +
+    (shouldRunRemoteChecks ? remoteCheckList.length : 0);
+
+  // Fase 1: Validação de integridade binária e decodificação dos Blobs em IndexedDB
+  progressState.phase = 'verifying_blobs';
+  emitProgress();
+
+  const validateSingleBlobRow = async (row: StudentPhotoBlobRecord) => {
+    if (options.signal?.aborted) return;
+
+    if (!row.blob || !(row.blob instanceof Blob) || row.blob.size <= 0 || row.byteSize <= 0) {
+      corruptedBlobReasons.set(row.cacheKey, 'corrupted_blob');
+      progressState.corruptedCount++;
+      return;
+    }
+
+    const ctype = (row.contentType || row.blob.type || '').toLowerCase();
+    if (ctype && !ctype.startsWith('image/') && !ctype.includes('octet-stream')) {
+      corruptedBlobReasons.set(row.cacheKey, 'corrupted_blob');
+      progressState.corruptedCount++;
+      return;
+    }
+
+    if (
+      verifySha256Integrity &&
+      row.sha256 &&
+      /^[a-f0-9]{64}$/i.test(row.sha256) &&
+      typeof crypto !== 'undefined' &&
+      crypto.subtle
+    ) {
+      try {
+        const computed = await computeBufferSha256(row.blob);
+        if (computed.toLowerCase() !== row.sha256.toLowerCase()) {
+          corruptedBlobReasons.set(row.cacheKey, 'sha256_mismatch');
+          progressState.corruptedCount++;
+          return;
+        }
+      } catch {
+        corruptedBlobReasons.set(row.cacheKey, 'corrupted_blob');
+        progressState.corruptedCount++;
+        return;
+      }
+    }
+
+    if (verifyBlobDecode) {
+      try {
+        const decoded = await decodeBlobForCanvas(row.blob);
+        const validDims = decoded.width > 0 && decoded.height > 0;
+        decoded.cleanup();
+        if (!validDims) {
+          corruptedBlobReasons.set(row.cacheKey, 'corrupted_blob');
+          progressState.corruptedCount++;
+        }
+      } catch {
+        corruptedBlobReasons.set(row.cacheKey, 'corrupted_blob');
+        progressState.corruptedCount++;
+      }
+    }
+  };
+
+  let blobIdx = 0;
+  const runBlobWorker = async () => {
+    while (blobIdx < canonicalBlobRows.length) {
+      if (options.signal?.aborted) break;
+      const current = canonicalBlobRows[blobIdx++];
+      await validateSingleBlobRow(current);
+      progressState.processed++;
+      if (progressState.processed % 8 === 0 || blobIdx === canonicalBlobRows.length) {
+        emitProgress();
+        await yieldToEventLoop();
+      }
+    }
+  };
+
+  if (canonicalBlobRows.length > 0 && !options.signal?.aborted) {
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, canonicalBlobRows.length) }, () => runBlobWorker())
+    );
+  }
+
+  // Validação de decodificação de Data URLs locais
+  for (const dataUrl of dataUrlCheckList) {
+    if (options.signal?.aborted) break;
+    const blob = dataUrlToBlob(dataUrl);
+    if (!blob || blob.size <= 0) {
+      urlOutcomes.set(dataUrl, { status: 'corrupted', reason: 'corrupted_data_url' });
+      corruptedUrlRecordsCount++;
+      progressState.corruptedCount++;
+    } else if (verifyBlobDecode) {
+      try {
+        const decoded = await decodeBlobForCanvas(blob);
+        const ok = decoded.width > 0 && decoded.height > 0;
+        decoded.cleanup();
+        if (ok) {
+          urlOutcomes.set(dataUrl, { status: 'accessible' });
+          progressState.accessibleCount++;
+        } else {
+          urlOutcomes.set(dataUrl, { status: 'corrupted', reason: 'corrupted_data_url' });
+          corruptedUrlRecordsCount++;
+          progressState.corruptedCount++;
+        }
+      } catch {
+        urlOutcomes.set(dataUrl, { status: 'corrupted', reason: 'corrupted_data_url' });
+        corruptedUrlRecordsCount++;
+        progressState.corruptedCount++;
+      }
+    } else {
+      urlOutcomes.set(dataUrl, { status: 'accessible' });
+      progressState.accessibleCount++;
+    }
+    progressState.processed++;
+    if (progressState.processed % 8 === 0) {
+      emitProgress();
+      await yieldToEventLoop();
+    }
+  }
+
+  // Fase 2: Verificação remota em lote de acessibilidade de URLs (quando online)
+  let accessibleUrlsCount = progressState.accessibleCount;
+  let inaccessibleUrlsCount = 0;
+  let skippedNetworkChecksCount = 0;
+
+  if (!options.signal?.aborted) {
+    progressState.phase = 'verifying_urls';
+    emitProgress();
+
+    if (!shouldRunRemoteChecks) {
+      for (const item of remoteCheckList) {
+        urlOutcomes.set(item.url, { status: 'skipped' });
+        skippedNetworkChecksCount++;
+      }
+      progressState.skippedCount = skippedNetworkChecksCount;
+    } else {
+      let authHeaders: Record<string, string> = {};
+      if (backendConfigured) {
+        try {
+          authHeaders = await getActiveUserAuthHeadersAsync();
+        } catch {
+          authHeaders = {};
+        }
+        // Verifica uma única vez se o backend Express realmente responde antes de testar /api/*
+        const { signal: healthSignal, cleanup: cleanupHealth } = combineAbortAndTimeout(
+          4000,
+          options.signal
+        );
+        try {
+          const healthRes = await fetch('/api/health', {
+            method: 'GET',
+            credentials: 'include',
+            signal: healthSignal,
+            cache: 'no-store',
+          });
+          const ctype = (healthRes.headers.get('content-type') || '').toLowerCase();
+          backendReachable =
+            (healthRes.ok || healthRes.status === 401 || healthRes.status === 403) &&
+            ctype.includes('application/json');
+        } catch {
+          backendReachable = false;
+        } finally {
+          cleanupHealth();
+        }
+      }
+
+      // Separa URLs de `/api/photos/:filename` para verificação em lote no servidor
+      const apiPhotoItems: Array<{ url: string; filename: string }> = [];
+      const individualRemoteItems: Array<{ url: string; validation: LocalPhotoUrlValidationResult }> = [];
+
+      for (const item of remoteCheckList) {
+        if (item.validation.kind === 'api_photo' && item.validation.apiPhotoFilename && backendReachable) {
+          apiPhotoItems.push({ url: item.url, filename: item.validation.apiPhotoFilename });
+        } else {
+          individualRemoteItems.push(item);
+        }
+      }
+
+      if (apiPhotoItems.length > 0 && !options.signal?.aborted) {
+        const uniqueFilenames = Array.from(new Set(apiPhotoItems.map((x) => x.filename)));
+        const batchOutcomes = await verifyApiPhotoBatchWithServer(
+          uniqueFilenames,
+          authHeaders,
+          requestTimeoutMs,
+          options.signal
+        );
+
+        if (batchOutcomes) {
+          for (const item of apiPhotoItems) {
+            const outcome = batchOutcomes.get(item.filename) || { status: 'skipped' };
+            urlOutcomes.set(item.url, outcome);
+            if (outcome.status === 'accessible') {
+              accessibleUrlsCount++;
+              progressState.accessibleCount++;
+            } else if (outcome.status === 'inaccessible' || outcome.status === 'corrupted') {
+              inaccessibleUrlsCount++;
+              progressState.inaccessibleCount++;
+            } else {
+              skippedNetworkChecksCount++;
+              progressState.skippedCount++;
+            }
+            progressState.processed++;
+          }
+          emitProgress();
+        } else {
+          // Fallback para verificação individual se endpoint em lote não respondeu
+          for (const item of apiPhotoItems) {
+            individualRemoteItems.push({
+              url: item.url,
+              validation: uniqueUrlsMap.get(item.url)!,
+            });
+          }
+        }
+      }
+
+      let remoteIdx = 0;
+      const runRemoteWorker = async () => {
+        while (remoteIdx < individualRemoteItems.length) {
+          if (options.signal?.aborted) break;
+          const item = individualRemoteItems[remoteIdx++];
+          const outcome = await verifySingleRemoteUrl(item.url, item.validation, {
+            backendReachable,
+            authHeaders,
+            timeoutMs: requestTimeoutMs,
+            signal: options.signal,
+          });
+          urlOutcomes.set(item.url, outcome);
+          if (outcome.status === 'accessible') {
+            accessibleUrlsCount++;
+            progressState.accessibleCount++;
+          } else if (outcome.status === 'inaccessible' || outcome.status === 'corrupted') {
+            inaccessibleUrlsCount++;
+            progressState.inaccessibleCount++;
+          } else {
+            skippedNetworkChecksCount++;
+            progressState.skippedCount++;
+          }
+          progressState.processed++;
+          if (progressState.processed % 4 === 0 || remoteIdx === individualRemoteItems.length) {
+            emitProgress();
+            await yieldToEventLoop();
+          }
+        }
+      };
+
+      if (individualRemoteItems.length > 0 && !options.signal?.aborted) {
+        await Promise.all(
+          Array.from({ length: Math.min(concurrency, individualRemoteItems.length) }, () =>
+            runRemoteWorker()
+          )
+        );
+      }
+    }
+  }
+
+  // Se abortado pelo usuário, não aplica exclusões parciais
+  if (options.signal?.aborted) {
+    return {
+      totalUrlRecordsChecked: urlRows.length,
+      totalBlobRecordsChecked: blobRows.length,
+      uniqueUrlsChecked: uniqueUrlsMap.size,
+      accessibleUrlsCount,
+      inaccessibleUrlsCount,
+      corruptedUrlRecordsCount,
+      corruptedBlobsCount: corruptedBlobReasons.size,
+      orphanedAliasesCount: 0,
+      skippedNetworkChecksCount,
+      removedUrlRecords: 0,
+      removedBlobRecords: 0,
+      freedBytes: 0,
+      obsoleteUrls: [],
+      affectedStudentKeys: [],
+      samples: [],
+      offlineModeUsed: !isOnline || !checkRemoteUrls,
+      backendAvailable: backendReachable,
+      aborted: true,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  // Fase 3: Planejamento e remoção em lote das entradas obsoletas/corrompidas no IndexedDB e memória
+  progressState.phase = 'cleaning';
+  emitProgress();
+
+  const plan = planPhotoCacheVerificationDeletions({
+    urlRows,
+    blobRows,
+    urlOutcomes,
+    corruptedBlobReasons,
+    activeClasses: options.activeClasses,
+    pruneUnreferencedObsoleteBlobs,
+  });
+
+  progressState.orphanedCount = plan.orphanedAliasesCount;
+
+  if (db && (plan.urlsToDelete.length > 0 || plan.blobsToDelete.length > 0)) {
+    const deletedBlobSet = new Set(plan.blobsToDelete);
+
+    for (let i = 0; i < plan.urlsToDelete.length; i += IDB_BATCH_COMMIT_SIZE * 2) {
+      const chunk = plan.urlsToDelete.slice(i, i + IDB_BATCH_COMMIT_SIZE * 2);
+      await new Promise<void>((resolve) => {
+        const tx = db!.transaction(STORE_PHOTO_URLS, 'readwrite');
+        const store = tx.objectStore(STORE_PHOTO_URLS);
+        for (const k of chunk) {
+          store.delete(k);
+          memoryUrlMap.delete(k);
+        }
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      });
+    }
+
+    for (let i = 0; i < plan.blobsToDelete.length; i += IDB_BATCH_COMMIT_SIZE * 2) {
+      const chunk = plan.blobsToDelete.slice(i, i + IDB_BATCH_COMMIT_SIZE * 2);
+      await new Promise<void>((resolve) => {
+        const tx = db!.transaction(STORE_PHOTO_BLOBS, 'readwrite');
+        const store = tx.objectStore(STORE_PHOTO_BLOBS);
+        for (const bk of chunk) {
+          store.delete(bk);
+          memoryBlobObjectUrlMap.delete(bk);
+          attemptedFetchKeys.delete(bk);
+        }
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      });
+    }
+
+    memoryShaToCanonicalKeyMap.forEach((canonicalKey, sha) => {
+      if (deletedBlobSet.has(canonicalKey)) {
+        memoryShaToCanonicalKeyMap.delete(sha);
+      }
+    });
+
+    revokeUnusedMemoryObjectUrls();
+    readyListeners.forEach((cb) => {
+      try {
+        cb();
+      } catch {
+        // ignore
+      }
+    });
+  }
+
+  progressState.phase = 'done';
+  progressState.removedUrlRecords = plan.urlsToDelete.length;
+  progressState.removedBlobRecords = plan.blobsToDelete.length;
+  progressState.freedBytes = plan.freedBytes;
+  emitProgress();
+
+  return {
+    totalUrlRecordsChecked: urlRows.length,
+    totalBlobRecordsChecked: blobRows.length,
+    uniqueUrlsChecked: uniqueUrlsMap.size,
+    accessibleUrlsCount,
+    inaccessibleUrlsCount,
+    corruptedUrlRecordsCount,
+    corruptedBlobsCount: corruptedBlobReasons.size,
+    orphanedAliasesCount: plan.orphanedAliasesCount,
+    skippedNetworkChecksCount,
+    removedUrlRecords: plan.urlsToDelete.length,
+    removedBlobRecords: plan.blobsToDelete.length,
+    freedBytes: plan.freedBytes,
+    obsoleteUrls: plan.obsoleteUrls,
+    affectedStudentKeys: plan.affectedStudentKeys,
+    samples: plan.samples,
+    offlineModeUsed: !isOnline || !checkRemoteUrls,
+    backendAvailable: backendReachable,
+    aborted: false,
+    durationMs: Date.now() - startedAt,
+  };
 };

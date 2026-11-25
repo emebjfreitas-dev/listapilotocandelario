@@ -732,7 +732,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
             ) : isCloudBusy ? (
               <div
                 data-status="saving"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0e3a8a] text-white font-medium text-xs shadow-2xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0071E3] text-white font-medium text-xs shadow-2xs"
                 title="Sincronizando alterações com a nuvem e dispositivo..."
               >
                 <SFSymbol name="sync" size={15} weight={500} className="animate-spin text-white" />
@@ -741,7 +741,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
             ) : (
               <div
                 data-status="success"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#047857] text-white font-medium text-xs shadow-2xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1B873F] text-white font-medium text-xs shadow-2xs"
                 title="Salvo automaticamente neste dispositivo e sincronizado com a nuvem"
               >
                 <SFSymbol
@@ -756,62 +756,62 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
           </div>
         </div>
 
-        {/* Linha 2: Seletor de Competência Mensal Redesenhado (Navy Institucional) */}
+        {/* Linha 2: Seletor de Competência Mensal Redesenhado */}
         {isPeb1 ? (
           <div
-            className="rounded-2xl bg-[#eef3fa] px-3.5 py-2.5 flex items-center justify-between gap-2 min-w-0"
+            className="rounded-2xl bg-[#F5F5F7] border border-black/[0.06] px-3.5 py-2.5 flex items-center justify-between gap-2 min-w-0"
             title={`Como PEB I, o lançamento de faltas é restrito ao mês vigente (${activeReferenceMonthName}).`}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <span className="w-8 h-8 rounded-xl bg-[#0e3a8a] text-white flex items-center justify-center shrink-0">
-                <SFSymbol name="lock" size={16} weight={500} className="text-white" />
+              <span className="w-8 h-8 rounded-full bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center shrink-0">
+                <SFSymbol name="lock" size={16} weight={500} />
               </span>
               <div className="min-w-0">
-                <span className="block text-[11px] font-medium text-slate-600">
+                <span className="block text-[11px] font-medium text-[#86868B]">
                   Mês vigente de lançamento
                 </span>
-                <span className="block text-sm font-semibold text-slate-950 truncate">
+                <span className="block text-sm font-semibold text-[#1D1D1F] truncate">
                   {selectedMonthName} 2027
                 </span>
               </div>
             </div>
             <span
               data-status="info"
-              className="px-2.5 py-1 rounded-xl bg-[#0e3a8a] text-white font-medium text-xs tabular-nums shrink-0"
+              className="px-2.5 py-1 rounded-full bg-[#0071E3] text-white font-medium text-xs tabular-nums shrink-0"
             >
               {diasLetivosMes}d letivos
             </span>
           </div>
         ) : (
-          <div className="rounded-2xl bg-[#eef3fa] p-2 sm:p-2.5 space-y-2 min-w-0">
+          <div className="rounded-2xl bg-[#F5F5F7] border border-black/[0.06] p-2 sm:p-2.5 space-y-2 min-w-0">
             {/* Stepper Principal com Mês, Ano e Dias Letivos */}
             <div className="flex items-center justify-between gap-2 min-w-0">
               <button
                 type="button"
                 disabled={!previousPeriodName}
                 onClick={() => previousPeriodName && handleMonthChange(previousPeriodName)}
-                className="w-11 h-11 rounded-xl bg-white hover:bg-[#dfe8f4] text-[#0e3a8a] flex items-center justify-center cursor-pointer transition-colors shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shrink-0"
+                className="w-10 h-10 rounded-full bg-white hover:bg-black/[0.05] text-[#1D1D1F] flex items-center justify-center cursor-pointer transition-colors border border-black/[0.06] disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shrink-0"
                 title={previousPeriodName ? `Mês anterior: ${previousPeriodName}` : 'Primeiro mês letivo'}
                 aria-label={previousPeriodName ? `Mês anterior: ${previousPeriodName}` : 'Primeiro mês letivo'}
               >
-                <SFSymbol name="chevron_left" size={22} weight={600} />
+                <SFSymbol name="chevron_left" size={20} weight={600} />
               </button>
 
               <div className="flex-1 flex items-center justify-center gap-2 min-w-0 px-1">
                 <SFSymbol
                   name="calendar_month"
-                  size={19}
+                  size={18}
                   filled
-                  className="text-[#0e3a8a] shrink-0"
+                  className="text-[#0071E3] shrink-0"
                 />
-                <span className="text-[15px] sm:text-base font-semibold text-slate-950 truncate tracking-tight">
+                <span className="text-[15px] sm:text-base font-semibold text-[#1D1D1F] truncate tracking-tight">
                   {selectedMonthName} 2027
                 </span>
                 <span
                   data-status="info"
-                  className="px-2 py-0.5 rounded-lg bg-[#0e3a8a] text-white text-[11px] font-medium tabular-nums shrink-0"
+                  className="px-2.5 py-0.5 rounded-full bg-[#0071E3] text-white text-[11px] font-medium tabular-nums shrink-0"
                 >
-                  {diasLetivosMes}d letivos
+                  {diasLetivosMes} {diasLetivosMes === 1 ? 'dia letivo' : 'dias letivos'}
                 </span>
               </div>
 
@@ -819,15 +819,15 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                 type="button"
                 disabled={!nextPeriodName}
                 onClick={() => nextPeriodName && handleMonthChange(nextPeriodName)}
-                className="w-11 h-11 rounded-xl bg-white hover:bg-[#dfe8f4] text-[#0e3a8a] flex items-center justify-center cursor-pointer transition-colors shadow-2xs disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shrink-0"
+                className="w-10 h-10 rounded-full bg-white hover:bg-black/[0.05] text-[#1D1D1F] flex items-center justify-center cursor-pointer transition-colors border border-black/[0.06] disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shrink-0"
                 title={nextPeriodName ? `Próximo mês: ${nextPeriodName}` : 'Último mês letivo'}
                 aria-label={nextPeriodName ? `Próximo mês: ${nextPeriodName}` : 'Último mês letivo'}
               >
-                <SFSymbol name="chevron_right" size={22} weight={600} />
+                <SFSymbol name="chevron_right" size={20} weight={600} />
               </button>
             </div>
 
-            {/* Faixa de Acesso Direto aos Meses Letivos (Sem Dropdown Nativo) */}
+            {/* Faixa de Acesso Direto aos Meses Letivos */}
             <div
               ref={monthStripRef}
               role="tablist"
@@ -837,7 +837,6 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
               {MONTHLY_SCHOOL_DAYS_2027.map((m) => {
                 const isSelected = m.month.toLowerCase() === selectedMonthName.toLowerCase();
                 const daysForClass = getClassSchoolDaysForMonth(classGroup, m.month);
-                const shortMonth = m.month.slice(0, 3);
                 return (
                   <button
                     key={m.month}
@@ -849,16 +848,16 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                     aria-selected={isSelected}
                     onClick={() => handleMonthChange(m.month)}
                     title={`${m.month} 2027 · ${daysForClass} dias letivos`}
-                    className={`min-h-[38px] px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 snap-center cursor-pointer transition-all active:scale-95 flex items-center gap-1 ${
+                    className={`min-h-[34px] px-3.5 rounded-full text-xs font-medium whitespace-nowrap shrink-0 snap-center cursor-pointer transition-all active:scale-95 flex items-center gap-1 ${
                       isSelected
-                        ? 'bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] text-white shadow-[0_6px_14px_-4px_rgba(14,58,138,0.45)]'
-                        : 'bg-white/90 text-slate-700 hover:bg-white hover:text-[#0e3a8a]'
+                        ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
+                        : 'bg-white text-[#86868B] hover:text-[#1D1D1F] border border-black/[0.06]'
                     }`}
                   >
-                    <span>{shortMonth}</span>
+                    <span>{m.month}</span>
                     {isSelected && (
-                      <span className="text-[10px] font-medium text-blue-100 tabular-nums">
-                        · {daysForClass}d
+                      <span className="text-[10px] font-medium text-white/80 tabular-nums">
+                        · {daysForClass} {daysForClass === 1 ? 'dia' : 'dias'}
                       </span>
                     )}
                   </button>
@@ -878,7 +877,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
               {liveClassMetrics.presenceRate}%
             </span>
             <span className="block text-[11px] text-slate-600 truncate mt-0.5">
-              {liveClassMetrics.totalPresencasTurma}/{liveClassMetrics.totalDiasMatriculadosTurma} P
+              {liveClassMetrics.totalPresencasTurma}/{liveClassMetrics.totalDiasMatriculadosTurma} presenças
             </span>
           </div>
 
@@ -894,7 +893,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
               {formatFaltas(liveClassMetrics.totalFaltasTurma)}
             </span>
             <span className="block text-[11px] text-slate-600 truncate mt-0.5">
-              {detailedIndicators.faltasSemAtestadoTurma} FNJ · {formatAtestados(liveClassMetrics.totalAtestadosTurma)}
+              {detailedIndicators.faltasSemAtestadoTurma} sem atestado · {formatAtestados(liveClassMetrics.totalAtestadosTurma)}
             </span>
           </div>
 
@@ -903,7 +902,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
               Assiduidade
             </span>
             <span className="block text-base sm:text-xl font-semibold text-slate-950 leading-tight mt-0.5">
-              {detailedIndicators.countZeroFaltas} sem F
+              {detailedIndicators.countZeroFaltas} sem faltas
             </span>
             <span
               className={`block text-[11px] truncate mt-0.5 ${
@@ -933,7 +932,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
               onChange={(e) => setSearchName(e.target.value)}
               placeholder="Buscar nº ou nome..."
               aria-label="Buscar por número ou nome do estudante"
-              className="w-full min-h-[44px] pl-10 pr-11 bg-[#f3f6fb] text-slate-950 text-sm rounded-2xl font-medium placeholder:text-slate-600 focus:bg-[#eef3f9] transition-colors"
+              className="w-full min-h-[42px] pl-10 pr-11 bg-white text-[#1D1D1F] text-sm rounded-full font-normal placeholder:text-[#86868B] border border-black/[0.08] shadow-2xs focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 focus:outline-hidden transition-all"
             />
             {searchName && (
               <button
@@ -943,26 +942,26 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                   setSearchName('');
                 }}
                 aria-label="Limpar busca"
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-950 cursor-pointer"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] cursor-pointer"
               >
-                <SFSymbol name="close" size={18} />
+                <SFSymbol name="close" size={16} />
               </button>
             )}
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-w-0">
-            {/* Filtro Rápido com Texto Integral (Zero Reticências) */}
-            <div className="grid grid-cols-3 sm:inline-flex items-center gap-1 bg-[#f3f6fb] p-1 rounded-2xl w-full sm:w-auto tabular-nums">
+            {/* Filtro Rápido */}
+            <div className="grid grid-cols-3 sm:inline-flex items-center gap-1 bg-[#F5F5F7] p-1 rounded-full w-full sm:w-auto tabular-nums border border-black/[0.06]">
               <button
                 type="button"
                 onClick={() => {
                   triggerMenuHaptic('light');
                   setQuickFilter('all');
                 }}
-                className={`min-h-[40px] px-2 sm:px-3.5 rounded-xl text-[11.5px] sm:text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center justify-center ${
+                className={`min-h-[34px] px-3.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex items-center justify-center ${
                   quickFilter === 'all'
-                    ? 'bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] text-white shadow-2xs'
-                    : 'text-slate-700 hover:text-slate-950'
+                    ? 'bg-[#0071E3] text-white shadow-xs font-semibold'
+                    : 'text-[#86868B] hover:text-[#1D1D1F]'
                 }`}
               >
                 Todos ({students.length})
@@ -973,10 +972,10 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                   triggerMenuHaptic('light');
                   setQuickFilter('faltas');
                 }}
-                className={`min-h-[40px] px-2 sm:px-3.5 rounded-xl text-[11.5px] sm:text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center justify-center ${
+                className={`min-h-[34px] px-3.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex items-center justify-center ${
                   quickFilter === 'faltas'
-                    ? 'bg-[#be123c] text-white shadow-2xs'
-                    : 'text-[#be123c] hover:bg-rose-100/70'
+                    ? 'bg-[#D70015] text-white shadow-xs font-semibold'
+                    : 'text-[#D70015] hover:bg-[#FFEBEB]'
                 }`}
               >
                 Faltas ({detailedIndicators.countWithFaltas})
@@ -987,10 +986,10 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                   triggerMenuHaptic('light');
                   setQuickFilter('atestados');
                 }}
-                className={`min-h-[40px] px-2 sm:px-3.5 rounded-xl text-[11.5px] sm:text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center justify-center ${
+                className={`min-h-[34px] px-3.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex items-center justify-center ${
                   quickFilter === 'atestados'
-                    ? 'bg-[#0e3a8a] text-white shadow-2xs'
-                    : 'text-[#0e3a8a] hover:bg-blue-100/70'
+                    ? 'bg-[#0071E3] text-white shadow-xs font-semibold'
+                    : 'text-[#0071E3] hover:bg-[#0071E3]/10'
                 }`}
               >
                 Atestados ({detailedIndicators.countWithAtestados})
@@ -998,20 +997,20 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
             </div>
 
             {/* Alternador Lista / Cartões */}
-            <div className="grid grid-cols-2 sm:inline-flex items-center gap-1 bg-[#f3f6fb] p-1 rounded-2xl w-full sm:w-auto shrink-0">
+            <div className="grid grid-cols-2 sm:inline-flex items-center gap-0.5 bg-[#F5F5F7] p-1 rounded-full w-full sm:w-auto shrink-0 border border-black/[0.06]">
               <button
                 type="button"
                 onClick={() => {
                   triggerMenuHaptic('light');
                   setAttendanceViewMode('compact');
                 }}
-                className={`min-h-[40px] px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap ${
+                className={`min-h-[32px] px-3.5 rounded-full text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all whitespace-nowrap ${
                   attendanceViewMode === 'compact'
-                    ? 'bg-white text-[#0e3a8a] font-semibold shadow-2xs'
-                    : 'text-slate-700 hover:text-slate-950 font-medium'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F] font-medium'
                 }`}
               >
-                <SFSymbol name="format_list_bulleted" size={17} />
+                <SFSymbol name="format_list_bulleted" size={16} />
                 <span>Lista</span>
               </button>
               <button
@@ -1020,13 +1019,13 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                   triggerMenuHaptic('light');
                   setAttendanceViewMode('cards');
                 }}
-                className={`min-h-[40px] px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap ${
+                className={`min-h-[32px] px-3.5 rounded-full text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all whitespace-nowrap ${
                   attendanceViewMode === 'cards'
-                    ? 'bg-white text-[#0e3a8a] font-semibold shadow-2xs'
-                    : 'text-slate-700 hover:text-slate-950 font-medium'
+                    ? 'bg-white text-[#1D1D1F] font-semibold shadow-xs'
+                    : 'text-[#86868B] hover:text-[#1D1D1F] font-medium'
                 }`}
               >
-                <SFSymbol name="grid_view" size={17} />
+                <SFSymbol name="grid_view" size={16} />
                 <span>Cartões</span>
               </button>
             </div>
@@ -1036,9 +1035,9 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
 
       {/* ESTADO VAZIO (SEM ESTUDANTES OU BUSCA/FILTRO ZERADO) */}
       {displayedStudents.length === 0 ? (
-        <section className="bg-white rounded-3xl p-8 sm:p-10 text-center space-y-3 shadow-2xs">
-          <div className="w-12 h-12 rounded-2xl bg-[#eef3fa] text-[#0e3a8a] flex items-center justify-center mx-auto">
-            <SFSymbol name="groups" size={26} filled />
+        <section className="bg-white rounded-3xl p-8 sm:p-10 text-center space-y-3 border border-black/[0.06] shadow-sm">
+          <div className="w-12 h-12 rounded-full bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto">
+            <SFSymbol name="groups" size={24} filled />
           </div>
           <h2 className="text-base sm:text-lg font-semibold text-slate-950">
             {students.length === 0
@@ -1059,7 +1058,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                   setSearchName('');
                   setQuickFilter('all');
                 }}
-                className="min-h-[44px] px-5 rounded-2xl bg-[#0e3a8a] hover:bg-[#0a2d6e] text-white text-xs font-semibold cursor-pointer shadow-xs"
+                className="min-h-[44px] px-6 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold cursor-pointer shadow-xs"
               >
                 Mostrar todos os estudantes ({students.length})
               </button>
@@ -1123,7 +1122,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             ? 'bg-[#6d28d9]'
                             : isOtherNonActive
                             ? 'bg-[#334155]'
-                            : 'bg-[#0e3a8a]'
+                            : 'bg-[#0071E3]'
                         }`}
                       >
                         {student.number.toString().padStart(2, '0')}
@@ -1148,7 +1147,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                           {isSavingThis && (
                             <span
                               data-status="saving"
-                              className="px-2 py-0.5 rounded-md bg-[#0e3a8a] text-white text-[11px] font-medium inline-flex items-center gap-1"
+                              className="px-2 py-0.5 rounded-md bg-[#0071E3] text-white text-[11px] font-medium inline-flex items-center gap-1"
                             >
                               <SFSymbol name="sync" size={12} className="animate-spin text-white" />
                               <span>Salvando...</span>
@@ -1182,7 +1181,8 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                           >
                             <span>{formatFreqPercent(m.frequenciaPercent)}</span>
                             <span className="opacity-90">
-                              ({m.presencas}/{m.diasLetivosMatriculados} {formatDL(m.diasLetivosMatriculados).split(' ')[1]})
+                              ({m.presencas}/{m.diasLetivosMatriculados}{' '}
+                              {m.diasLetivosMatriculados === 1 ? 'Dia Letivo' : 'Dias Letivos'})
                             </span>
                           </span>
 
@@ -1202,7 +1202,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                           {m.atestados > 0 && (
                             <span
                               data-status="info"
-                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-[#0e3a8a] text-white font-medium text-[11px]"
+                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-[#0071E3] text-white font-medium text-[11px]"
                             >
                               {formatAtestados(m.atestados)}
                             </span>
@@ -1217,7 +1217,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                                 onNavigateToConsecutiveAbsences();
                               }}
                               title="Abrir Busca Ativa para registrar contato com a família"
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#0e3a8a] hover:bg-[#0a2d6e] text-white font-medium text-[11px] cursor-pointer transition-colors"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-[11px] cursor-pointer transition-colors"
                             >
                               <SFSymbol name="gpp_maybe" size={13} weight={500} />
                               <span>Busca Ativa</span>
@@ -1242,7 +1242,8 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             Faltas
                           </span>
                           <span className="text-[11px] font-medium text-slate-700 tabular-nums block">
-                            máx {m.diasLetivosMatriculados}d
+                            máximo {m.diasLetivosMatriculados}{' '}
+                            {m.diasLetivosMatriculados === 1 ? 'dia' : 'dias'}
                           </span>
                         </div>
 
@@ -1266,8 +1267,8 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onChange={(e) => handleDirectSetAbsence(student.id, e.target.value)}
                             aria-label={`Digitar faltas de ${student.name}`}
                             title="Toque para digitar o número de faltas diretamente"
-                            className={`w-12 sm:w-13 h-11 rounded-xl text-center font-semibold text-lg sm:text-xl tabular-nums bg-white shadow-xs transition-all ${
-                              m.faltas > 0 ? 'text-[#be123c]' : 'text-slate-950'
+                            className={`w-12 sm:w-13 h-10 rounded-xl text-center font-semibold text-lg sm:text-xl tabular-nums bg-white border border-black/[0.08] shadow-2xs transition-all ${
+                              m.faltas > 0 ? 'text-[#D70015]' : 'text-[#1D1D1F]'
                             }`}
                           />
 
@@ -1276,7 +1277,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onClick={() => handleDeltaAbsence(student.id, 1)}
                             disabled={!effectiveCanEdit || isMaxFaltasReached}
                             aria-label={`Adicionar falta para ${student.name}`}
-                            className="w-11 h-11 sm:w-11 sm:h-11 rounded-xl bg-[#0e3a8a] hover:bg-[#0a2d6e] text-white font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
+                            className="w-10 h-10 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
                           >
                             +
                           </button>
@@ -1287,15 +1288,15 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                       <div
                         className={`flex items-center justify-between sm:justify-start gap-2 sm:gap-3 px-3 sm:px-3.5 py-2.5 rounded-2xl transition-colors min-w-0 ${
                           m.atestados > 0
-                            ? 'bg-sky-100/90 text-sky-950'
-                            : 'bg-[#f3f6fb] text-slate-900'
+                            ? 'bg-[#0071E3]/10 text-[#0071E3]'
+                            : 'bg-[#F5F5F7] text-[#1D1D1F]'
                         }`}
                       >
                         <div className="pr-1 min-w-0">
-                          <span className="text-xs sm:text-[13px] font-semibold uppercase tracking-wider text-sky-950 block leading-tight">
+                          <span className="text-xs sm:text-[13px] font-semibold uppercase tracking-wider text-[#0071E3] block leading-tight">
                             Atestado
                           </span>
-                          <span className="text-[11px] font-medium text-slate-700 tabular-nums block">
+                          <span className="text-[11px] font-medium text-[#86868B] tabular-nums block">
                             {m.faltas === 0 ? '0 faltas' : `de ${m.faltas}`}
                           </span>
                         </div>
@@ -1306,7 +1307,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onClick={() => handleDeltaAtestado(student.id, -1)}
                             disabled={!effectiveCanEdit || m.atestados === 0}
                             aria-label={`Diminuir atestado de ${student.name}`}
-                            className="w-11 h-11 rounded-xl bg-white hover:bg-slate-200 text-sky-950 font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
+                            className="w-10 h-10 rounded-full bg-white hover:bg-black/[0.05] text-[#1D1D1F] border border-black/[0.06] font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
                           >
                             —
                           </button>
@@ -1320,8 +1321,8 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onChange={(e) => handleDirectSetAtestado(student.id, e.target.value)}
                             aria-label={`Digitar atestados de ${student.name}`}
                             title="Toque para digitar o número de atestados diretamente"
-                            className={`w-12 sm:w-13 h-11 rounded-xl text-center font-semibold text-lg sm:text-xl tabular-nums bg-white shadow-xs transition-all ${
-                              m.atestados > 0 ? 'text-[#0e3a8a]' : 'text-slate-950'
+                            className={`w-12 sm:w-13 h-10 rounded-xl text-center font-semibold text-lg sm:text-xl tabular-nums bg-white border border-black/[0.08] shadow-2xs transition-all ${
+                              m.atestados > 0 ? 'text-[#0071E3]' : 'text-[#1D1D1F]'
                             }`}
                           />
 
@@ -1330,7 +1331,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onClick={() => handleDeltaAtestado(student.id, 1)}
                             disabled={!effectiveCanEdit || m.faltas === 0 || isMaxAtestadosReached}
                             aria-label={`Adicionar atestado para ${student.name}`}
-                            className="w-11 h-11 rounded-xl bg-[#0e3a8a] hover:bg-[#0a2d6e] text-white font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
+                            className="w-10 h-10 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
                           >
                             +
                           </button>
@@ -1393,7 +1394,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span
                               className={`px-2 py-0.5 rounded-md text-white text-xs font-medium tabular-nums ${
-                                isJustSaved ? 'bg-[#047857]' : 'bg-[#0e3a8a]'
+                                isJustSaved ? 'bg-[#047857]' : 'bg-[#0071E3]'
                               }`}
                             >
                               Nº {student.number.toString().padStart(2, '0')}
@@ -1410,7 +1411,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             {isSavingThis && (
                               <span
                                 data-status="saving"
-                                className="px-2 py-0.5 rounded-md bg-[#0e3a8a] text-white text-xs font-medium inline-flex items-center gap-1"
+                                className="px-2 py-0.5 rounded-md bg-[#0071E3] text-white text-xs font-medium inline-flex items-center gap-1"
                               >
                                 <SFSymbol name="sync" size={12} className="animate-spin text-white" />
                                 <span>Salvando...</span>
@@ -1476,7 +1477,8 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             Faltas
                           </span>
                           <span className="text-[11px] font-medium text-slate-700 tabular-nums">
-                            máx {m.diasLetivosMatriculados}d
+                            máximo {m.diasLetivosMatriculados}{' '}
+                            {m.diasLetivosMatriculados === 1 ? 'dia' : 'dias'}
                           </span>
                         </div>
 
@@ -1499,8 +1501,8 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onFocus={(e) => e.target.select()}
                             onChange={(e) => handleDirectSetAbsence(student.id, e.target.value)}
                             aria-label={`Digitar faltas de ${student.name}`}
-                            className={`w-12 sm:w-14 h-11 rounded-xl text-center text-lg sm:text-xl font-semibold tabular-nums bg-white shadow-xs ${
-                              m.faltas > 0 ? 'text-[#be123c]' : 'text-slate-950'
+                            className={`w-12 sm:w-14 h-10 rounded-xl text-center text-lg sm:text-xl font-semibold tabular-nums bg-white border border-black/[0.08] shadow-2xs ${
+                              m.faltas > 0 ? 'text-[#D70015]' : 'text-[#1D1D1F]'
                             }`}
                           />
 
@@ -1509,7 +1511,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onClick={() => handleDeltaAbsence(student.id, 1)}
                             disabled={!effectiveCanEdit || isMaxFaltasReached}
                             aria-label={`Adicionar falta para ${student.name}`}
-                            className="w-11 h-11 rounded-xl bg-[#0e3a8a] hover:bg-[#0a2d6e] text-white font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
+                            className="w-10 h-10 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
                           >
                             +
                           </button>
@@ -1519,16 +1521,16 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                       <div
                         className={`p-3 rounded-2xl flex flex-col justify-between transition-colors min-w-0 ${
                           m.atestados > 0
-                            ? 'bg-sky-100/90 text-sky-950'
-                            : 'bg-[#f3f6fb] text-slate-900'
+                            ? 'bg-[#0071E3]/10 text-[#0071E3]'
+                            : 'bg-[#F5F5F7] text-[#1D1D1F]'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2 gap-1">
-                          <span className="text-xs font-semibold uppercase text-sky-950">
+                          <span className="text-xs font-semibold uppercase text-[#0071E3]">
                             Atestados
                           </span>
-                          <span className="text-[11px] font-medium text-slate-700 tabular-nums">
-                            {m.faltas === 0 ? '0 faltas' : `máx ${m.faltas}`}
+                          <span className="text-[11px] font-medium text-[#86868B] tabular-nums">
+                            {m.faltas === 0 ? '0 faltas' : `máximo ${m.faltas}`}
                           </span>
                         </div>
 
@@ -1538,7 +1540,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onClick={() => handleDeltaAtestado(student.id, -1)}
                             disabled={!effectiveCanEdit || m.atestados === 0}
                             aria-label={`Diminuir atestado de ${student.name}`}
-                            className="w-11 h-11 rounded-xl bg-white text-sky-950 font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
+                            className="w-10 h-10 rounded-full bg-white hover:bg-black/[0.05] text-[#1D1D1F] border border-black/[0.06] font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
                           >
                             —
                           </button>
@@ -1551,8 +1553,8 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onFocus={(e) => e.target.select()}
                             onChange={(e) => handleDirectSetAtestado(student.id, e.target.value)}
                             aria-label={`Digitar atestados de ${student.name}`}
-                            className={`w-12 sm:w-14 h-11 rounded-xl text-center text-lg sm:text-xl font-semibold tabular-nums bg-white shadow-xs ${
-                              m.atestados > 0 ? 'text-[#0e3a8a]' : 'text-slate-950'
+                            className={`w-12 sm:w-14 h-10 rounded-xl text-center text-lg sm:text-xl font-semibold tabular-nums bg-white border border-black/[0.08] shadow-2xs ${
+                              m.atestados > 0 ? 'text-[#0071E3]' : 'text-[#1D1D1F]'
                             }`}
                           />
 
@@ -1561,7 +1563,7 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                             onClick={() => handleDeltaAtestado(student.id, 1)}
                             disabled={!effectiveCanEdit || m.faltas === 0 || isMaxAtestadosReached}
                             aria-label={`Adicionar atestado para ${student.name}`}
-                            className="w-11 h-11 rounded-xl bg-[#0e3a8a] hover:bg-[#0a2d6e] text-white font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
+                            className="w-10 h-10 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xl flex items-center justify-center shadow-xs disabled:opacity-25 cursor-pointer active:scale-95 transition-transform"
                           >
                             +
                           </button>
@@ -1588,10 +1590,10 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
                     triggerMenuHaptic('light');
                     setShowAllStudentsInCall((prev) => !prev);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-[#eef3fa] hover:bg-[#dfe8f4] text-[#0e3a8a] text-xs font-semibold cursor-pointer transition-colors"
+                  className="px-3 py-1 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#0071E3] text-xs font-medium cursor-pointer transition-colors"
                 >
                   {showAllStudentsInCall
-                    ? `Paginar (${CALL_PAGE_SIZE}/pág)`
+                    ? `Paginar (${CALL_PAGE_SIZE} por página)`
                     : `Ver todos (${displayedStudents.length})`}
                 </button>
               }
@@ -1601,12 +1603,12 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
       )}
 
       {/* Rodapé Resumido */}
-      <section className="bg-white rounded-3xl p-4 sm:p-6 shadow-[0_10px_28px_-10px_rgba(15,23,42,0.10)] flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
+      <section className="bg-white rounded-3xl p-5 sm:p-6 border border-black/[0.06] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
         <div className="min-w-0 flex-1">
-          <h3 className="text-base sm:text-lg font-semibold text-slate-950 break-words">
+          <h3 className="text-base sm:text-lg font-semibold text-[#1D1D1F] break-words">
             Faltas de {selectedMonthName}
           </h3>
-          <p className="text-xs sm:text-sm text-slate-700 font-normal mt-0.5 break-words tabular-nums">
+          <p className="text-xs sm:text-sm text-[#86868B] font-normal mt-0.5 break-words tabular-nums">
             {formatFaltas(liveClassMetrics.totalFaltasTurma)} registradas ·{' '}
             {liveClassMetrics.presenceRate}% de presença global ·{' '}
             {syncSnapshot.isOnline
@@ -1615,15 +1617,15 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto min-w-0">
           {!isPeb1 && previousPeriodName && (
             <button
               type="button"
               onClick={() => handleMonthChange(previousPeriodName)}
-              className="w-full sm:w-auto min-h-[44px] py-2 px-4 rounded-xl bg-[#eef3fa] hover:bg-[#dfe8f4] text-slate-900 font-semibold text-xs sm:text-[13px] flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-colors"
+              className="w-full sm:w-auto min-h-[40px] py-2 px-4 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-medium text-xs sm:text-[13px] flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-colors border border-black/[0.06]"
               title={`Voltar ao período anterior: ${previousPeriodName}`}
             >
-              <SFSymbol name="history" size={18} className="text-[#0e3a8a] shrink-0" />
+              <SFSymbol name="history" size={17} className="text-[#0071E3] shrink-0" />
               <span>Período Anterior ({previousPeriodName})</span>
             </button>
           )}
@@ -1634,9 +1636,9 @@ export const RegistroFrequenciaMensalScreen: React.FC<RegistroFrequenciaMensalSc
               triggerMenuHaptic('light');
               onBack();
             }}
-            className="w-full sm:w-auto min-h-[44px] py-2 px-5 rounded-xl bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] hover:brightness-110 text-white font-semibold text-xs sm:text-sm flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-all"
+            className="w-full sm:w-auto min-h-[40px] py-2 px-5 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-xs sm:text-sm flex items-center justify-center text-center whitespace-normal gap-1.5 cursor-pointer transition-colors shadow-sm"
           >
-            <SFSymbol name="arrow_back" size={18} className="text-white shrink-0" />
+            <SFSymbol name="arrow_back" size={17} className="text-white shrink-0" />
             <span>Voltar para Turma</span>
           </button>
         </div>

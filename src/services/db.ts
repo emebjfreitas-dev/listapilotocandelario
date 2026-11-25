@@ -32,8 +32,13 @@ import {
   wipeFirestoreSchoolDataOnly,
   touchLocalEpochState,
   shouldAllowRemoteClassesOverwrite,
+  isFirestoreQuotaExceeded,
 } from './firebaseSync';
-import { resolveStudentGender } from '../utils/genderDictionary';
+import {
+  resolveStudentGender,
+  saveStoredNameGenderEntries,
+  NameGenderEntry,
+} from '../utils/genderDictionary';
 import { isBackendApiAvailable } from './apiEnvironment';
 import { hasForbiddenPrototypeKey } from '../utils/serverValidation';
 import {
@@ -803,7 +808,16 @@ const classesOrUsersSanitize = (users: AuthorizedUser[]): AuthorizedUser[] => {
       }
 
       if (matchedClasses.length === 0) {
-        matchedClasses.push(INITIAL_CLASSES[0]);
+        return {
+          ...u,
+          role: 'usuario',
+          email: cleanEmail,
+          teacherRoleType: 'peb1',
+          assignedClassId: '',
+          assignedClassName: 'Nenhuma turma vinculada',
+          assignedClassIds: [],
+          assignedClassNames: [],
+        };
       }
 
       const finalIds = matchedClasses.map((c) => c.id);
@@ -861,10 +875,10 @@ const classesOrUsersSanitize = (users: AuthorizedUser[]): AuthorizedUser[] => {
       role: 'usuario',
       email: cleanEmail,
       teacherRoleType: 'peb1',
-      assignedClassId: INITIAL_CLASSES[0].id,
-      assignedClassName: `${INITIAL_CLASSES[0].name} (${INITIAL_CLASSES[0].shift.replace('Turno ', '')})`,
-      assignedClassIds: [INITIAL_CLASSES[0].id],
-      assignedClassNames: [`${INITIAL_CLASSES[0].name} (${INITIAL_CLASSES[0].shift.replace('Turno ', '')})`],
+      assignedClassId: '',
+      assignedClassName: 'Nenhuma turma vinculada',
+      assignedClassIds: [],
+      assignedClassNames: [],
     };
   });
 };
@@ -953,13 +967,6 @@ export const pushAuthorizedUsersToServer = async (
   setSyncingActiveState();
   let savedToAny = false;
 
-  try {
-    const cloudOk = await saveConfigMetaToFirestoreCloud({ authorizedUsers: sanitized });
-    if (cloudOk) savedToAny = true;
-  } catch {
-    // continue to backend API
-  }
-
   if (isBackendApiAvailable()) {
     try {
       const headers = await getActiveUserAuthHeadersAsync();
@@ -974,6 +981,9 @@ export const pushAuthorizedUsersToServer = async (
       });
       if (res.ok) {
         savedToAny = true;
+        if (!isFirestoreQuotaExceeded()) {
+          void saveConfigMetaToFirestoreCloud({ authorizedUsers: sanitized }).catch(() => {});
+        }
         const data = await res.json();
         if (Array.isArray(data?.authorizedUsers)) {
           const clean = classesOrUsersSanitize(data.authorizedUsers);
@@ -984,7 +994,16 @@ export const pushAuthorizedUsersToServer = async (
         }
       }
     } catch {
-      // handled below
+      // handled by fallback below
+    }
+  }
+
+  if (!savedToAny && !isFirestoreQuotaExceeded()) {
+    try {
+      const cloudOk = await saveConfigMetaToFirestoreCloud({ authorizedUsers: sanitized });
+      if (cloudOk) savedToAny = true;
+    } catch {
+      // ignore
     }
   }
 
@@ -1006,14 +1025,6 @@ export const pushSessionLogsToServer = async (
   users?: AuthorizedUser[]
 ): Promise<void> => {
   const sanitizedUsers = users ? classesOrUsersSanitize(users) : undefined;
-  try {
-    await saveConfigMetaToFirestoreCloud({
-      accessSessionLogs: logs,
-      ...(sanitizedUsers ? { authorizedUsers: sanitizedUsers } : {}),
-    });
-  } catch {
-    // ignore
-  }
   if (isBackendApiAvailable()) {
     try {
       const headers = await getActiveUserAuthHeadersAsync();
@@ -1031,6 +1042,18 @@ export const pushSessionLogsToServer = async (
       });
     } catch {
       // ignore offline
+    }
+    return;
+  }
+
+  if (!isFirestoreQuotaExceeded()) {
+    try {
+      await saveConfigMetaToFirestoreCloud({
+        accessSessionLogs: logs,
+        ...(sanitizedUsers ? { authorizedUsers: sanitizedUsers } : {}),
+      });
+    } catch {
+      // ignore
     }
   }
 };
@@ -1069,12 +1092,6 @@ export const pushSchoolNoticesToServer = async (
   const sliced = notices.slice(0, 60);
   setSyncingActiveState();
   let saved = false;
-  try {
-    const ok = await saveConfigMetaToFirestoreCloud({ schoolNotices: sliced });
-    if (ok) saved = true;
-  } catch {
-    // ignore
-  }
   if (isBackendApiAvailable()) {
     try {
       const headers = await getActiveUserAuthHeadersAsync();
@@ -1087,9 +1104,22 @@ export const pushSchoolNoticesToServer = async (
         credentials: 'include',
         body: JSON.stringify({ schoolNotices: sliced }),
       });
-      if (res.ok) saved = true;
+      if (res.ok) {
+        saved = true;
+        if (!isFirestoreQuotaExceeded()) {
+          void saveConfigMetaToFirestoreCloud({ schoolNotices: sliced }).catch(() => {});
+        }
+      }
     } catch {
       // ignore offline
+    }
+  }
+  if (!saved && !isFirestoreQuotaExceeded()) {
+    try {
+      const ok = await saveConfigMetaToFirestoreCloud({ schoolNotices: sliced });
+      if (ok) saved = true;
+    } catch {
+      // ignore
     }
   }
   if (saved) {
@@ -1139,12 +1169,6 @@ export const pushAttendanceWindowToServer = async (
 ): Promise<void> => {
   setSyncingActiveState();
   let saved = false;
-  try {
-    const ok = await saveConfigMetaToFirestoreCloud({ attendanceWindowConfig: config });
-    if (ok) saved = true;
-  } catch {
-    // ignore
-  }
   if (isBackendApiAvailable()) {
     try {
       const headers = await getActiveUserAuthHeadersAsync();
@@ -1157,9 +1181,22 @@ export const pushAttendanceWindowToServer = async (
         credentials: 'include',
         body: JSON.stringify({ attendanceWindowConfig: config }),
       });
-      if (res.ok) saved = true;
+      if (res.ok) {
+        saved = true;
+        if (!isFirestoreQuotaExceeded()) {
+          void saveConfigMetaToFirestoreCloud({ attendanceWindowConfig: config }).catch(() => {});
+        }
+      }
     } catch {
       // ignore offline
+    }
+  }
+  if (!saved && !isFirestoreQuotaExceeded()) {
+    try {
+      const ok = await saveConfigMetaToFirestoreCloud({ attendanceWindowConfig: config });
+      if (ok) saved = true;
+    } catch {
+      // ignore
     }
   }
   if (saved) {
@@ -1285,18 +1322,6 @@ export const pushClassesToServer = async (
   let savedToFirestore = false;
   let savedToApi = false;
 
-  try {
-    savedToFirestore = await saveClassesToFirestoreCloud(classes, nowMs);
-    if (cloudLinks || discoveredNominalPdfs) {
-      await saveConfigMetaToFirestoreCloud({
-        ...(cloudLinks ? { cloudLinks } : {}),
-        ...(discoveredNominalPdfs ? { discoveredNominalPdfs } : {}),
-      });
-    }
-  } catch {
-    // fallback to API
-  }
-
   if (isBackendApiAvailable()) {
     try {
       const headers = await getActiveUserAuthHeadersAsync();
@@ -1318,9 +1343,32 @@ export const pushClassesToServer = async (
       });
       if (res.ok) {
         savedToApi = true;
+        if (!isFirestoreQuotaExceeded()) {
+          void saveClassesToFirestoreCloud(classes, nowMs).catch(() => {});
+          if (cloudLinks || discoveredNominalPdfs) {
+            void saveConfigMetaToFirestoreCloud({
+              ...(cloudLinks ? { cloudLinks } : {}),
+              ...(discoveredNominalPdfs ? { discoveredNominalPdfs } : {}),
+            }).catch(() => {});
+          }
+        }
       }
     } catch {
-      // offline or serverless cold start
+      // offline or transient failure
+    }
+  }
+
+  if (!savedToApi && !isFirestoreQuotaExceeded()) {
+    try {
+      savedToFirestore = await saveClassesToFirestoreCloud(classes, nowMs);
+      if (cloudLinks || discoveredNominalPdfs) {
+        await saveConfigMetaToFirestoreCloud({
+          ...(cloudLinks ? { cloudLinks } : {}),
+          ...(discoveredNominalPdfs ? { discoveredNominalPdfs } : {}),
+        });
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -1344,16 +1392,6 @@ export const pushCloudLinksToServer = async (
 ): Promise<void> => {
   setSyncingActiveState();
   let saved = false;
-  try {
-    const ok = await saveConfigMetaToFirestoreCloud({
-      cloudLinks,
-      ...(discoveredNominalPdfs ? { discoveredNominalPdfs } : {}),
-      ...(discoveredDrivePhotos ? { discoveredDrivePhotos } : {}),
-    });
-    if (ok) saved = true;
-  } catch {
-    // ignore
-  }
   if (isBackendApiAvailable()) {
     try {
       const headers = await getActiveUserAuthHeadersAsync();
@@ -1370,9 +1408,30 @@ export const pushCloudLinksToServer = async (
           ...(discoveredDrivePhotos ? { discoveredDrivePhotos } : {}),
         }),
       });
-      if (res.ok) saved = true;
+      if (res.ok) {
+        saved = true;
+        if (!isFirestoreQuotaExceeded()) {
+          void saveConfigMetaToFirestoreCloud({
+            cloudLinks,
+            ...(discoveredNominalPdfs ? { discoveredNominalPdfs } : {}),
+            ...(discoveredDrivePhotos ? { discoveredDrivePhotos } : {}),
+          }).catch(() => {});
+        }
+      }
     } catch {
       // ignore offline
+    }
+  }
+  if (!saved && !isFirestoreQuotaExceeded()) {
+    try {
+      const ok = await saveConfigMetaToFirestoreCloud({
+        cloudLinks,
+        ...(discoveredNominalPdfs ? { discoveredNominalPdfs } : {}),
+        ...(discoveredDrivePhotos ? { discoveredDrivePhotos } : {}),
+      });
+      if (ok) saved = true;
+    } catch {
+      // ignore
     }
   }
   if (saved) {
@@ -1413,6 +1472,7 @@ export const pullSharedSchoolStateFromServer = async (): Promise<{
   cloudLinks?: SharedCloudLinks;
   discoveredNominalPdfs?: any[];
   discoveredDrivePhotos?: any[];
+  genderDictionary?: NameGenderEntry[];
 } | null> => {
   try {
     let apiData: any = null;
@@ -1428,18 +1488,41 @@ export const pullSharedSchoolStateFromServer = async (): Promise<{
           apiData = await res.json();
         }
       } catch {
-        // API unreachable or serverless route not active; fallback to Firestore Cloud
+        // API unreachable; fallback to Firestore Cloud
       }
     }
 
-    // If API has no classes (e.g. static hosting on GitHub Pages or fresh container), pull from Cloud Firestore!
+    const apiHasClasses = Boolean(
+      apiData && Array.isArray(apiData.classes) && apiData.classes.length > 0
+    );
+    const apiHasStudents = Boolean(
+      apiHasClasses &&
+        apiData.classes.some(
+          (c: any) => Array.isArray(c?.students) && c.students.length > 0
+        )
+    );
+    const shouldQueryFirestoreFallback =
+      !isBackendApiAvailable() ||
+      (!apiData && !isFirestoreQuotaExceeded()) ||
+      (!apiHasStudents &&
+        Number(apiData?.classesUpdatedAtMs || 0) === 0 &&
+        !isFirestoreQuotaExceeded());
+
     let firestoreData: any = null;
-    if (!apiData || !Array.isArray(apiData.classes) || apiData.classes.length === 0) {
+    if (shouldQueryFirestoreFallback) {
       firestoreData = await fetchStateFromFirestoreCloud();
     }
 
+    const firestoreHasStudents = Boolean(
+      firestoreData &&
+        Array.isArray(firestoreData.classes) &&
+        firestoreData.classes.some(
+          (c: any) => Array.isArray(c?.students) && c.students.length > 0
+        )
+    );
+
     const data =
-      apiData && Array.isArray(apiData.classes) && apiData.classes.length > 0
+      apiHasClasses && (apiHasStudents || !firestoreHasStudents)
         ? apiData
         : firestoreData || apiData;
 
@@ -1455,6 +1538,7 @@ export const pullSharedSchoolStateFromServer = async (): Promise<{
       cloudLinks?: SharedCloudLinks;
       discoveredNominalPdfs?: any[];
       discoveredDrivePhotos?: any[];
+      genderDictionary?: NameGenderEntry[];
     } = {};
 
     if (Array.isArray(data?.schoolNotices)) {
@@ -1574,6 +1658,11 @@ export const pullSharedSchoolStateFromServer = async (): Promise<{
         JSON.stringify(data.discoveredDrivePhotos)
       );
       result.discoveredDrivePhotos = data.discoveredDrivePhotos;
+    }
+
+    if (Array.isArray(data?.genderDictionary) && data.genderDictionary.length > 0) {
+      saveStoredNameGenderEntries(data.genderDictionary);
+      result.genderDictionary = data.genderDictionary;
     }
 
     if (Array.isArray(data?.classes) && data.classes.length > 0) {
@@ -2044,7 +2133,13 @@ export const exportSchoolDataToJsonFile = (
 const stripScriptTags = (value: string): string =>
   value
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
     .replace(/javascript\s*:/gi, '')
+    .replace(/vbscript\s*:/gi, '')
+    .replace(/data\s*:\s*text\/html/gi, '')
     .replace(/\bon\w+\s*=/gi, '')
     .trim();
 
@@ -2566,11 +2661,17 @@ export const importSchoolDataFromJson = async (
       }
     }
 
-    // 3. Sincronizar com Firestore Cloud
-    try {
-      await saveClassesToFirestoreCloud(validatedClasses, nowMs);
-    } catch (e) {
-      console.warn('Aviso: sincronização Firestore Cloud em segundo plano:', e);
+    // 3. Espelho opcional no Firestore Cloud (não bloqueante quando backend dedicado estiver ativo)
+    if (!isFirestoreQuotaExceeded()) {
+      if (isBackendApiAvailable()) {
+        void saveClassesToFirestoreCloud(validatedClasses, nowMs).catch(() => {});
+      } else {
+        try {
+          await saveClassesToFirestoreCloud(validatedClasses, nowMs);
+        } catch (e) {
+          console.warn('Aviso: sincronização Firestore Cloud em segundo plano:', e);
+        }
+      }
     }
 
     // 4. Registrar log de auditoria
@@ -2643,11 +2744,13 @@ export const resetEntireAppData = async (
     }
   }
 
-  // Limpar apenas os dados no Firestore Cloud
-  try {
-    await wipeFirestoreSchoolDataOnly(pristineClasses, CLEAN_DB_RESET_EPOCH_ID);
-  } catch (e) {
-    console.warn('Aviso: falha ao limpar dados no Firestore:', e);
+  // Limpar apenas os dados no Firestore Cloud (respeitando limite de cota quando em modo backend)
+  if (!isFirestoreQuotaExceeded()) {
+    try {
+      await wipeFirestoreSchoolDataOnly(pristineClasses, CLEAN_DB_RESET_EPOCH_ID);
+    } catch (e) {
+      console.warn('Aviso: falha ao limpar dados no Firestore:', e);
+    }
   }
 
   return pristineClasses;
@@ -3282,6 +3385,9 @@ export const clearAllStudentPdfsViaApi = async (): Promise<{ ok: boolean; cleare
   }
   return { ok: true, clearedCount: count };
 };
+
+export { establishServerAuthSessionCookieDetailed } from './authSessionService';
+export { pushLgpdConfigToServer } from './securityAuditService';
 
 
 

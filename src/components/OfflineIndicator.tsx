@@ -3,19 +3,32 @@ import { useNetworkHealth } from '../hooks/useNetworkHealth';
 import { WifiOff, AlertTriangle, CloudOff } from 'lucide-react';
 import { ModalPortal } from './ui/ModalPortal';
 import { subscribeToSyncStatus, isFirestoreQuotaExceeded } from '../services/firebaseSync';
+import { isBackendApiAvailable } from '../services/apiEnvironment';
+import { subscribeToRealtimeConnectionStatus } from '../services/realtimeClient';
 
 export const OfflineIndicator: React.FC = () => {
   const { isOnline, isSlow, isUnstable, averageLatencyMs } = useNetworkHealth();
   const [quotaExceeded, setQuotaExceeded] = useState(() => isFirestoreQuotaExceeded());
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const backendActive = isBackendApiAvailable();
 
   useEffect(() => {
-    const unsub = subscribeToSyncStatus((snap) => {
+    const unsubSync = subscribeToSyncStatus((snap) => {
       setQuotaExceeded(Boolean(snap.isQuotaExceeded || isFirestoreQuotaExceeded()));
     });
-    return () => unsub();
+    const unsubRealtime = subscribeToRealtimeConnectionStatus((status) => {
+      setRealtimeConnected(status.connected);
+    });
+    return () => {
+      unsubSync();
+      unsubRealtime();
+    };
   }, []);
 
-  if (isOnline && !isSlow && !isUnstable && !quotaExceeded) return null;
+  const showFirestoreQuotaBanner = !backendActive && quotaExceeded;
+  const showSlowWarning = isOnline && (isSlow || isUnstable) && !realtimeConnected;
+
+  if (isOnline && !showSlowWarning && !showFirestoreQuotaBanner) return null;
 
   if (!isOnline) {
     return (
@@ -33,7 +46,7 @@ export const OfflineIndicator: React.FC = () => {
     );
   }
 
-  if (quotaExceeded) {
+  if (showFirestoreQuotaBanner) {
     return (
       <ModalPortal>
         <div
@@ -62,7 +75,7 @@ export const OfflineIndicator: React.FC = () => {
       >
         <AlertTriangle className="w-4 h-4 shrink-0 text-white" />
         <span className="text-white">
-          Conexão Lenta {averageLatencyMs ? `(~${averageLatencyMs}ms)` : ''} — O sincronismo com a nuvem pode demorar um pouco mais.
+          Conexão Lenta {averageLatencyMs ? `(~${averageLatencyMs}ms)` : ''} — O sincronismo com o servidor pode demorar um pouco mais.
         </span>
       </div>
     </ModalPortal>
