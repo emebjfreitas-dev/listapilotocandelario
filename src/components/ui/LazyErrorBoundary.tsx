@@ -62,17 +62,17 @@ export class LazyErrorBoundary extends React.Component<
     const card = (
       <div
         role="alert"
-        className="w-full max-w-md mx-auto bg-white text-slate-950 rounded-3xl p-6 sm:p-7 shadow-[0_18px_48px_-12px_rgba(4,9,20,0.45)] flex flex-col items-center text-center gap-4"
+        className="w-full max-w-md mx-auto bg-white text-[#1D1D1F] rounded-3xl border border-black/[0.08] p-6 sm:p-7 shadow-[0_18px_48px_rgba(0,0,0,0.12)] flex flex-col items-center text-center gap-4"
       >
-        <div className="w-12 h-12 rounded-2xl bg-amber-100 text-[#b45309] flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 rounded-2xl bg-[#FFF5E5] text-[#B25000] flex items-center justify-center shrink-0">
           <AlertTriangle className="w-6 h-6" aria-hidden="true" />
         </div>
 
         <div className="space-y-1.5">
-          <h2 className="text-lg font-bold text-slate-950">
+          <h2 className="text-lg font-semibold text-[#1D1D1F] tracking-tight">
             Falha ao carregar este módulo
           </h2>
-          <p className="text-sm text-slate-700 leading-relaxed">
+          <p className="text-sm text-[#424245] leading-relaxed">
             A conexão oscilou ou o aplicativo foi atualizado em segundo plano. Tente carregar novamente.
           </p>
         </div>
@@ -81,7 +81,7 @@ export class LazyErrorBoundary extends React.Component<
           <button
             type="button"
             onClick={this.handleRetry}
-            className="flex-1 min-h-[44px] px-4 py-2.5 rounded-2xl bg-[#0f3370] hover:bg-[#1649a8] text-white font-bold text-sm inline-flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            className="flex-1 min-h-[42px] px-4 py-2 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-sm inline-flex items-center justify-center gap-2 cursor-pointer transition-colors"
           >
             <RotateCcw className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>Tentar novamente</span>
@@ -90,7 +90,7 @@ export class LazyErrorBoundary extends React.Component<
           <button
             type="button"
             onClick={this.handleReload}
-            className="flex-1 min-h-[44px] px-4 py-2.5 rounded-2xl bg-[#eef3f9] hover:bg-[#dfe8f4] text-slate-950 font-bold text-sm inline-flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            className="flex-1 min-h-[42px] px-4 py-2 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] font-semibold text-sm inline-flex items-center justify-center gap-2 cursor-pointer transition-colors"
           >
             <RefreshCw className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>Atualizar página</span>
@@ -101,7 +101,7 @@ export class LazyErrorBoundary extends React.Component<
           <button
             type="button"
             onClick={this.props.onDismiss}
-            className="text-xs font-semibold text-slate-700 hover:text-slate-950 px-3 py-1.5 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors"
+            className="text-xs font-semibold text-[#86868B] hover:text-[#1D1D1F] px-3 py-1.5 rounded-full hover:bg-[#F5F5F7] cursor-pointer transition-colors"
           >
             Fechar janela
           </button>
@@ -111,7 +111,7 @@ export class LazyErrorBoundary extends React.Component<
 
     if (isModal) {
       return (
-        <div className="fixed inset-0 z-50 bg-[#040914]/75 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/35 backdrop-blur-sm flex items-center justify-center p-4">
           {card}
         </div>
       );

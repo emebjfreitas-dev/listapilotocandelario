@@ -1893,10 +1893,10 @@ export default function App() {
     return (
       <SafeAreaView
         edges={['top', 'bottom']}
-        className="min-h-[100dvh] w-full bg-[#070d19] bg-[var(--canvas-gradient)] flex flex-col items-center justify-center p-6 text-white font-sans"
+        className="min-h-[100dvh] w-full bg-[#F5F5F7] flex flex-col items-center justify-center p-6 text-[#1D1D1F] font-sans"
       >
-        <Loader2 className="w-10 h-10 text-blue-300 animate-spin mb-4" aria-hidden="true" />
-        <p className="text-sm font-semibold tracking-wide text-slate-100">
+        <Loader2 className="w-9 h-9 text-[#0071E3] animate-spin mb-4" aria-hidden="true" />
+        <p className="text-sm font-medium tracking-tight text-[#424245]">
           Verificando sessão institucional...
         </p>
       </SafeAreaView>
@@ -1907,7 +1907,7 @@ export default function App() {
     return (
       <SafeAreaView
         edges={['top', 'bottom']}
-        className="min-h-screen w-full overflow-x-clip bg-[#0a1529] font-sans"
+        className="min-h-screen w-full overflow-x-clip bg-[#F5F5F7] font-sans"
       >
         <LoginScreen
           authorizedUsers={authorizedUsers}
@@ -1934,7 +1934,7 @@ export default function App() {
   return (
     <SafeAreaView
       edges={['bottom']}
-      className="min-h-screen w-full overflow-x-clip bg-[#070d19] bg-[var(--canvas-gradient)] bg-fixed text-[#0f172a] flex flex-col font-sans selection:bg-blue-500/30 selection:text-inherit"
+      className="min-h-screen w-full overflow-x-clip bg-[#F5F5F7] text-[#1D1D1F] flex flex-col font-sans selection:bg-[#0071E3]/15 selection:text-[#1D1D1F]"
     >
       {/* Top Minimalist Header */}
       <Header
@@ -1983,19 +1983,21 @@ export default function App() {
       >
         {/* Banner de Aviso de Menor Privilégio e Segurança LGPD */}
         {securityBlockNotice && (
-          <div className="mb-5 w-full min-w-0 p-4 sm:p-5 rounded-2xl bg-amber-50 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-sm animate-gentle-fade">
+          <div className="mb-5 w-full min-w-0 p-4 sm:p-5 rounded-2xl bg-white border border-black/[0.08] text-[#1D1D1F] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] animate-gentle-fade">
             <div className="flex items-start gap-3 min-w-0 flex-1 w-full">
-              <ShieldCheck className="w-6 h-6 text-amber-700 shrink-0 mt-0.5" />
+              <div className="w-9 h-9 rounded-xl bg-[#B25000]/10 text-[#B25000] flex items-center justify-center shrink-0 mt-0.5">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
               <div className="space-y-1 min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 min-w-0">
-                  <span className="font-bold text-xs sm:text-[13px] uppercase tracking-wide text-amber-900 break-words">
+                  <span className="font-semibold text-xs sm:text-[13px] tracking-tight text-[#1D1D1F] break-words">
                     Acesso Restrito · Princípio do Menor Privilégio
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-lg bg-amber-200/80 text-xs font-mono font-bold shrink-0">
+                  <span className="px-2 py-0.5 rounded-md bg-[#F5F5F7] border border-black/[0.06] text-[#424245] text-[11px] font-mono font-medium shrink-0">
                     LGPD Art. 14 / RBAC
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-amber-900 font-medium leading-relaxed break-words">
+                <p className="text-xs sm:text-sm text-[#424245] leading-relaxed break-words">
                   {securityBlockNotice.message}
                 </p>
               </div>
@@ -2003,7 +2005,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setSecurityBlockNotice(null)}
-              className="w-full sm:w-auto min-h-[42px] text-center whitespace-normal px-4 py-2 rounded-xl bg-amber-200/90 hover:bg-amber-300 text-amber-950 text-xs sm:text-sm font-bold shrink-0 cursor-pointer transition-colors duration-100"
+              className="w-full sm:w-auto min-h-[40px] text-center whitespace-nowrap px-4 py-2 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs sm:text-sm font-medium shrink-0 cursor-pointer transition-colors duration-150"
             >
               Compreendi
             </button>
@@ -2032,9 +2034,9 @@ export default function App() {
         <LazyErrorBoundary resetKey={currentScreen}>
         <Suspense
           fallback={
-            <div className="w-full py-16 flex flex-col items-center justify-center gap-3 text-white">
-              <Loader2 className="w-7 h-7 text-blue-300 animate-spin" aria-hidden="true" />
-              <span className="text-xs font-semibold tracking-wide text-slate-200">Carregando módulo...</span>
+            <div className="w-full py-16 flex flex-col items-center justify-center gap-3 text-[#1D1D1F]">
+              <Loader2 className="w-7 h-7 text-[#0071E3] animate-spin" aria-hidden="true" />
+              <span className="text-xs font-medium tracking-tight text-[#86868B]">Carregando módulo...</span>
             </div>
           }
         >

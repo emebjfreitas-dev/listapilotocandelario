@@ -266,13 +266,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
   const variantClass =
     variant === 'inline'
-      ? 'bg-transparent hover:bg-white/80 text-slate-950 font-bold rounded-lg shadow-none'
-      : 'bg-[#f3f6fb] hover:bg-[#eef3f9] text-slate-950 font-semibold rounded-xl shadow-[0_2px_6px_-2px_rgba(9,15,29,0.06)] hover:shadow-[0_4px_12px_-4px_rgba(9,46,112,0.12)]';
+      ? 'bg-transparent hover:bg-[#F5F5F7] text-[#1D1D1F] font-semibold rounded-lg shadow-none'
+      : 'bg-[#F5F5F7] hover:bg-[#EFEFF2] border border-black/[0.08] text-[#1D1D1F] font-semibold rounded-xl';
 
   const activeRingClass = isOpen
     ? variant === 'inline'
-      ? 'bg-white shadow-[0_4px_12px_rgba(9,15,29,0.12)]'
-      : 'bg-white shadow-[0_6px_18px_-4px_rgba(9,46,112,0.18)]'
+      ? 'bg-white border border-black/[0.08] shadow-xs'
+      : 'bg-white border-[#0071E3] ring-2 ring-[#0071E3]/15 shadow-xs'
     : '';
 
   return (
@@ -295,14 +295,14 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       >
         <span
           className={`truncate min-w-0 flex-1 ${
-            !selectedOption ? 'text-slate-600 font-medium' : ''
+            !selectedOption ? 'text-[#86868B] font-medium' : ''
           }`}
         >
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <ChevronDown
           className={`w-4 h-4 shrink-0 transition-transform duration-150 ${
-            isOpen ? 'rotate-180 text-[#0f3370]' : 'text-slate-700'
+            isOpen ? 'rotate-180 text-[#0071E3]' : 'text-[#86868B]'
           }`}
         />
       </button>
@@ -325,12 +325,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               width: menuStyle.width,
               zIndex: 9999,
             }}
-            className={`bg-white/98 backdrop-blur-2xl rounded-2xl shadow-[0_20px_50px_rgba(9,15,29,0.22)] overflow-hidden flex flex-col animate-apple-pop ${menuClassName}`}
+            className={`bg-white/95 backdrop-blur-2xl rounded-2xl border border-black/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.14)] overflow-hidden flex flex-col animate-apple-pop ${menuClassName}`}
           >
             {isSearchable && (
-              <div className="p-2 bg-[#f3f6fb] shrink-0">
+              <div className="p-2 bg-[#F5F5F7] border-b border-black/[0.06] shrink-0">
                 <div className="relative flex items-center">
-                  <Search className="w-3.5 h-3.5 text-slate-600 absolute left-2.5 pointer-events-none" />
+                  <Search className="w-3.5 h-3.5 text-[#86868B] absolute left-2.5 pointer-events-none" />
                   <input
                     ref={searchInputRef}
                     type="text"
@@ -340,7 +340,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                       setHighlightedIndex(0);
                     }}
                     placeholder={searchPlaceholder}
-                    className="w-full min-h-[34px] pl-8 pr-7 rounded-xl bg-white text-xs font-medium text-slate-950 placeholder:text-slate-600 shadow-[0_1px_3px_rgba(9,15,29,0.06)]"
+                    className="w-full min-h-[34px] pl-8 pr-7 rounded-xl bg-white border border-black/[0.08] text-xs font-medium text-[#1D1D1F] placeholder:text-[#86868B]"
                   />
                   {searchQuery && (
                     <button
@@ -349,7 +349,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                         setSearchQuery('');
                         searchInputRef.current?.focus();
                       }}
-                      className="absolute right-1.5 p-1 text-slate-600 hover:text-slate-950 cursor-pointer"
+                      className="absolute right-1.5 p-1 text-[#86868B] hover:text-[#1D1D1F] cursor-pointer"
                       aria-label="Limpar filtro"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -364,7 +364,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               className="overflow-y-auto overscroll-contain p-1.5 space-y-0.5 modal-scroll-body"
             >
               {filteredOptions.length === 0 ? (
-                <div className="px-3 py-5 text-center text-xs text-slate-700 font-medium">
+                <div className="px-3 py-5 text-center text-xs text-[#86868B] font-medium">
                   Nenhuma opção encontrada
                 </div>
               ) : (
@@ -383,10 +383,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                       onClick={() => handleSelectOption(opt)}
                       className={`w-full min-h-[38px] px-3 py-2 rounded-xl text-left flex items-center justify-between gap-2.5 transition-colors duration-100 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed ${
                         isSelected
-                          ? 'bg-[#e8f0fe] text-[#0f3370] font-semibold'
+                          ? 'bg-[#0071E3]/10 text-[#0071E3] font-semibold'
                           : isHighlighted
-                          ? 'bg-[#eef3f9] text-slate-950 font-medium'
-                          : 'text-slate-900 hover:bg-[#f3f6fb] font-medium'
+                          ? 'bg-[#F5F5F7] text-[#1D1D1F] font-medium'
+                          : 'text-[#1D1D1F] hover:bg-[#F5F5F7] font-medium'
                       }`}
                     >
                       <div className="min-w-0 flex-1">
@@ -394,13 +394,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                           {opt.label}
                         </span>
                         {opt.description && (
-                          <span className="text-[11px] text-slate-700 block leading-snug mt-0.5 break-words font-normal">
+                          <span className="text-[11px] text-[#86868B] block leading-snug mt-0.5 break-words font-normal">
                             {opt.description}
                           </span>
                         )}
                       </div>
                       {isSelected && (
-                        <Check className="w-4 h-4 text-[#0f3370] shrink-0 stroke-[2]" />
+                        <Check className="w-4 h-4 text-[#0071E3] shrink-0 stroke-[2]" />
                       )}
                     </button>
                   );

@@ -47,26 +47,26 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
     <div
       className={`rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row items-center justify-between gap-2.5 min-w-0 ${
         isDark
-          ? 'bg-white/10 text-white'
-          : 'bg-white text-slate-950 shadow-[0_6px_22px_-8px_rgba(9,15,29,0.08)]'
+          ? 'bg-[#1D1D1F] text-white border border-white/10'
+          : 'bg-white text-[#1D1D1F] border border-black/[0.06] shadow-[0_2px_10px_rgba(0,0,0,0.03)]'
       }`}
     >
       <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs tabular-nums min-w-0">
-        <span className={isDark ? 'text-slate-200 font-medium' : 'text-slate-700 font-medium'}>
+        <span className={isDark ? 'text-[#A1A1A6] font-medium' : 'text-[#424245] font-medium'}>
           Mostrando{' '}
-          <strong className={isDark ? 'text-white' : 'text-slate-950'}>
+          <strong className={isDark ? 'text-white' : 'text-[#1D1D1F]'}>
             {startIdx}–{endIdx}
           </strong>{' '}
           de{' '}
-          <strong className={isDark ? 'text-white' : 'text-slate-950'}>
+          <strong className={isDark ? 'text-white' : 'text-[#1D1D1F]'}>
             {totalItems}
           </strong>{' '}
           {itemLabel}
         </span>
         {totalPages > 1 && (
           <span
-            className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${
-              isDark ? 'bg-white/15 text-white' : 'bg-[#eef3f9] text-slate-800'
+            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+              isDark ? 'bg-white/15 text-white' : 'bg-[#F5F5F7] text-[#424245]'
             }`}
           >
             Pág. {safePage}/{totalPages}
@@ -82,10 +82,10 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
             disabled={safePage <= 1}
             onClick={() => onPageChange(safePage - 1)}
             aria-label="Página anterior"
-            className={`min-h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:pointer-events-none transition-colors ${
+            className={`min-h-[36px] px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:pointer-events-none transition-colors ${
               isDark
                 ? 'bg-white/15 hover:bg-white/25 text-white'
-                : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-950'
+                : 'bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F]'
             }`}
           >
             <ChevronLeft className="w-4 h-4 shrink-0" />
@@ -102,14 +102,14 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
                   onClick={() => onPageChange(pageNum)}
                   aria-label={`Página ${pageNum}`}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`min-w-[36px] min-h-[36px] px-2 rounded-xl text-xs font-bold tabular-nums cursor-pointer transition-colors ${
+                  className={`min-w-[34px] min-h-[34px] px-2 rounded-full text-xs font-semibold tabular-nums cursor-pointer transition-colors ${
                     isActive
                       ? isDark
-                        ? 'bg-white text-slate-950'
-                        : 'bg-[#14428c] text-white'
+                        ? 'bg-white text-[#1D1D1F]'
+                        : 'bg-[#0071E3] text-white'
                       : isDark
                       ? 'bg-white/10 hover:bg-white/20 text-white'
-                      : 'bg-[#f3f6fb] hover:bg-[#e2e8f0] text-slate-800'
+                      : 'bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#424245]'
                   }`}
                 >
                   {pageNum}
@@ -123,10 +123,10 @@ export const PaginationBar: React.FC<PaginationBarProps> = ({
             disabled={safePage >= totalPages}
             onClick={() => onPageChange(safePage + 1)}
             aria-label="Próxima página"
-            className={`min-h-[38px] px-2.5 sm:px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:pointer-events-none transition-colors ${
+            className={`min-h-[36px] px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:pointer-events-none transition-colors ${
               isDark
                 ? 'bg-white/15 hover:bg-white/25 text-white'
-                : 'bg-[#eef3f9] hover:bg-[#e2e8f0] text-slate-950'
+                : 'bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F]'
             }`}
           >
             <span>Próxima</span>

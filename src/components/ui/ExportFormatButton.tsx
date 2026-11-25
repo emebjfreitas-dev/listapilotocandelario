@@ -61,18 +61,18 @@ export const ExportFormatButton: React.FC<ExportFormatButtonProps> = ({
       title: 'Word (.docx)',
       subtitle: 'Documento editável formatado',
       badge: 'DOCX',
-      badgeBg: 'bg-[#e8f0fe]',
-      badgeText: 'text-[#0e3a8a]',
-      icon: <FileType2 className="w-4 h-4 text-[#0e3a8a]" />,
+      badgeBg: 'bg-[#0071E3]/10',
+      badgeText: 'text-[#0071E3]',
+      icon: <FileType2 className="w-4 h-4 text-[#0071E3]" />,
     },
     {
       format: 'xlsx',
       title: 'Excel (.xlsx)',
       subtitle: 'Planilha moderna com abas',
       badge: 'XLSX',
-      badgeBg: 'bg-[#ecfdf5]',
-      badgeText: 'text-[#047857]',
-      icon: <FileSpreadsheet className="w-4 h-4 text-[#047857]" />,
+      badgeBg: 'bg-[#EAF7EE]',
+      badgeText: 'text-[#1B873F]',
+      icon: <FileSpreadsheet className="w-4 h-4 text-[#1B873F]" />,
     },
     ...(includeClassicXls
       ? [
@@ -81,9 +81,9 @@ export const ExportFormatButton: React.FC<ExportFormatButtonProps> = ({
             title: 'Excel Clássico (.xls)',
             subtitle: 'Compatível com SED e legado',
             badge: 'XLS',
-            badgeBg: 'bg-emerald-50',
-            badgeText: 'text-emerald-800',
-            icon: <Table2 className="w-4 h-4 text-emerald-700" />,
+            badgeBg: 'bg-[#EAF7EE]',
+            badgeText: 'text-[#1B873F]',
+            icon: <Table2 className="w-4 h-4 text-[#1B873F]" />,
           },
         ]
       : []),
@@ -92,9 +92,9 @@ export const ExportFormatButton: React.FC<ExportFormatButtonProps> = ({
       title: 'PDF (.pdf)',
       subtitle: 'Documento pronto para impressão',
       badge: 'PDF',
-      badgeBg: 'bg-rose-50',
-      badgeText: 'text-[#be123c]',
-      icon: <FileText className="w-4 h-4 text-[#be123c]" />,
+      badgeBg: 'bg-[#FFEBEB]',
+      badgeText: 'text-[#D70015]',
+      icon: <FileText className="w-4 h-4 text-[#D70015]" />,
     },
     ...(includeCsv
       ? [
@@ -103,9 +103,9 @@ export const ExportFormatButton: React.FC<ExportFormatButtonProps> = ({
             title: 'CSV (.csv)',
             subtitle: 'Texto separado por ponto e vírgula',
             badge: 'CSV',
-            badgeBg: 'bg-slate-100',
-            badgeText: 'text-slate-800',
-            icon: <Download className="w-4 h-4 text-slate-700" />,
+            badgeBg: 'bg-[#F5F5F7]',
+            badgeText: 'text-[#424245]',
+            icon: <Download className="w-4 h-4 text-[#424245]" />,
           },
         ]
       : []),
@@ -181,12 +181,12 @@ export const ExportFormatButton: React.FC<ExportFormatButtonProps> = ({
 
   const variantClasses =
     variant === 'primary'
-      ? 'min-h-[40px] px-3.5 py-2 rounded-2xl bg-[#14428c] hover:bg-[#0f3370] text-white font-semibold text-xs sm:text-[13px] shadow-2xs'
+      ? 'min-h-[38px] px-4 py-2 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xs sm:text-[13px]'
       : variant === 'dark'
-      ? 'min-h-[40px] px-3.5 py-2 rounded-2xl bg-[#081326] hover:bg-[#0e3a8a] text-white font-semibold text-xs sm:text-[13px] shadow-2xs'
+      ? 'min-h-[38px] px-4 py-2 rounded-full bg-[#1D1D1F] hover:bg-[#424245] text-white font-semibold text-xs sm:text-[13px]'
       : variant === 'compact'
-      ? 'min-h-[38px] py-1.5 px-3 rounded-xl bg-white hover:bg-[#e2e8f0] text-[#0f172a] font-semibold text-[12.5px] shadow-2xs'
-      : 'min-h-[40px] px-3.5 py-2 rounded-2xl bg-[#eef3f9] hover:bg-[#dfe8f4] text-[#0f172a] font-semibold text-xs sm:text-[13px]';
+      ? 'min-h-[36px] py-1.5 px-3 rounded-full bg-white hover:bg-[#F5F5F7] border border-black/[0.08] text-[#1D1D1F] font-semibold text-[12.5px]'
+      : 'min-h-[38px] px-4 py-2 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.06] text-[#1D1D1F] font-semibold text-xs sm:text-[13px]';
 
   const isBusy = loadingFormat !== null;
 
@@ -237,9 +237,9 @@ export const ExportFormatButton: React.FC<ExportFormatButtonProps> = ({
               width: `${coords.width}px`,
               zIndex: 160,
             }}
-            className="rounded-2xl bg-white p-1.5 shadow-[0_18px_42px_-10px_rgba(8,19,38,0.38)] animate-apple-pop"
+            className="rounded-2xl bg-white/95 backdrop-blur-2xl border border-black/[0.08] p-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.14)] animate-apple-pop"
           >
-            <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-600">
+            <div className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#86868B]">
               Baixar relatório em
             </div>
             <div className="space-y-0.5">
@@ -249,17 +249,17 @@ export const ExportFormatButton: React.FC<ExportFormatButtonProps> = ({
                   type="button"
                   role="menuitem"
                   onClick={() => void handleSelectFormat(opt.format)}
-                  className="w-full px-2.5 py-2 rounded-xl hover:bg-[#eef3f9] text-left flex items-center justify-between gap-2.5 cursor-pointer transition-colors"
+                  className="w-full px-2.5 py-2 rounded-xl hover:bg-[#F5F5F7] text-left flex items-center justify-between gap-2.5 cursor-pointer transition-colors"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-8 h-8 rounded-lg bg-[#f3f6fb] flex items-center justify-center shrink-0">
+                    <span className="w-8 h-8 rounded-lg bg-[#F5F5F7] flex items-center justify-center shrink-0">
                       {opt.icon}
                     </span>
                     <div className="min-w-0">
-                      <span className="block text-[12.5px] font-semibold text-slate-950 leading-tight">
+                      <span className="block text-[12.5px] font-semibold text-[#1D1D1F] leading-tight">
                         {opt.title}
                       </span>
-                      <span className="block text-[11px] text-slate-600 leading-tight mt-0.5 truncate">
+                      <span className="block text-[11px] text-[#86868B] leading-tight mt-0.5 truncate">
                         {opt.subtitle}
                       </span>
                     </div>

@@ -102,10 +102,10 @@ export const SavingIndicator: React.FC = () => {
     : 'success';
 
   const bgClass = isSaving
-    ? 'bg-[#0e3a8a]'
+    ? 'bg-[#0071E3]'
     : feedbackMode === 'offline_saved'
-    ? 'bg-[#b45309]'
-    : 'bg-[#047857]';
+    ? 'bg-[#B25000]'
+    : 'bg-[#1B873F]';
 
   return (
     <ModalPortal>
@@ -128,7 +128,7 @@ export const SavingIndicator: React.FC = () => {
                 : { opacity: 0, y: 8, scale: 0.96 }
             }
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className={`pointer-events-none fixed bottom-[calc(82px+env(safe-area-inset-bottom,0px))] right-4 lg:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] lg:right-6 z-[120] flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-medium shadow-[0_14px_34px_rgba(7,30,70,0.45)] select-none text-white ${bgClass}`}
+            className={`pointer-events-none fixed bottom-[calc(82px+env(safe-area-inset-bottom,0px))] right-4 lg:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] lg:right-6 z-[120] flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-medium shadow-[0_10px_28px_rgba(0,0,0,0.16)] select-none text-white ${bgClass}`}
           >
             {isSaving ? (
               <>

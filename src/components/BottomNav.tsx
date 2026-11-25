@@ -116,28 +116,28 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       label: 'Bolsa Família',
       description: 'Beneficiários e apuração bimestral de faltas',
       symbolName: 'volunteer_activism',
-      iconBgClass: 'bg-[#b45309] text-white shadow-[0_4px_12px_rgba(180,83,9,0.28)]',
+      iconBgClass: 'bg-[#B25000]/10 text-[#B25000]',
     },
     {
       id: 'dias_letivos',
       label: 'Calendário Escolar',
       description: 'Dias letivos mensais, bimestres e meta de 200 dias',
       symbolName: 'calendar_month',
-      iconBgClass: 'bg-[#047857] text-white shadow-[0_4px_12px_rgba(4,120,87,0.28)]',
+      iconBgClass: 'bg-[#1B873F]/10 text-[#1B873F]',
     },
     {
       id: 'usuarios_acesso',
       label: 'Central Administrativa',
       description: 'Acessos, segurança, uploads e backup no Drive',
       symbolName: 'admin_panel_settings',
-      iconBgClass: 'bg-[#0e3a8a] text-white shadow-[0_4px_12px_rgba(14,58,138,0.32)]',
+      iconBgClass: 'bg-[#0071E3]/10 text-[#0071E3]',
     },
     {
       id: 'diagnostico_bd',
       label: 'Diagnóstico & Banco',
       description: 'Integridade da nuvem, fila de envio e registros',
       symbolName: 'database',
-      iconBgClass: 'bg-[#6d28d9] text-white shadow-[0_4px_12px_rgba(109,40,217,0.28)]',
+      iconBgClass: 'bg-[#424245]/10 text-[#1D1D1F]',
     },
   ];
 
@@ -175,13 +175,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   return (
     <>
-      {/* Barra de Navegação Inferior (Mobile & Tablet) */}
+      {/* Barra de Navegação Inferior Estilo Apple (Mobile & Tablet) */}
       <nav
         aria-label="Barra de Navegação Inferior"
-        className="fixed bottom-0 left-0 right-0 w-full z-40 pb-safe bg-[#081326]/96 backdrop-blur-2xl shadow-[0_-1px_0_rgba(148,163,184,0.16),0_-12px_32px_rgba(2,6,23,0.65)] lg:hidden"
+        className="fixed bottom-0 left-0 right-0 w-full z-40 pb-safe bg-white/90 backdrop-blur-2xl border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"
       >
         <div
-          className={`grid ${gridColsClass} items-center h-[66px] px-2 max-w-lg mx-auto gap-1`}
+          className={`grid ${gridColsClass} items-center h-[64px] px-2 max-w-lg mx-auto gap-1`}
         >
           {coreNavItems.map((item) => {
             const isActive = getIsActive(item.id) && !showMoreMenu;
@@ -197,15 +197,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   onChangeScreen(item.id);
                 }}
                 aria-current={isActive ? 'page' : undefined}
-                className="group relative flex flex-col items-center justify-center w-full min-w-0 min-h-[48px] h-full py-1.5 px-1 cursor-pointer select-none rounded-2xl"
+                className="group relative flex flex-col items-center justify-center w-full min-w-0 min-h-[48px] h-full py-1 px-1 cursor-pointer select-none rounded-2xl"
               >
-                <div className="relative flex items-center justify-center w-13 h-8 rounded-2xl">
+                <div className="relative flex items-center justify-center w-12 h-7 rounded-full">
                   {isActive && (
                     <motion.span
                       layoutId={prefersReducedMotion ? undefined : 'bottomNavActivePill'}
                       transition={{ type: 'spring', stiffness: 460, damping: 34, mass: 0.7 }}
                       aria-hidden="true"
-                      className="absolute inset-0 rounded-2xl bg-gradient-to-b from-[#2563eb] to-[#1649a8] shadow-[0_6px_16px_rgba(37,99,235,0.45)]"
+                      className="absolute inset-0 rounded-full bg-[#0071E3]/12"
                     />
                   )}
                   <SFSymbol
@@ -213,18 +213,18 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                     filled={isActive}
                     size={21}
                     weight={isActive ? 540 : 410}
-                    className={`relative z-10 ${
+                    className={`relative z-10 transition-colors ${
                       isActive
-                        ? 'text-white'
-                        : 'text-slate-300 group-hover:text-white'
+                        ? 'text-[#0071E3]'
+                        : 'text-[#86868B] group-hover:text-[#1D1D1F]'
                     }`}
                   />
                 </div>
                 <span
-                  className={`text-[11px] tracking-tight leading-none mt-1.5 whitespace-nowrap truncate max-w-full transition-colors ${
+                  className={`text-[11px] tracking-tight leading-none mt-1 whitespace-nowrap truncate max-w-full transition-colors ${
                     isActive
-                      ? 'font-semibold text-white'
-                      : 'font-medium text-slate-300 group-hover:text-white'
+                      ? 'font-semibold text-[#0071E3]'
+                      : 'font-medium text-[#424245] group-hover:text-[#1D1D1F]'
                   }`}
                 >
                   {item.label}
@@ -243,15 +243,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 setShowMoreMenu((prev) => !prev);
               }}
               aria-expanded={showMoreMenu}
-              className="group relative flex flex-col items-center justify-center w-full min-w-0 min-h-[48px] h-full py-1.5 px-1 cursor-pointer select-none rounded-2xl"
+              className="group relative flex flex-col items-center justify-center w-full min-w-0 min-h-[48px] h-full py-1 px-1 cursor-pointer select-none rounded-2xl"
             >
-              <div className="relative flex items-center justify-center w-13 h-8 rounded-2xl">
+              <div className="relative flex items-center justify-center w-12 h-7 rounded-full">
                 {(isMoreActive || showMoreMenu) && (
                   <motion.span
                     layoutId={prefersReducedMotion ? undefined : 'bottomNavActivePill'}
                     transition={{ type: 'spring', stiffness: 460, damping: 34, mass: 0.7 }}
                     aria-hidden="true"
-                    className="absolute inset-0 rounded-2xl bg-gradient-to-b from-[#2563eb] to-[#1649a8] shadow-[0_6px_16px_rgba(37,99,235,0.45)]"
+                    className="absolute inset-0 rounded-full bg-[#0071E3]/12"
                   />
                 )}
                 <SFSymbol
@@ -259,21 +259,21 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   filled={isMoreActive || showMoreMenu}
                   size={21}
                   weight={isMoreActive || showMoreMenu ? 540 : 410}
-                  className={`relative z-10 ${
+                  className={`relative z-10 transition-colors ${
                     isMoreActive || showMoreMenu
-                      ? 'text-white'
-                      : 'text-slate-300 group-hover:text-white'
+                      ? 'text-[#0071E3]'
+                      : 'text-[#86868B] group-hover:text-[#1D1D1F]'
                   }`}
                 />
                 {hasPendingCloud && (
-                  <span className="absolute -top-0.5 right-1 z-20 w-2.5 h-2.5 rounded-full bg-[#f59e0b] shadow-[0_0_0_2px_#081326]" />
+                  <span className="absolute -top-0.5 right-1 z-20 w-2.5 h-2.5 rounded-full bg-[#B25000] ring-2 ring-white" />
                 )}
               </div>
               <span
-                className={`text-[11px] tracking-tight leading-none mt-1.5 whitespace-nowrap truncate max-w-full transition-colors ${
+                className={`text-[11px] tracking-tight leading-none mt-1 whitespace-nowrap truncate max-w-full transition-colors ${
                   isMoreActive || showMoreMenu
-                    ? 'font-semibold text-white'
-                    : 'font-medium text-slate-300 group-hover:text-white'
+                    ? 'font-semibold text-[#0071E3]'
+                    : 'font-medium text-[#424245] group-hover:text-[#1D1D1F]'
                 }`}
               >
                 Gestão
@@ -290,12 +290,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 triggerMenuHaptic('medium');
                 setShowLogoutConfirm(true);
               }}
-              className="group flex flex-col items-center justify-center w-full min-w-0 min-h-[48px] h-full py-1.5 px-1 cursor-pointer select-none rounded-2xl"
+              className="group flex flex-col items-center justify-center w-full min-w-0 min-h-[48px] h-full py-1 px-1 cursor-pointer select-none rounded-2xl"
             >
-              <div className="flex items-center justify-center w-13 h-8 rounded-2xl bg-[#be123c]/25 text-rose-200 group-hover:bg-[#be123c]/40 transition-colors">
-                <SFSymbol name="logout" filled size={20} weight={480} />
+              <div className="flex items-center justify-center w-12 h-7 rounded-full bg-[#D70015]/10 text-[#D70015] group-hover:bg-[#D70015]/15 transition-colors">
+                <SFSymbol name="logout" filled size={19} weight={480} />
               </div>
-              <span className="text-[11px] font-medium tracking-tight leading-none mt-1.5 whitespace-nowrap truncate max-w-full text-rose-200 group-hover:text-white">
+              <span className="text-[11px] font-medium tracking-tight leading-none mt-1 whitespace-nowrap truncate max-w-full text-[#D70015]">
                 Sair
               </span>
             </motion.button>
@@ -313,24 +313,24 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             className="fixed inset-0 z-[120] overflow-hidden lg:hidden flex flex-col justify-end"
           >
             <div
-              className="fixed inset-0 bg-[#050d1d]/70 backdrop-blur-sm animate-backdrop-in"
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-backdrop-in"
               onClick={() => {
                 triggerMenuHaptic('light');
                 setShowMoreMenu(false);
               }}
             />
-            <div className="relative bg-white rounded-t-[28px] shadow-[0_-24px_60px_rgba(2,6,23,0.45)] px-5 pt-3 pb-7 space-y-3.5 max-h-[88dvh] modal-scroll-body animate-ios-sheet min-w-0">
+            <div className="relative bg-white border-t border-black/[0.08] rounded-t-[28px] shadow-[0_-20px_50px_rgba(0,0,0,0.16)] px-5 pt-3 pb-7 space-y-3.5 max-h-[88dvh] modal-scroll-body animate-ios-sheet min-w-0">
               <div
                 aria-hidden="true"
-                className="w-10 h-1 rounded-full bg-slate-300 mx-auto"
+                className="w-10 h-1 rounded-full bg-black/15 mx-auto"
               />
 
               <div className="flex items-center justify-between gap-3 pt-0.5 min-w-0">
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-[18px] font-semibold tracking-tight text-[#071e46] break-words">
+                  <h2 className="text-[18px] font-semibold tracking-tight text-[#1D1D1F] break-words">
                     Ferramentas de Gestão
                   </h2>
-                  <p className="text-xs text-slate-600 break-words mt-0.5">
+                  <p className="text-xs text-[#86868B] break-words mt-0.5">
                     Módulos administrativos, calendário letivo e nuvem
                   </p>
                 </div>
@@ -341,23 +341,23 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                     triggerMenuHaptic('light');
                     setShowMoreMenu(false);
                   }}
-                  className="w-10 h-10 rounded-full bg-[#eef3fa] hover:bg-[#dfe9f7] flex items-center justify-center text-[#0e3a8a] cursor-pointer transition-colors shrink-0"
+                  className="w-9 h-9 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] flex items-center justify-center text-[#424245] cursor-pointer transition-colors shrink-0"
                   aria-label="Fechar menu de gestão"
                 >
-                  <SFSymbol name="close" size={20} weight={500} />
+                  <SFSymbol name="close" size={19} weight={500} />
                 </motion.button>
               </div>
 
-              {/* Cartão Navy Institucional de Nuvem & Sincronização */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#071e46] via-[#0c2f6e] to-[#08224f] text-white shadow-[0_12px_28px_rgba(7,30,70,0.28)] flex items-center justify-between gap-3 min-w-0">
+              {/* Cartão Apple de Nuvem & Sincronização */}
+              <div className="p-3.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.06] text-[#1D1D1F] flex items-center justify-between gap-3 min-w-0">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-white ${
                       isActivelySyncing
-                        ? 'bg-[#1d4ed8]'
+                        ? 'bg-[#0071E3]'
                         : hasPendingCloud
-                        ? 'bg-[#b45309]'
-                        : 'bg-[#047857]'
+                        ? 'bg-[#B25000]'
+                        : 'bg-[#1B873F]'
                     }`}
                   >
                     <SFSymbol
@@ -369,20 +369,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                           : 'cloud_done'
                       }
                       filled
-                      size={21}
+                      size={20}
                       className={isActivelySyncing ? 'animate-spin' : ''}
                     />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-white leading-snug">
+                      <span className="text-sm font-semibold text-[#1D1D1F] leading-snug">
                         {hasPendingCloud
                           ? `${unifiedPendingCount} pendência(s)`
                           : 'Nuvem Sincronizada'}
                       </span>
                       <span
                         data-status={hasPendingCloud ? 'warning' : 'success'}
-                        className="px-2 py-0.5 rounded-md text-[10.5px] font-medium text-white leading-none"
+                        className="px-2 py-0.5 rounded-full text-[10.5px] font-medium text-white leading-none"
                       >
                         {isActivelySyncing
                           ? 'Enviando'
@@ -391,7 +391,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                           : 'Ativo'}
                       </span>
                     </div>
-                    <span className="text-[11.5px] text-blue-100/85 block break-words mt-0.5">
+                    <span className="text-[11.5px] text-[#86868B] block break-words mt-0.5">
                       Sincronização automática em segundo plano
                     </span>
                   </div>
@@ -401,11 +401,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   whileTap={tapAnimation}
                   onClick={handleManualSync}
                   disabled={isFlushingCloud}
-                  className="min-h-[38px] px-3.5 py-2 rounded-xl bg-[#1d4ed8] hover:bg-[#2563eb] text-white font-semibold text-xs inline-flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors disabled:opacity-55 shadow-[0_4px_12px_rgba(29,78,216,0.4)]"
+                  className="min-h-[36px] px-3.5 py-1.5 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-xs inline-flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors disabled:opacity-55"
                 >
                   <SFSymbol
                     name="sync"
-                    size={16}
+                    size={15}
                     weight={500}
                     className={isFlushingCloud ? 'animate-spin' : ''}
                   />
@@ -413,7 +413,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 </motion.button>
               </div>
 
-              {/* Lista de Módulos com Ícones SF Symbols e Navy Institucional */}
+              {/* Lista de Módulos */}
               <div className="space-y-2">
                 {adminMoreItems.map((item) => {
                   const isActive =
@@ -424,16 +424,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                     <motion.button
                       key={item.id}
                       type="button"
-                      whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
+                      whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
                       onClick={() => {
                         triggerMenuHaptic('light');
                         setShowMoreMenu(false);
                         onChangeScreen(item.id);
                       }}
-                      className={`w-full p-3 rounded-2xl flex items-center justify-between gap-3 text-left transition-all duration-150 cursor-pointer min-w-0 ${
+                      className={`w-full p-3 rounded-2xl border flex items-center justify-between gap-3 text-left transition-all duration-150 cursor-pointer min-w-0 ${
                         isActive
-                          ? 'bg-gradient-to-r from-[#0e3a8a] to-[#1649a8] text-white shadow-[0_10px_24px_rgba(14,58,138,0.32)]'
-                          : 'bg-[#f2f6fc] hover:bg-[#e5edf9] text-[#071e46]'
+                          ? 'bg-[#0071E3] border-transparent text-white'
+                          : 'bg-[#F5F5F7]/70 hover:bg-[#F5F5F7] border-black/[0.05] text-[#1D1D1F]'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -445,7 +445,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                           <SFSymbol
                             name={item.symbolName}
                             filled
-                            size={21}
+                            size={20}
                             weight={500}
                           />
                         </div>
@@ -455,7 +455,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                           </span>
                           <span
                             className={`text-xs block break-words leading-snug mt-0.5 ${
-                              isActive ? 'text-blue-100' : 'text-slate-700'
+                              isActive ? 'text-white/85' : 'text-[#86868B]'
                             }`}
                           >
                             {item.description}
@@ -466,7 +466,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                         className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors ${
                           isActive
                             ? 'bg-white/15 text-white'
-                            : 'bg-[#e2eaf6] text-[#0e3a8a]'
+                            : 'bg-white text-[#86868B]'
                         }`}
                       >
                         <SFSymbol name="chevron_right" size={18} weight={500} />
@@ -480,17 +480,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 <div className="pt-1">
                   <motion.button
                     type="button"
-                    whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
+                    whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
                     onClick={() => {
                       triggerMenuHaptic('medium');
                       setShowMoreMenu(false);
                       setShowLogoutConfirm(true);
                     }}
-                    className="w-full min-h-[48px] py-2.5 px-4 rounded-2xl text-[#9f1239] bg-[#fff1f2] hover:bg-[#ffe4e6] font-semibold text-sm flex items-center justify-center gap-2.5 transition-colors cursor-pointer"
+                    className="w-full min-h-[46px] py-2.5 px-4 rounded-full text-[#D70015] bg-[#D70015]/8 hover:bg-[#D70015]/14 font-medium text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
                   >
-                    <span className="w-7 h-7 rounded-lg bg-[#be123c] text-white flex items-center justify-center shrink-0">
-                      <SFSymbol name="logout" filled size={16} weight={500} />
-                    </span>
+                    <SFSymbol name="logout" filled size={18} weight={500} />
                     <span>Encerrar Sessão</span>
                   </motion.button>
                 </div>
@@ -509,16 +507,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             className="fixed inset-0 z-[130] flex items-center justify-center p-4"
           >
             <div
-              className="absolute inset-0 bg-[#050d1d]/70 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/40 backdrop-blur-md"
               onClick={() => setShowLogoutConfirm(false)}
             />
-            <div className="relative bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-gentle-fade text-center">
-              <div className="w-12 h-12 rounded-2xl bg-[#fff1f2] text-[#be123c] flex items-center justify-center mx-auto shadow-xs">
+            <div className="relative bg-white border border-black/[0.08] rounded-3xl p-6 max-w-sm w-full shadow-[0_24px_64px_rgba(0,0,0,0.2)] space-y-4 animate-gentle-fade text-center">
+              <div className="w-12 h-12 rounded-2xl bg-[#D70015]/10 text-[#D70015] flex items-center justify-center mx-auto">
                 <SFSymbol name="logout" filled size={22} />
               </div>
               <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-950">Deseja realmente sair?</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
+                <h3 className="text-lg font-semibold text-[#1D1D1F]">Deseja realmente sair?</h3>
+                <p className="text-xs text-[#86868B] leading-relaxed">
                   Sua sessão será encerrada e você retornará à tela de identificação institucional.
                 </p>
               </div>
@@ -526,7 +524,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowLogoutConfirm(false)}
-                  className="min-h-[44px] py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold cursor-pointer transition-colors"
+                  className="min-h-[44px] py-2 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] text-xs font-medium cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
@@ -536,7 +534,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                     setShowLogoutConfirm(false);
                     onLogout?.();
                   }}
-                  className="min-h-[44px] py-2 px-4 rounded-xl bg-[#be123c] hover:bg-[#9f1239] text-white text-xs font-semibold cursor-pointer transition-colors shadow-xs"
+                  className="min-h-[44px] py-2 px-4 rounded-full bg-[#D70015] hover:bg-[#B80012] text-white text-xs font-medium cursor-pointer transition-colors"
                 >
                   Sim, sair
                 </button>

@@ -394,9 +394,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       : null;
 
   return (
-    <div className="relative min-h-[100dvh] w-full flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none font-sans bg-[#0a1529]">
-      {/* Galeria alternada com dissolução esmaecida contínua (camada anterior firme sob camada nova em fade-in) */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#0a1529]">
+    <div className="relative min-h-[100dvh] w-full flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none font-sans bg-[#F5F5F7]">
+      {/* Galeria alternada com dissolução esmaecida contínua */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#1D1D1F]">
         {safePrevIndex !== null && (
           <img
             key={`prev-${availableGallery[safePrevIndex]}`}
@@ -404,7 +404,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             alt=""
             aria-hidden="true"
             referrerPolicy="no-referrer"
-            className="absolute inset-0 z-0 w-full h-full object-cover object-center filter brightness-[0.92] contrast-[1.03] saturate-[1.04]"
+            className="absolute inset-0 z-0 w-full h-full object-cover object-center filter brightness-[0.90] contrast-[1.03] saturate-[1.02]"
           />
         )}
         <img
@@ -419,15 +419,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               setFailedPhotoUrls((prev) => ({ ...prev, [failedUrl]: true }));
             }
           }}
-          className="absolute inset-0 z-[1] w-full h-full object-cover object-center filter brightness-[0.92] contrast-[1.03] saturate-[1.04] animate-login-photo-dissolve"
+          className="absolute inset-0 z-[1] w-full h-full object-cover object-center filter brightness-[0.90] contrast-[1.03] saturate-[1.02] animate-login-photo-dissolve"
         />
-        {/* Véu escuro suave para manter a foto nítida, colorida e levemente escurecida sem esbranquiçar */}
-        <div className="absolute inset-0 z-[2] bg-[#071226]/22" />
-        <div className="absolute inset-0 z-[2] bg-[radial-gradient(ellipse_at_center,rgba(7,18,38,0.16)_0%,rgba(5,12,26,0.46)_100%)]" />
+        <div className="absolute inset-0 z-[2] bg-black/25" />
+        <div className="absolute inset-0 z-[2] bg-[radial-gradient(ellipse_at_center,rgba(29,29,31,0.18)_0%,rgba(0,0,0,0.52)_100%)]" />
       </div>
 
-      {/* Card Minimalista e Focado Sem Bordas */}
-      <div className="relative z-10 w-full max-w-[390px] min-w-0 bg-white/97 backdrop-blur-md rounded-3xl shadow-[0_28px_68px_rgba(2,6,23,0.42)] px-7 py-9 sm:px-9 sm:py-10 flex flex-col items-center text-center animate-apple-pop">
+      {/* Card Minimalista Estilo Apple */}
+      <div className="relative z-10 w-full max-w-[396px] min-w-0 bg-white/96 backdrop-blur-2xl rounded-3xl border border-black/[0.08] shadow-[0_24px_64px_rgba(0,0,0,0.28)] px-7 py-9 sm:px-9 sm:py-10 flex flex-col items-center text-center animate-apple-pop">
         {/* Brasão Oficial de Jundiaí */}
         <img
           src={APP_LOGO_URL}
@@ -437,24 +436,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             e.currentTarget.onerror = null;
             e.currentTarget.src = APP_LOGO_FALLBACK_URL;
           }}
-          className="w-20 h-20 object-contain mb-3.5 shrink-0 drop-shadow-xs"
+          className="w-20 h-20 object-contain mb-4 shrink-0"
         />
 
         {/* Identificação Institucional */}
-        <p className="text-[11px] uppercase tracking-[0.16em] font-bold text-slate-700">
+        <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-[#86868B]">
           Prefeitura de Jundiaí · SME
         </p>
 
         {/* Nome do Aplicativo */}
-        <h1 className="text-xl sm:text-[22px] font-bold tracking-tight text-[#14428c] leading-snug mt-1.5 text-balance">
+        <h1 className="text-xl sm:text-[23px] font-bold tracking-[-0.025em] text-[#1D1D1F] leading-snug mt-1.5 text-balance">
           Lista Piloto Candelário 2027
         </h1>
 
-        <p className="text-xs sm:text-[13px] font-semibold text-slate-700 leading-snug mt-1 mb-8 text-balance">
+        <p className="text-xs sm:text-[13px] font-medium text-[#424245] leading-snug mt-1 mb-8 text-balance">
           EMEB Prof. Joaquim Candelário de Freitas
         </p>
 
-        {/* Botão Oficial de 'Entrar com o Google' com transição de entrada suave (fade-in) */}
+        {/* Botão Oficial de Login com Google */}
         <div
           className={`w-full transition-all duration-700 ease-out animate-google-btn-fade-in ${
             buttonMounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
@@ -465,10 +464,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             disabled={loading}
             onClick={handleGoogleLogin}
             aria-label="Fazer login com a conta Google"
-            className="w-full min-h-[52px] py-2.5 px-5 bg-[#eef3f9] hover:bg-[#e2e8f0] rounded-full text-slate-950 font-semibold text-sm sm:text-[15px] flex items-center justify-center gap-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.08)] hover:shadow-[0_8px_20px_rgba(11,59,140,0.16)] hover:-translate-y-px active:scale-[0.98] transition-all duration-200 cursor-pointer disabled:opacity-60"
+            className="w-full min-h-[50px] py-2.5 px-5 bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.08] rounded-full text-[#1D1D1F] font-medium text-sm sm:text-[15px] flex items-center justify-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.08)] hover:-translate-y-px active:scale-[0.985] transition-all duration-180 cursor-pointer disabled:opacity-60"
           >
             {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin text-[#14428c]" />
+              <Loader2 className="w-5 h-5 animate-spin text-[#0071E3]" />
             ) : (
               <svg
                 className="w-5 h-5 shrink-0"
@@ -499,25 +498,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </button>
         </div>
 
-        {/* Mensagem de Erro com Design Limpo e Acessível */}
+        {/* Mensagem de Erro */}
         {errorMsg && (
-          <div className="w-full mt-4 px-3.5 py-2.5 rounded-2xl bg-[#fff1f2] text-[#9f1239] text-xs font-semibold leading-relaxed break-words text-left flex items-start gap-2 animate-fade-in">
-            <AlertCircle className="w-4 h-4 text-[#be123c] shrink-0 mt-0.5" />
+          <div className="w-full mt-4 px-3.5 py-2.5 rounded-2xl bg-[#D70015]/8 border border-[#D70015]/15 text-[#B80012] text-xs font-medium leading-relaxed break-words text-left flex items-start gap-2 animate-fade-in">
+            <AlertCircle className="w-4 h-4 text-[#D70015] shrink-0 mt-0.5" />
             <p className="flex-1">{errorMsg}</p>
           </div>
         )}
 
-        {/* Orientação prática para iPhone (Modo Tela de Início / Navegador Interno / Storage Particionado) */}
+        {/* Orientação prática para iPhone */}
         {showIosHelp && (
-          <div className="w-full mt-3.5 p-3.5 rounded-2xl bg-[#f3f6fb] text-[#0f172a] text-left space-y-2.5 animate-fade-in">
-            <p className="text-xs font-bold text-[#14428c] leading-snug">
+          <div className="w-full mt-3.5 p-3.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.06] text-[#1D1D1F] text-left space-y-2.5 animate-fade-in">
+            <p className="text-xs font-semibold text-[#1D1D1F] leading-snug">
               {authEnv.isIOSStandalone
                 ? 'Abertura pela Tela de Início (iOS)'
                 : authEnv.isInAppBrowser
                 ? 'Navegador interno detectado'
                 : 'Compatibilidade de login no Safari / iOS'}
             </p>
-            <p className="text-[11.5px] text-[#334155] leading-relaxed">
+            <p className="text-[11.5px] text-[#424245] leading-relaxed">
               {authEnv.isIOSStandalone
                 ? 'No iPhone, o modo Tela de Início isola a janela de login do Google. Copie o endereço abaixo e abra diretamente no navegador Safari para entrar.'
                 : authEnv.isInAppBrowser
@@ -528,7 +527,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <button
                 type="button"
                 onClick={handleCopyPortalUrl}
-                className="w-full min-h-[40px] px-3 py-2 rounded-xl bg-[#14428c] hover:bg-[#0f3370] text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                className="w-full min-h-[40px] px-3 py-2 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
               >
                 {copiedPortalUrl ? (
                   <>
@@ -548,7 +547,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   type="button"
                   disabled={loading}
                   onClick={handleTryFedCmSignIn}
-                  className="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-[#e8f0fe] hover:bg-[#d4e2fc] text-[#14428c] text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                  className="w-full min-h-[38px] px-3 py-1.5 rounded-full bg-white hover:bg-[#E8E8ED] border border-black/[0.08] text-[#0071E3] text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
                 >
                   <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                   <span>Tentar Login Direto Google</span>
@@ -560,7 +559,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   type="button"
                   disabled={loading}
                   onClick={() => void executePopupSignIn()}
-                  className="w-full min-h-[36px] px-3 py-1.5 rounded-xl bg-[#eef3f9] hover:bg-[#dfe8f4] text-[#334155] text-[11px] font-semibold cursor-pointer transition-colors disabled:opacity-50"
+                  className="w-full min-h-[36px] px-3 py-1.5 rounded-full bg-white hover:bg-[#E8E8ED] border border-black/[0.06] text-[#424245] text-[11px] font-medium cursor-pointer transition-colors disabled:opacity-50"
                 >
                   Tentar janela de login mesmo assim
                 </button>
@@ -569,10 +568,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
         )}
 
-        {/* Rodapé Institucional Discreto Sem Linha Divisória */}
+        {/* Rodapé Institucional */}
         <div className="w-full mt-6 pt-3">
-          <p className="text-[11px] text-slate-600 leading-relaxed text-balance">
-            Acesso exclusivo para contas institucionais autorizadas (<span className="font-bold text-slate-900">@educacao.jundiai.sp.gov.br</span>).
+          <p className="text-[11px] text-[#86868B] leading-relaxed text-balance">
+            Acesso exclusivo para contas institucionais autorizadas (<span className="font-semibold text-[#1D1D1F]">@educacao.jundiai.sp.gov.br</span>).
           </p>
         </div>
       </div>
