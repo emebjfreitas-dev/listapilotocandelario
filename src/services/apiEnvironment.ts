@@ -43,17 +43,10 @@ export const isBackendApiAvailable = (): boolean => {
   if (isStaticHosting()) {
     return false;
   }
-  if (!probedBackend) {
-    // If running on localhost / 127.0.0.1 or custom port, probe lazily or assume true until probed
-    return true;
-  }
-  return backendAvailable;
+  // Sempre permite tentar se não foi confirmado estático
+  return true;
 };
 
-/**
- * Perform a single, lightweight probe on app startup to verify if /api/school-state exists.
- * If running on GitHub Pages, skips probing immediately to avoid even 1 unnecessary request.
- */
 export const probeBackendAvailability = async (): Promise<boolean> => {
   if (typeof window === 'undefined') {
     backendAvailable = false;
@@ -67,13 +60,9 @@ export const probeBackendAvailability = async (): Promise<boolean> => {
     return false;
   }
 
-  if (probedBackend) {
-    return backendAvailable;
-  }
-
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
+    const timeout = setTimeout(() => controller.abort(), 3000);
     const res = await fetch('/api/health', {
       method: 'GET',
       headers: { Accept: 'application/json' },
@@ -86,10 +75,10 @@ export const probeBackendAvailability = async (): Promise<boolean> => {
     if ((res.ok || res.status === 401 || res.status === 403) && contentType.includes('application/json')) {
       backendAvailable = true;
     } else {
-      backendAvailable = false;
+      backendAvailable = true; // Assume available on local dev/preview
     }
   } catch {
-    backendAvailable = false;
+    backendAvailable = true; // Graceful fallback
   } finally {
     probedBackend = true;
   }
