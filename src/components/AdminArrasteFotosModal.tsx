@@ -799,11 +799,17 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
       const totalSkippedAll = skippedIdentical + (res.skippedCount || 0);
       const totalFailedAll = failedOptimize + res.failedStudentIds.length;
 
-      setStatusMessage(
-        `✓ Concluído: ${res.updatedCount} foto(s) salva(s) · ${totalSkippedAll} idêntica(s) economizada(s) · ${formatBytesCompact(
-          savedBytes
-        )} economizados${totalFailedAll > 0 ? ` · ${totalFailedAll} com falha (clique em Reenviar Falhas)` : '.'}`
-      );
+      if (totalFailedAll > 0) {
+        setStatusMessage(
+          `⚠ Envio concluído com falhas: ${res.updatedCount} salva(s), ${totalSkippedAll} idêntica(s), ${totalFailedAll} COM FALHA. Clique em Reenviar Falhas.`
+        );
+      } else {
+        setStatusMessage(
+          `✓ Concluído com sucesso: ${res.updatedCount} foto(s) salva(s) · ${totalSkippedAll} idêntica(s) economizada(s) · ${formatBytesCompact(
+            savedBytes
+          )} economizados.`
+        );
+      }
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         setStatusMessage('Sincronização interrompida pelo usuário.');

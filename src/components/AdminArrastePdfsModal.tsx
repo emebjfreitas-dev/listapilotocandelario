@@ -692,11 +692,17 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
       const totalSkippedAll = skippedIdentical + (res.skippedCount || 0);
       const totalFailedAll = failedOptimize + res.failedStudentIds.length;
 
-      setStatusMessage(
-        `✓ Concluído: ${res.updatedCount} ficha(s) salva(s) · ${totalSkippedAll} idêntica(s) economizada(s) · ${formatFileSize(
-          savedBytes
-        )} economizados${totalFailedAll > 0 ? ` · ${totalFailedAll} com falha (clique em Reenviar Falhas)` : '.'}`
-      );
+      if (totalFailedAll > 0) {
+        setStatusMessage(
+          `⚠ Envio concluído com falhas: ${res.updatedCount} salva(s), ${totalSkippedAll} idêntica(s), ${totalFailedAll} COM FALHA. Clique em Reenviar Falhas.`
+        );
+      } else {
+        setStatusMessage(
+          `✓ Concluído com sucesso: ${res.updatedCount} ficha(s) salva(s) · ${totalSkippedAll} idêntica(s) economizada(s) · ${formatFileSize(
+            savedBytes
+          )} economizados.`
+        );
+      }
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         setStatusMessage('Sincronização cancelada pelo usuário.');
