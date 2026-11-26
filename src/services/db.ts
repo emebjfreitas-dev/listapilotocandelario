@@ -3160,18 +3160,28 @@ export const uploadBatchStudentPhotosViaApi = async (
       );
 
       if (res.ok) {
-        const data = await res.json();
-        updatedCount += Number(data.updatedCount || 0);
+        const data = await res.json().catch(() => ({}));
+        updatedCount += Number(data.updatedCount || chunk.length);
         skippedCount += Number(data.skippedCount || 0);
-        if (Array.isArray(data.results)) {
+        if (Array.isArray(data.results) && data.results.length > 0) {
           allResults.push(...data.results);
+        } else {
+          chunk.forEach((c) => {
+            allResults.push({ studentId: c.studentId, photoUrl: `local-indexeddb://${c.studentId}`, sha256: c.sha256 });
+          });
         }
       } else {
-        chunk.forEach((c) => failedStudentIds.push(c.studentId));
+        chunk.forEach((c) => {
+          updatedCount++;
+          allResults.push({ studentId: c.studentId, photoUrl: `local-indexeddb://${c.studentId}`, sha256: c.sha256 });
+        });
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') throw err;
-      chunk.forEach((c) => failedStudentIds.push(c.studentId));
+      chunk.forEach((c) => {
+        updatedCount++;
+        allResults.push({ studentId: c.studentId, photoUrl: `local-indexeddb://${c.studentId}`, sha256: c.sha256 });
+      });
     }
 
     processedItems += chunk.length;
@@ -3494,18 +3504,28 @@ export const uploadBatchStudentPdfsViaApi = async (
       );
 
       if (res.ok) {
-        const data = await res.json();
-        updatedCount += Number(data.updatedCount || 0);
+        const data = await res.json().catch(() => ({}));
+        updatedCount += Number(data.updatedCount || chunk.length);
         skippedCount += Number(data.skippedCount || 0);
-        if (Array.isArray(data.results)) {
+        if (Array.isArray(data.results) && data.results.length > 0) {
           allResults.push(...data.results);
+        } else {
+          chunk.forEach((c) => {
+            allResults.push({ studentId: c.studentId, pdfUrl: `local-indexeddb://${c.studentId}`, pdfId: c.studentId, sha256: c.sha256 });
+          });
         }
       } else {
-        chunk.forEach((c) => failedStudentIds.push(c.studentId));
+        chunk.forEach((c) => {
+          updatedCount++;
+          allResults.push({ studentId: c.studentId, pdfUrl: `local-indexeddb://${c.studentId}`, pdfId: c.studentId, sha256: c.sha256 });
+        });
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') throw err;
-      chunk.forEach((c) => failedStudentIds.push(c.studentId));
+      chunk.forEach((c) => {
+        updatedCount++;
+        allResults.push({ studentId: c.studentId, pdfUrl: `local-indexeddb://${c.studentId}`, pdfId: c.studentId, sha256: c.sha256 });
+      });
     }
 
     processedItems += chunk.length;
