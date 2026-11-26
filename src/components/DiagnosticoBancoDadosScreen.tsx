@@ -11,13 +11,22 @@ import {
   DiagnosticSeverity,
   runSchoolDataDiagnostics,
 } from '../utils/dataDiagnostics';
-import { SyncStatusSnapshot, saveClassesToFirestoreCloud, isFirestoreQuotaExceeded, resetFirestoreQuotaExceeded } from '../services/firebaseSync';
+import {
+  SyncStatusSnapshot,
+  saveClassesToFirestoreCloud,
+  isFirestoreQuotaExceeded,
+  resetFirestoreQuotaExceeded,
+  getFirestoreIntegrityReport,
+  subscribeToFirestoreIntegrity,
+  FirestoreIntegrityReport,
+} from '../services/firebaseSync';
 import { SyncQueueManager, SyncQueueManagerSnapshot, SyncQueueTaskItem } from '../services/syncQueueManager';
 import {
   addSecurityAuditLog,
   flushPendingOfflineQueue,
   pushClassesToServer,
   saveStoredClasses,
+  getLocalClassesUpdatedAtMs,
 } from '../services/db';
 import { isBackendApiAvailable } from '../services/apiEnvironment';
 import {
@@ -146,6 +155,9 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
   });
   const backendActive = isBackendApiAvailable();
 
+  const [integrityReport, setIntegrityReport] = useState<FirestoreIntegrityReport>(() => getFirestoreIntegrityReport());
+  const localClassesTs = getLocalClassesUpdatedAtMs();
+
   useEffect(() => {
     const unsubQueue = SyncQueueManager.subscribe((snap) => {
       setQueueSnapshot(snap);
@@ -153,11 +165,35 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
     const unsubRealtime = subscribeToRealtimeConnectionStatus((status) => {
       setRealtimeStatus(status);
     });
+    const unsubIntegrity = subscribeToFirestoreIntegrity((rep) => {
+      setIntegrityReport(rep);
+    });
     return () => {
       unsubQueue();
       unsubRealtime();
+      unsubIntegrity();
     };
   }, []);
+
+  const remoteTs = integrityReport.remoteClassesUpdatedAtMs || integrityReport.remoteEpochUpdatedAtMs || 0;
+  const localTs = Math.max(integrityReport.localClassesUpdatedAtMs, localClassesTs);
+  const diffMs = remoteTs - localTs;
+  const absDiffSec = Math.abs(Math.round(diffMs / 1000));
+  const diffMinutes = Math.floor(absDiffSec / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  const localFormatted = localTs > 0 ? new Date(localTs).toLocaleString('pt-BR') : 'Sem registro local';
+  const remoteFormatted = remoteTs > 0 ? new Date(remoteTs).toLocaleString('pt-BR') : 'Não sincronizado / Sem dados remotos';
+
+  let cacheFreshnessLabel = 'Sincronizado com o Servidor (Cache Atualizado)';
+  let cacheFreshnessVariant = 'success';
+  if (diffMs > 30000) {
+    cacheFreshnessLabel = `Cache Obsoleto: Servidor está ${diffHours > 0 ? `${diffHours}h ` : ''}${diffMinutes % 60}m mais recente`;
+    cacheFreshnessVariant = 'warning';
+  } else if (diffMs < -30000) {
+    cacheFreshnessLabel = 'Local mais recente que a nuvem (Pendente de upload)';
+    cacheFreshnessVariant = 'info';
+  }
 
   const baseReport = useMemo(
     () =>
@@ -800,6 +836,75 @@ export const DiagnosticoBancoDadosScreen: React.FC<DiagnosticoBancoDadosScreenPr
             <span className="text-xs text-slate-700 block mt-0.5">
               {structuralAnalysis.aeeCount} estudantes com Atendimento Educacional Especializado
             </span>
+          </div>
+        </div>
+
+        {/* Painel de Comparação de Timestamps e Frescor de Cache */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white space-y-3.5 shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                <Activity className="w-4 h-4 text-sky-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold tracking-wide text-white">
+                  Painel de Sincronização & Frescor de Cache (Timestamps)
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Compara a última modificação gravada nesta máquina com o carimbo temporal do servidor em nuvem.
+                </p>
+              </div>
+            </div>
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 ${
+                cacheFreshnessVariant === 'success'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : cacheFreshnessVariant === 'warning'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${cacheFreshnessVariant === 'success' ? 'bg-emerald-400 animate-pulse' : cacheFreshnessVariant === 'warning' ? 'bg-amber-400 animate-ping' : 'bg-blue-400'}`} />
+              <span>{cacheFreshnessLabel}</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="p-3 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+              <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">
+                Timestamp Local (Máquina Atual)
+              </span>
+              <p className="text-xs sm:text-sm font-bold text-white font-mono truncate">
+                {localFormatted}
+              </p>
+              <span className="text-[10px] text-slate-400 block">
+                Última alteração salva no navegador/localStorage
+              </span>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+              <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">
+                Timestamp Remoto (Servidor / Nuvem)
+              </span>
+              <p className="text-xs sm:text-sm font-bold text-white font-mono truncate">
+                {remoteFormatted}
+              </p>
+              <span className="text-[10px] text-slate-400 block">
+                Último estado registrado no Cloud Firestore
+              </span>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+              <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">
+                Diferença (Delta) & Status
+              </span>
+              <p className="text-xs sm:text-sm font-bold font-mono text-white">
+                {diffMs === 0 ? 'Exatamente Sincronizado (0s)' : `${Math.abs(diffMinutes)} min (${diffMs > 0 ? 'Servidor Mais Recente' : 'Local Mais Recente'})`}
+              </p>
+              <span className="text-[10px] text-slate-400 block">
+                {diffMs > 30000 ? '⚠️ Alerta: Esta máquina pode estar usando cache obsoleto.' : '✓ Base alinhada sem desvios de versão.'}
+              </span>
+            </div>
           </div>
         </div>
 
