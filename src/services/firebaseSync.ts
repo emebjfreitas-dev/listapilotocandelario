@@ -134,25 +134,8 @@ export const isFirestoreInternalAssertionError = (error: unknown): boolean => {
 };
 
 export const isFirestoreQuotaExceeded = (): boolean => {
-  const now = Date.now();
-  if (memoryQuotaPausedUntilMs > now) return true;
-  try {
-    if (typeof localStorage !== 'undefined') {
-      const stored = localStorage.getItem(FIRESTORE_QUOTA_STORAGE_KEY);
-      if (stored) {
-        const until = parseInt(stored, 10);
-        if (until > now) {
-          memoryQuotaPausedUntilMs = until;
-          return true;
-        } else {
-          localStorage.removeItem(FIRESTORE_QUOTA_STORAGE_KEY);
-        }
-      }
-    }
-  } catch {
-    // ignore storage access errors
-  }
-  return false;
+  // Modo exclusivo Google Sheets + Cache Local / Express (Firestore desativado 100% a pedido do usuário)
+  return true;
 };
 
 export const markFirestoreQuotaExceeded = (_error?: unknown): void => {
