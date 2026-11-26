@@ -25,7 +25,7 @@ export const OfflineIndicator: React.FC = () => {
     };
   }, []);
 
-  const showFirestoreQuotaBanner = !backendActive && quotaExceeded;
+  const showFirestoreQuotaBanner = false;
   const showSlowWarning = isOnline && (isSlow || isUnstable) && !realtimeConnected;
 
   if (isOnline && !showSlowWarning && !showFirestoreQuotaBanner) return null;
