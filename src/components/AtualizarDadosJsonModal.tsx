@@ -21,6 +21,7 @@ import {
 import { ClassGroup } from '../types';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { ModalPortal } from './ui/ModalPortal';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 import {
   exportSchoolDataToJsonFile,
   validateAndSanitizeJsonPayload,
@@ -28,10 +29,12 @@ import {
   resetEntireAppData,
 } from '../services/db';
 
-const GoogleDriveBackupModal = React.lazy(() =>
-  import('./admin/GoogleDriveBackupModal').then((m) => ({
-    default: m.GoogleDriveBackupModal,
-  }))
+const GoogleDriveBackupModal = lazyWithRetry(
+  () =>
+    import('./admin/GoogleDriveBackupModal').then((m) => ({
+      default: m.GoogleDriveBackupModal,
+    })),
+  'GoogleDriveBackupModal'
 );
 
 interface AtualizarDadosJsonModalProps {

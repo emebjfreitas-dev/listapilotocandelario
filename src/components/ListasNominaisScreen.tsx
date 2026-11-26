@@ -34,6 +34,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { getStoredLgpdConfig, maskSensitiveText, addSecurityAuditLog } from '../services/db';
 import { StudentAvatar } from './StudentAvatar';
 import { ModalPortal } from './ui/ModalPortal';
 import { PaginationBar } from './ui/PaginationBar';
@@ -546,6 +547,7 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
       return;
     }
 
+    const anonymize = Boolean(getStoredLgpdConfig().anonymizeExportedSpreadsheets);
     const orderedRows: EvaluatedRow[] = groupedByClass.flatMap((g) => g.rows);
     const exportObjects = orderedRows.map((r, index) => {
       const monthCols: Record<string, string | number> = {};
@@ -555,7 +557,12 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
         monthCols[`${shortM} (FALTAS / ATEST.)`] = `${mb.faltas}F / ${mb.atestados}A`;
       });
 
-      return {
+      const rawNis = r.student.nis || '';
+      const rawPhone = r.student.telefones || r.student.guardianPhone || '';
+      const safeNis = anonymize && rawNis ? maskSensitiveText(rawNis, 'nis') : (rawNis || '—');
+      const safePhone = anonymize && rawPhone ? maskSensitiveText(rawPhone, 'phone') : (rawPhone || '—');
+
+      const obj = {
         'ORDEM': index + 1,
         'TURMA': r.cls.name,
         'ESTUDANTE (A-Z)': r.student.name,
@@ -577,9 +584,30 @@ export const ListasNominaisScreen: React.FC<ListasNominaisScreenProps> = ({
           ? `ABAIXO DA META (<${r.rep.minLegalPresencePercent}%)`
           : `DENTRO DA META (≥${r.rep.minLegalPresencePercent}%)`,
         'RA': `${r.student.ra}-${r.student.digRa}`,
-        'NIS (BOLSA FAMÍLIA)': r.student.nis || '—',
-        'RESPONSÁVEL / TELEFONE': `${r.student.filiacao1 || r.student.guardianName || '—'} (${r.student.telefones || r.student.guardianPhone || '—'})`,
+        'NIS (BOLSA FAMÍLIA)': safeNis,
+        'RESPONSÁVEL / TELEFONE': `${r.student.filiacao1 || r.student.guardianName || '—'} (${safePhone})`,
       };
+
+      const sanitizedObj: Record<string, any> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === 'string' && /^[=+\-@\t\r]/.test(v)) {
+          sanitizedObj[k] = `'${v}`;
+        } else {
+          sanitizedObj[k] = v;
+        }
+      }
+      return sanitizedObj;
+    });
+
+    addSecurityAuditLog({
+      userEmail: 'emebjfreitas@jundiai.sp.gov.br',
+      userName: 'Gestão Escolar / Administração',
+      userRole: 'admin',
+      eventType: 'STUDENT_DATA_EXPORTED',
+      actionTitle: 'Exportação Nominal Bolsa Família (.XLS)',
+      details: `Exportadas listas nominais (${exportObjects.length} registros) do bimestre ${currentBimester.shortLabel}. Anônimo LGPD: ${anonymize}.`,
+      targetResource: 'Listas Nominais Bolsa Família',
+      severity: 'info',
     });
 
     const XLSX = await import('xlsx');

@@ -88,6 +88,15 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
   const [activeBanner, setActiveBanner] = useState<PushNoticeItem | null>(null);
 
   const popoverRef = useRef<HTMLDivElement>(null);
+  const visibleClassesRef = useRef<ClassGroup[]>(visibleClasses);
+  visibleClassesRef.current = visibleClasses;
+  const attendanceWindowConfigRef = useRef<AttendanceWindowConfig>(attendanceWindowConfig);
+  attendanceWindowConfigRef.current = attendanceWindowConfig;
+  const onNavigateScreenRef = useRef(onNavigateScreen);
+  onNavigateScreenRef.current = onNavigateScreen;
+  const assignedClassIdsKey = assignedClassIds.join(',');
+  const visibleClassesIdKey = visibleClasses.map((c) => c.id).join(',');
+  const attendanceWindowKey = JSON.stringify(attendanceWindowConfig);
 
   useEffect(() => {
     setReadIds(getReadPushNoticeIds(userEmail));
@@ -98,15 +107,18 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
     let mounted = true;
     void registerPushServiceWorker();
 
+    const parsedAssignedIds = assignedClassIdsKey
+      ? assignedClassIdsKey.split(',').filter(Boolean)
+      : [];
     const effectiveAssignedIds =
-      assignedClassIds.length > 0
-        ? assignedClassIds
-        : visibleClasses.map((c) => c.id);
+      parsedAssignedIds.length > 0
+        ? parsedAssignedIds
+        : visibleClassesRef.current.map((c) => c.id);
 
     const handleSwMessage = (event: MessageEvent) => {
       const data = event.data;
       if (data && data.type === 'PUSH_NOTIFICATION_CLICKED' && data.targetScreen) {
-        onNavigateScreen?.(data.targetScreen as ScreenType, data.targetClassId);
+        onNavigateScreenRef.current?.(data.targetScreen as ScreenType, data.targetClassId);
       } else if (
         data &&
         data.type === 'FCM_SUBSCRIPTION_REFRESH_NEEDED' &&
@@ -161,32 +173,38 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
       unsubscribeFcm();
       unsubscribeCompulsoryFcm();
     };
-  }, [userEmail, userRole, teacherRoleType, userName, assignedClassIds, visibleClasses, onNavigateScreen]);
+  }, [userEmail, userRole, teacherRoleType, userName, assignedClassIdsKey]);
 
   // Monitora automaticamente o fechamento da janela e dispara lembrete de fim de turno ao educador
   useEffect(() => {
-    if (visibleClasses.length === 0) return;
+    if (!visibleClassesIdKey) return;
     let cancelled = false;
     let cutoffTimeoutId: number | null = null;
     let pollIntervalId: number | null = null;
 
+    const parsedAssignedIds = assignedClassIdsKey
+      ? assignedClassIdsKey.split(',').filter(Boolean)
+      : [];
+
     const runChecks = async () => {
       if (cancelled) return;
+      const latestClasses = visibleClassesRef.current;
+      const latestWindow = attendanceWindowConfigRef.current;
       await evaluateAndTriggerWindowClosingReminder({
-        attendanceWindowConfig,
-        visibleClasses,
+        attendanceWindowConfig: latestWindow,
+        visibleClasses: latestClasses,
         userEmail,
         userRole,
       });
       const eodNotice = await evaluateAndTriggerTeacherEndOfDayReminder({
-        attendanceWindowConfig,
-        visibleClasses,
+        attendanceWindowConfig: latestWindow,
+        visibleClasses: latestClasses,
         userEmail,
         userRole,
         teacherRoleType,
-        assignedClassIds,
+        assignedClassIds: parsedAssignedIds,
         onOpenClassAttendance: (classId) =>
-          onNavigateScreen?.('frequencia_mensal', classId),
+          onNavigateScreenRef.current?.('frequencia_mensal', classId),
       });
       if (!cancelled && eodNotice) {
         setCustomNotices(getStoredCustomPushNotices());
@@ -201,11 +219,11 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
         cutoffTimeoutId = null;
       }
       const nextDelay = getNextTeacherEndOfDayReminderDelayMs({
-        attendanceWindowConfig,
-        visibleClasses,
+        attendanceWindowConfig: attendanceWindowConfigRef.current,
+        visibleClasses: visibleClassesRef.current,
         userRole,
         teacherRoleType,
-        assignedClassIds,
+        assignedClassIds: parsedAssignedIds,
       });
       if (nextDelay !== null && nextDelay > 0) {
         const safeDelay = Math.min(nextDelay + 500, 2_147_483_000);
@@ -236,13 +254,12 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
       document.removeEventListener('visibilitychange', handleVisibilityWake);
     };
   }, [
-    attendanceWindowConfig,
-    visibleClasses,
+    attendanceWindowKey,
+    visibleClassesIdKey,
     userEmail,
     userRole,
     teacherRoleType,
-    assignedClassIds,
-    onNavigateScreen,
+    assignedClassIdsKey,
   ]);
 
   // Auto-oculta o banner flutuante após 8 segundos (permanece na central até dar ciência)

@@ -257,7 +257,7 @@ async function handlePhotoRequest(event, req, url) {
           'Content-Type': cached.contentType || 'image/jpeg',
           'X-Cache-Provider': 'IndexedDB-BlobStore',
           'X-Cache-Hit': 'true',
-          'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400',
+          'Cache-Control': 'private, no-cache',
         },
       });
     }

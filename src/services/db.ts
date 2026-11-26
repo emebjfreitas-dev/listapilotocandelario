@@ -17,10 +17,13 @@ import {
 } from '../data/mockData';
 import { sortClassesInOfficialOrder } from '../data/officialMatrix2027';
 import { resolveCanonicalClassId } from '../data/officialSedStudents';
+import { getAuth } from 'firebase/auth';
 import {
   saveClassesToFirestoreCloud,
   saveConfigMetaToFirestoreCloud,
   fetchStateFromFirestoreCloud,
+  fetchClassesFromFirestorePaginated,
+  FetchCloudStateOptions,
   enqueuePendingSyncOperation,
   markSyncOperationSuccess,
   setSyncingActiveState,
@@ -34,6 +37,10 @@ import {
   shouldAllowRemoteClassesOverwrite,
   isFirestoreQuotaExceeded,
 } from './firebaseSync';
+import {
+  uploadStudentPhotoToStorage,
+  uploadStudentPdfToStorage,
+} from './firebaseStorage';
 import {
   resolveStudentGender,
   saveStoredNameGenderEntries,
@@ -808,7 +815,16 @@ const classesOrUsersSanitize = (users: AuthorizedUser[]): AuthorizedUser[] => {
       }
 
       if (matchedClasses.length === 0) {
-        matchedClasses.push(INITIAL_CLASSES[0]);
+        return {
+          ...u,
+          role: 'usuario',
+          email: cleanEmail,
+          teacherRoleType: 'peb1',
+          assignedClassId: '',
+          assignedClassName: 'Nenhuma turma vinculada',
+          assignedClassIds: [],
+          assignedClassNames: [],
+        };
       }
 
       const finalIds = matchedClasses.map((c) => c.id);
@@ -866,10 +882,10 @@ const classesOrUsersSanitize = (users: AuthorizedUser[]): AuthorizedUser[] => {
       role: 'usuario',
       email: cleanEmail,
       teacherRoleType: 'peb1',
-      assignedClassId: INITIAL_CLASSES[0].id,
-      assignedClassName: `${INITIAL_CLASSES[0].name} (${INITIAL_CLASSES[0].shift.replace('Turno ', '')})`,
-      assignedClassIds: [INITIAL_CLASSES[0].id],
-      assignedClassNames: [`${INITIAL_CLASSES[0].name} (${INITIAL_CLASSES[0].shift.replace('Turno ', '')})`],
+      assignedClassId: '',
+      assignedClassName: 'Nenhuma turma vinculada',
+      assignedClassIds: [],
+      assignedClassNames: [],
     };
   });
 };
@@ -1453,7 +1469,9 @@ registerOfflineFlushHandler(async () => {
   await flushPendingOfflineQueue();
 });
 
-export const pullSharedSchoolStateFromServer = async (): Promise<{
+export const pullSharedSchoolStateFromServer = async (
+  firestoreOptions?: FetchCloudStateOptions
+): Promise<{
   authorizedUsers?: AuthorizedUser[];
   accessSessionLogs?: UserAccessSessionLog[];
   attendanceWindowConfig?: AttendanceWindowConfig;
@@ -1501,7 +1519,7 @@ export const pullSharedSchoolStateFromServer = async (): Promise<{
 
     let firestoreData: any = null;
     if (shouldQueryFirestoreFallback) {
-      firestoreData = await fetchStateFromFirestoreCloud();
+      firestoreData = await fetchStateFromFirestoreCloud(firestoreOptions || false);
     }
 
     const firestoreHasStudents = Boolean(
@@ -2124,7 +2142,13 @@ export const exportSchoolDataToJsonFile = (
 const stripScriptTags = (value: string): string =>
   value
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
     .replace(/javascript\s*:/gi, '')
+    .replace(/vbscript\s*:/gi, '')
+    .replace(/data\s*:\s*text\/html/gi, '')
     .replace(/\bon\w+\s*=/gi, '')
     .trim();
 
@@ -2837,8 +2861,38 @@ const fetchWithExponentialBackoff = async (
   throw lastError || new Error('Falha de rede após múltiplas tentativas.');
 };
 
+const dataUrlToBlobForStorage = (dataUrl: string, defaultMime: string): Blob => {
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx === -1) return new Blob([], { type: defaultMime });
+  const header = dataUrl.slice(0, commaIdx);
+  const body = dataUrl.slice(commaIdx + 1);
+  const mimeMatch = header.match(/data:([^;]+);/i);
+  const mimeType = mimeMatch?.[1] || defaultMime;
+  if (header.toLowerCase().includes(';base64')) {
+    const binary = atob(body);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mimeType });
+  }
+  return new Blob([decodeURIComponent(body)], { type: mimeType });
+};
+
+const isFirebaseStorageAuthReady = (): boolean => {
+  try {
+    const auth = getAuth();
+    return Boolean(auth.currentUser && auth.currentUser.emailVerified);
+  } catch {
+    return false;
+  }
+};
+
+export { fetchClassesFromFirestorePaginated };
+
 /**
  * Upload individual de foto pelo PEB I ou Admin para o servidor central (binário econômico preferencial)
+ * Em hospedagem estática, envia ao Firebase Storage após redimensionar (>1280px) e converter em WebP 0.8 com Cache-Control (86400s).
  */
 export const uploadStudentPhotoViaApi = async (
   studentId: string,
@@ -2852,6 +2906,25 @@ export const uploadStudentPhotoViaApi = async (
     : photoDataUrlOrBinary;
 
   if (!isBackendApiAvailable()) {
+    if (isFirebaseStorageAuthReady() && (isBinaryObj || fallbackUrl.startsWith('data:image/'))) {
+      try {
+        const blob = isBinaryObj
+          ? new Blob([new Uint8Array(photoDataUrlOrBinary.bytes)], {
+              type: photoDataUrlOrBinary.mimeType || 'image/webp',
+            })
+          : dataUrlToBlobForStorage(fallbackUrl, 'image/jpeg');
+        if (blob.size > 0) {
+          const uploaded = await uploadStudentPhotoToStorage(studentId, blob);
+          return {
+            ok: true,
+            photoUrl: uploaded.downloadUrl,
+            sha256: isBinaryObj ? photoDataUrlOrBinary.sha256 : undefined,
+          };
+        }
+      } catch (storageErr) {
+        console.warn('Fallback local de foto (Storage indisponível/offline):', storageErr);
+      }
+    }
     return {
       ok: true,
       photoUrl: fallbackUrl,
@@ -2934,12 +3007,71 @@ export const uploadBatchStudentPhotosViaApi = async (
   results: Array<{ studentId: string; photoUrl: string; sha256: string }>;
 }> => {
   if (!isBackendApiAvailable()) {
+    if (!isFirebaseStorageAuthReady()) {
+      return {
+        ok: true,
+        updatedCount: photos.length,
+        skippedCount: 0,
+        failedStudentIds: [],
+        results: [],
+      };
+    }
+
+    const totalItems = photos.length;
+    const results: Array<{ studentId: string; photoUrl: string; sha256: string }> = [];
+    const failedStudentIds: string[] = [];
+    let updatedCount = 0;
+    let processedItems = 0;
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < photos.length) {
+        if (options?.waitIfPaused) await options.waitIfPaused();
+        if (options?.signal?.aborted) {
+          throw new DOMException('Upload abortado pelo usuário.', 'AbortError');
+        }
+        const idx = cursor++;
+        const item = photos[idx];
+        const isBinary = 'bytes' in item && item.bytes instanceof Uint8Array;
+        const blob =
+          'bytes' in item && item.bytes instanceof Uint8Array
+            ? new Blob([new Uint8Array(item.bytes)], { type: item.mimeType || 'image/webp' })
+            : dataUrlToBlobForStorage((item as { photoDataUrl: string }).photoDataUrl, 'image/jpeg');
+        try {
+          const uploaded = await uploadStudentPhotoToStorage(item.studentId, blob);
+          results.push({
+            studentId: item.studentId,
+            photoUrl: uploaded.downloadUrl,
+            sha256: isBinary ? item.sha256 : '',
+          });
+          updatedCount++;
+        } catch {
+          failedStudentIds.push(item.studentId);
+        } finally {
+          processedItems++;
+          options?.onProgress?.({
+            completedChunks: processedItems,
+            totalChunks: totalItems,
+            processedItems,
+            totalItems,
+            updatedCount,
+            skippedCount: 0,
+            failedCount: failedStudentIds.length,
+          });
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(4, Math.max(1, totalItems)) }, () => worker())
+    );
+
     return {
-      ok: true,
-      updatedCount: photos.length,
+      ok: failedStudentIds.length < totalItems,
+      updatedCount,
       skippedCount: 0,
-      failedStudentIds: [],
-      results: [],
+      failedStudentIds,
+      results,
     };
   }
 
@@ -3124,6 +3256,17 @@ export const uploadStudentPdfViaApi = async (
   pdfDataUrl: string
 ): Promise<{ ok: boolean; pdfUrl?: string }> => {
   if (!isBackendApiAvailable()) {
+    if (isFirebaseStorageAuthReady() && pdfDataUrl.startsWith('data:')) {
+      try {
+        const blob = dataUrlToBlobForStorage(pdfDataUrl, 'application/pdf');
+        if (blob.size > 0) {
+          const uploaded = await uploadStudentPdfToStorage(studentId, blob);
+          return { ok: true, pdfUrl: uploaded.downloadUrl };
+        }
+      } catch (storageErr) {
+        console.warn('Fallback local de PDF (Storage indisponível/offline):', storageErr);
+      }
+    }
     return { ok: true, pdfUrl: pdfDataUrl };
   }
   try {
@@ -3167,12 +3310,73 @@ export const uploadBatchStudentPdfsViaApi = async (
   results: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string }>;
 }> => {
   if (!isBackendApiAvailable()) {
+    if (!isFirebaseStorageAuthReady()) {
+      return {
+        ok: true,
+        updatedCount: pdfs.length,
+        skippedCount: 0,
+        failedStudentIds: [],
+        results: [],
+      };
+    }
+
+    const totalItems = pdfs.length;
+    const results: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string }> = [];
+    const failedStudentIds: string[] = [];
+    let updatedCount = 0;
+    let processedItems = 0;
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < pdfs.length) {
+        if (options?.waitIfPaused) await options.waitIfPaused();
+        if (options?.signal?.aborted) {
+          throw new DOMException('Upload abortado pelo usuário.', 'AbortError');
+        }
+        const idx = cursor++;
+        const item = pdfs[idx];
+        const isBinary = 'bytes' in item && item.bytes instanceof Uint8Array;
+        const blob =
+          'bytes' in item && item.bytes instanceof Uint8Array
+            ? new Blob([new Uint8Array(item.bytes)], { type: 'application/pdf' })
+            : dataUrlToBlobForStorage((item as { pdfDataUrl: string }).pdfDataUrl, 'application/pdf');
+        try {
+          const uploaded = await uploadStudentPdfToStorage(item.studentId, blob);
+          const cleanId = item.studentId.replace(/[^a-zA-Z0-9-_]/g, '_');
+          results.push({
+            studentId: item.studentId,
+            pdfUrl: uploaded.downloadUrl,
+            pdfId: cleanId,
+            sha256: isBinary ? item.sha256 : '',
+          });
+          updatedCount++;
+        } catch {
+          failedStudentIds.push(item.studentId);
+        } finally {
+          processedItems++;
+          options?.onProgress?.({
+            completedChunks: processedItems,
+            totalChunks: totalItems,
+            processedItems,
+            totalItems,
+            updatedCount,
+            skippedCount: 0,
+            failedCount: failedStudentIds.length,
+          });
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(3, Math.max(1, totalItems)) }, () => worker())
+    );
+
     return {
-      ok: true,
-      updatedCount: pdfs.length,
+      ok: failedStudentIds.length < totalItems,
+      updatedCount,
       skippedCount: 0,
-      failedStudentIds: [],
-      results: [],
+      failedStudentIds,
+      results,
     };
   }
 
@@ -3370,6 +3574,9 @@ export const clearAllStudentPdfsViaApi = async (): Promise<{ ok: boolean; cleare
   }
   return { ok: true, clearedCount: count };
 };
+
+export { establishServerAuthSessionCookieDetailed } from './authSessionService';
+export { pushLgpdConfigToServer } from './securityAuditService';
 
 
 

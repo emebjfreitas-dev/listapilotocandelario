@@ -458,3 +458,97 @@ export const collectFilesFromDataTransfer = async (
 
   return results;
 };
+
+/**
+ * Função utilitária no frontend usando HTML5 Canvas que redimensiona fotos maiores que 1280px
+ * e converte para WebP com qualidade 0.8 para economizar espaço e banda de download no Storage.
+ */
+export const resizePhotoWithCanvasToWebp = async (
+  fileOrBlob: File | Blob,
+  maxDimension = 1280,
+  quality = 0.8
+): Promise<{
+  blob: Blob;
+  width: number;
+  height: number;
+  originalBytes: number;
+  compressedBytes: number;
+}> => {
+  const originalBytes = fileOrBlob.size;
+  if (originalBytes <= 0) {
+    throw new Error('Arquivo vazio fornecido para compressão (0 bytes).');
+  }
+
+  const objectUrl = URL.createObjectURL(fileOrBlob);
+  const img = new Image();
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Falha ao decodificar imagem no navegador.'));
+      img.src = objectUrl;
+    });
+
+    const srcW = img.naturalWidth || img.width;
+    const srcH = img.naturalHeight || img.height;
+
+    if (srcW <= 0 || srcH <= 0) {
+      throw new Error('Dimensões inválidas da imagem fornecida.');
+    }
+
+    let targetW = srcW;
+    let targetH = srcH;
+
+    if (srcW > maxDimension || srcH > maxDimension) {
+      if (srcW > srcH) {
+        targetH = Math.max(1, Math.round((srcH * maxDimension) / srcW));
+        targetW = maxDimension;
+      } else {
+        targetW = Math.max(1, Math.round((srcW * maxDimension) / srcH));
+        targetH = maxDimension;
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Contexto Canvas 2D indisponível.');
+    }
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+
+    const outputBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), 'image/webp', quality);
+    });
+
+    if (!outputBlob) {
+      const fallbackBlob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', quality);
+      });
+      if (!fallbackBlob) {
+        throw new Error('Falha ao codificar imagem otimizada com HTML5 Canvas.');
+      }
+      return {
+        blob: fallbackBlob,
+        width: targetW,
+        height: targetH,
+        originalBytes,
+        compressedBytes: fallbackBlob.size,
+      };
+    }
+
+    return {
+      blob: outputBlob,
+      width: targetW,
+      height: targetH,
+      originalBytes,
+      compressedBytes: outputBlob.size,
+    };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};

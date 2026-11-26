@@ -48,12 +48,13 @@ import {
   setLocalClassesUpdatedAtMs,
 } from './services/db';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import {
   subscribeToFirestoreRealtimeState,
   subscribeToSyncStatus,
   SyncStatusSnapshot,
   saveClassesToFirestoreCloud,
-  fetchStateFromFirestoreCloud,
+  fetchClassesFromFirestorePaginated,
   fetchAuthorizedUsersFromFirestore,
   beginBootIntegrityCheck,
   monitorFirestoreIntegrityOnBoot,
@@ -76,6 +77,7 @@ import {
 } from './services/realtimeClient';
 import { saveStoredNameGenderEntries } from './utils/genderDictionary';
 import { OFFICIAL_OCTOBER_DAYS, INITIAL_CLASSES, INITIAL_AUTHORIZED_USERS } from './data/mockData';
+import { sortClassesInOfficialOrder } from './data/officialMatrix2027';
 import { getClassAttendanceMetrics, haveClassesChanged } from './utils/attendanceRules';
 import {
   syncPhotosFromDriveFolder,
@@ -655,6 +657,12 @@ export default function App() {
   assignedClassIdRef.current = assignedClassId;
   const assignedClassIdsRef = useRef<string[]>(assignedClassIds);
   assignedClassIdsRef.current = assignedClassIds;
+  const currentUserEmailRef = useRef<string>(currentUserEmail);
+  currentUserEmailRef.current = currentUserEmail;
+
+  const cloudClassesLastDocRef = useRef<QueryDocumentSnapshot | null>(null);
+  const [hasMoreCloudClasses, setHasMoreCloudClasses] = useState(false);
+  const [isLoadingMoreCloudClasses, setIsLoadingMoreCloudClasses] = useState(false);
 
   const skipNextClassesSaveRef = useRef<boolean>(false);
   const isServerSyncInFlightRef = useRef<boolean>(false);
@@ -689,6 +697,37 @@ export default function App() {
     },
     []
   );
+
+  const handleLoadMoreCloudClasses = useCallback(async () => {
+    if (isLoadingMoreCloudClasses || !cloudClassesLastDocRef.current) return;
+    setIsLoadingMoreCloudClasses(true);
+    try {
+      const page = await fetchClassesFromFirestorePaginated({
+        pageSize: 20,
+        lastDoc: cloudClassesLastDocRef.current,
+      });
+      cloudClassesLastDocRef.current = page.lastDoc;
+      setHasMoreCloudClasses(page.hasMore);
+
+      if (page.classes.length > 0) {
+        const mergedMap = new Map<string, ClassGroup>(
+          classesRef.current.map((c) => [c.id, c])
+        );
+        page.classes.forEach((remoteCls) => {
+          const existing = mergedMap.get(remoteCls.id);
+          if (!existing || (remoteCls.updatedAtMs || 0) >= (existing.updatedAtMs || 0)) {
+            mergedMap.set(remoteCls.id, remoteCls);
+          }
+        });
+        const sorted = sortClassesInOfficialOrder(Array.from(mergedMap.values()));
+        applyRemoteClassesSafely(sorted, true);
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar mais turmas da nuvem:', err);
+    } finally {
+      setIsLoadingMoreCloudClasses(false);
+    }
+  }, [isLoadingMoreCloudClasses, applyRemoteClassesSafely]);
 
   const applyAuthorizedUsersIfChanged = useCallback(
     (incomingUsers: AuthorizedUser[], persistLocal: boolean = true) => {
@@ -809,7 +848,7 @@ export default function App() {
     runExpirationRevocation();
     const intervalId = window.setInterval(runExpirationRevocation, 60000);
     return () => window.clearInterval(intervalId);
-  }, [isAuthVerified, userRole, simulatedTeacherEmail, authorizedUsers, currentUserEmail]);
+  }, [isAuthVerified, userRole, simulatedTeacherEmail, currentUserEmail]);
 
   const isAuthVerifiedRef = useRef<boolean>(false);
   useEffect(() => {
@@ -1256,9 +1295,22 @@ export default function App() {
         }
       }, 60000);
     } else {
-      // Hospedagem estática (sem backend Express): utiliza Cloud Firestore onSnapshot
+      // Hospedagem estática (sem backend Express): carga única paginada + ouvinte leve em 'school_meta_2027/state'
+      const scopedClassIds =
+        userRoleRef.current === 'usuario'
+          ? assignedClassIdsRef.current.filter((id) => id !== 'all')
+          : undefined;
+      const scopedTeacherEmail =
+        userRoleRef.current === 'usuario' ? currentUserEmailRef.current : undefined;
+
       unsubFirestore = subscribeToFirestoreRealtimeState({
-        onClassesUpdate: (remoteClasses, remoteUpdatedAtMs) => {
+        classIds: scopedClassIds && scopedClassIds.length > 0 ? scopedClassIds : undefined,
+        teacherEmail: scopedTeacherEmail || undefined,
+        onClassesUpdate: (remoteClasses, remoteUpdatedAtMs, pagination) => {
+          if (pagination) {
+            cloudClassesLastDocRef.current = pagination.lastDoc;
+            setHasMoreCloudClasses(pagination.hasMore);
+          }
           if (!active || !remoteClasses || remoteClasses.length === 0) return;
           if (!shouldAllowRemoteClassesOverwrite({ remoteUpdatedAtMs, fromCache: false })) {
             return;
@@ -2365,6 +2417,17 @@ export default function App() {
                 window.scrollTo(0, 0);
               }}
               onNavigateScreen={navigateToScreen}
+              onSyncScreenFromSection={(section) => {
+                const targetScreen: ScreenType =
+                  section === 'calendario'
+                    ? 'dias_letivos'
+                    : section === 'diagnostico'
+                    ? 'diagnostico_bd'
+                    : 'usuarios_acesso';
+                if (targetScreen !== currentScreen) {
+                  setCurrentScreen(targetScreen);
+                }
+              }}
               onOpenClassDetails={(cls) => {
                 setSelectedClass(cls);
                 navigateToScreen('detalhes');
@@ -2392,6 +2455,9 @@ export default function App() {
             onSelectClassForDetails={handleSelectClassForDetails}
             onOpenConfigDaysModal={() => navigateToScreen('dias_letivos')}
             onNavigateToAcessos={() => navigateToScreen('usuarios_acesso')}
+            hasMoreCloudClasses={!isBackendApiAvailable() && hasMoreCloudClasses}
+            isLoadingMoreCloudClasses={isLoadingMoreCloudClasses}
+            onLoadMoreCloudClasses={handleLoadMoreCloudClasses}
           />
         )}
 

@@ -62,7 +62,8 @@
         "cloudLinks": { "type": "object" },
         "discoveredNominalPdfs": { "type": "array" },
         "discoveredDrivePhotos": { "type": "array" },
-        "genderDictionary": { "type": "array" }
+        "genderDictionary": { "type": "array" },
+        "lgpdConfig": { "type": "object" }
       },
       "required": ["updatedAtMs"]
     },

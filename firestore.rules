@@ -92,6 +92,7 @@ service cloud.firestore {
           'discoveredNominalPdfs',
           'discoveredDrivePhotos',
           'genderDictionary',
+          'lgpdConfig',
           'cleanResetEpochId'
         ]);
     }

@@ -19,6 +19,8 @@ function resolveModuleDir(pkgName: string): string {
   }
 }
 
+const reactPath = resolveModuleDir('react');
+const reactDomPath = resolveModuleDir('react-dom');
 const reactIsPath = resolveModuleDir('react-is');
 const rechartsPath = resolveModuleDir('recharts');
 
@@ -28,15 +30,44 @@ export default defineConfig(() => {
     base: basePath,
     plugins: [react(), tailwindcss()],
     resolve: {
-      dedupe: ['react', 'react-dom', 'react-is', 'recharts'],
+      dedupe: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-is',
+        'recharts',
+      ],
       alias: {
         '@': path.resolve(__dirname, '.'),
+        react: reactPath,
+        'react-dom': reactDomPath,
         'react-is': reactIsPath,
         recharts: rechartsPath,
       },
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'react-is', 'recharts'],
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-is',
+        'recharts',
+        'lucide-react',
+        'sonner',
+        'framer-motion',
+        'react-window',
+        'pdf-lib',
+        'xlsx',
+        'heic2any',
+        'firebase/app',
+        'firebase/auth',
+        'firebase/firestore',
+        'firebase/messaging',
+        'firebase/storage',
+      ],
     },
     build: {
       chunkSizeWarningLimit: 3000,

@@ -53,6 +53,7 @@ import {
   pullOfficialCalendarFromServer,
   pullSharedSchoolStateFromServer,
 } from '../services/db';
+import { isBackendApiAvailable } from '../services/apiEnvironment';
 import { ExportFormatButton } from './ui/ExportFormatButton';
 import { exportUniversalReport } from '../utils/universalExport';
 import { buildCalendar200DaysReport } from '../utils/reportBuilders';
@@ -262,8 +263,12 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
     };
   }, []);
 
-  // Periodic background sync
+  // Periodic background sync (apenas quando backend Express está ativo; em hospedagem estática o Firebase Sync gerencia deltas sem polling)
+  const onUpdateClassesRef = useRef(onUpdateClasses);
+  onUpdateClassesRef.current = onUpdateClasses;
+
   useEffect(() => {
+    if (!isBackendApiAvailable()) return;
     let isMounted = true;
     const intervalMs = syncFrequency * 60 * 1000;
     const performPeriodicSync = async () => {
@@ -271,8 +276,8 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
       try {
         localStorage.setItem('emeb_last_sed_auto_sync_at', new Date().toISOString());
         const sState = await pullSharedSchoolStateFromServer();
-        if (isMounted && onUpdateClasses && sState && Array.isArray(sState.classes)) {
-          onUpdateClasses(sState.classes);
+        if (isMounted && onUpdateClassesRef.current && sState && Array.isArray(sState.classes)) {
+          onUpdateClassesRef.current(sState.classes);
         }
       } catch {
         // ignore periodic background failure
@@ -283,7 +288,7 @@ export const DiasLetivosScreen: React.FC<DiasLetivosScreenProps> = ({
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, [syncFrequency, onUpdateClasses]);
+  }, [syncFrequency]);
 
   // Actions: Template, Year Switch, Auto-Balance, Month Tools, Interactive Day Click
   const handleLoadOfficialDefault = (targetYear: number = selectedYear) => {

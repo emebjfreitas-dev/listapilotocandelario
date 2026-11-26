@@ -6,6 +6,7 @@ import {
   BinaryPhotoUploadInput,
   BatchUploadProgress,
 } from '../services/db';
+import { isBackendApiAvailable } from '../services/apiEnvironment';
 import {
   isSupportedImageFile,
   collectFilesFromDataTransfer,
@@ -757,7 +758,9 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
             if (!r && !payload) return s;
             const cleanId = s.id.replace(/[^a-zA-Z0-9-_]/g, '_');
             const ext = payload?.ext || 'webp';
-            const finalPhotoUrl = r?.photoUrl || `/api/photos/${cleanId}.${ext}?v=${now}`;
+            const finalPhotoUrl =
+              r?.photoUrl ||
+              (isBackendApiAvailable() ? `/api/photos/${cleanId}.${ext}?v=${now}` : s.photo || '');
             const finalSha = r?.sha256 || payload?.sha256 || s.photoSha256;
             const compressedBlob = blobByStudentId.get(s.id);
 

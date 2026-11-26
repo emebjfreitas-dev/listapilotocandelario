@@ -8,7 +8,7 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
-import { INITIAL_AUTHORIZED_USERS } from './src/data/mockData.ts';
+import { INITIAL_AUTHORIZED_USERS } from './src/data/authorizedUsersData.ts';
 import {
   ensureSafePayloadObject,
   validateAuthSessionRequest,

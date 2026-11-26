@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertTriangle, Info, ShieldAlert } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertTriangle, Download, Info, ShieldAlert } from 'lucide-react';
 import { SecurityAuditLogEntry } from '../../types';
 import { CustomSelect } from '../CustomSelect';
 import { PaginationBar } from '../ui/PaginationBar';
@@ -16,6 +16,7 @@ interface AdminSecurityLogsTabProps {
   onChangeSearchTerm: (val: string) => void;
   onChangeSeverityFilter: (val: 'all' | 'info' | 'warning' | 'security_alert') => void;
   onPageChange: (page: number) => void;
+  onExportBeforeClear?: () => void;
   onClearLogs: () => void;
 }
 
@@ -31,10 +32,13 @@ export const AdminSecurityLogsTab: React.FC<AdminSecurityLogsTabProps> = ({
   onChangeSearchTerm,
   onChangeSeverityFilter,
   onPageChange,
+  onExportBeforeClear,
   onClearLogs,
 }) => {
+  const [confirmingClear, setConfirmingClear] = useState(false);
+
   return (
-    <section className="bg-white rounded-3xl p-4 sm:p-5 shadow-[0_6px_22px_-8px_rgba(9,15,29,0.08)] space-y-4">
+    <section className="bg-white rounded-3xl p-4 sm:p-5 border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-slate-950">
@@ -67,17 +71,67 @@ export const AdminSecurityLogsTab: React.FC<AdminSecurityLogsTabProps> = ({
             ]}
           />
 
-          {canManage && securityLogsTotal > 0 && (
+          {canManage && securityLogsTotal > 0 && !confirmingClear && (
             <button
               type="button"
-              onClick={onClearLogs}
+              onClick={() => setConfirmingClear(true)}
               className="min-h-[40px] px-3 rounded-xl bg-[#eef3f9] hover:bg-rose-100 text-slate-800 hover:text-rose-950 text-xs font-semibold cursor-pointer transition-all duration-150 active:scale-[0.97]"
             >
-              Limpar
+              Limpar histórico
             </button>
           )}
         </div>
       </div>
+
+      {canManage && confirmingClear && (
+        <div
+          role="alertdialog"
+          aria-label="Confirmação para limpeza da trilha de auditoria LGPD"
+          className="p-4 rounded-2xl bg-[#fef3c7] border border-[#b45309]/20 flex flex-col lg:flex-row lg:items-center justify-between gap-3 animate-gentle-fade"
+        >
+          <div className="flex items-start gap-2.5 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-[#b45309] shrink-0 mt-0.5" />
+            <div className="space-y-0.5 min-w-0">
+              <p className="text-xs sm:text-sm font-semibold text-slate-950">
+                Confirmar limpeza da trilha de auditoria local?
+              </p>
+              <p className="text-xs text-slate-800 leading-relaxed">
+                Pela conformidade LGPD Art. 14, recomenda-se exportar o arquivo .CSV antes de limpar. Um registro imutável desta limpeza permanecerá gravado com seu usuário.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onExportBeforeClear && (
+              <button
+                type="button"
+                onClick={onExportBeforeClear}
+                className="min-h-[40px] px-3.5 rounded-xl bg-white hover:bg-[#f3f6fb] text-[#0f172a] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 shrink-0" />
+                <span>Exportar .CSV antes</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmingClear(false);
+                onClearLogs();
+              }}
+              className="min-h-[40px] px-3.5 rounded-xl bg-[#991b1b] hover:bg-[#7f1d1d] text-white text-xs font-semibold cursor-pointer"
+            >
+              Confirmar limpeza
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(false)}
+              className="min-h-[40px] px-3.5 rounded-xl bg-white hover:bg-[#eef3f9] text-slate-700 text-xs font-semibold cursor-pointer"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {filteredSecurityLogs.length === 0 ? (
         <div className="p-8 rounded-2xl bg-[#f3f6fb] text-center text-xs text-slate-700 font-medium">

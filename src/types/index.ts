@@ -448,7 +448,8 @@ export type SecurityEventType =
   | 'SYSTEM_CONFIG_UPDATED'
   | 'DATABASE_FACTORY_RESET'
   | 'JSON_DATA_EXPORT_GENERATED'
-  | 'JSON_DATA_IMPORT_APPLIED';
+  | 'JSON_DATA_IMPORT_APPLIED'
+  | 'SECURITY_LOGS_CLEARED';
 
 export interface SecurityAuditLogEntry {
   id: string;
@@ -465,7 +466,7 @@ export interface SecurityAuditLogEntry {
 }
 
 export interface RbacRoleDefinition {
-  roleKey: UserRole | 'coordenacao';
+  roleKey: UserRole | 'coordenacao' | 'aee';
   name: string;
   badgeLabel: string;
   description: string;
@@ -486,6 +487,7 @@ export interface LgpdProtectionConfig {
   lastAuditedAtISO: string;
   complianceOfficer: string;
   anonymizeExportedSpreadsheets: boolean;
+  autoLogoutMinutes?: number;
 }
 
 export interface FcmDeviceSubscription {

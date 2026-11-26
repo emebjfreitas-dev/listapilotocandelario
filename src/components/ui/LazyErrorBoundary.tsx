@@ -13,6 +13,25 @@ interface LazyErrorBoundaryState {
   errorMessage: string;
 }
 
+const CHUNK_RELOAD_STORAGE_KEY = 'lp_chunk_reload_ts';
+const RELOAD_COOLDOWN_MS = 20_000;
+
+function isRecoverableModuleVersionMismatch(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : String(error || '');
+  return (
+    /Invalid hook call/i.test(message) ||
+    /Cannot read properties of null \(reading '(useState|useEffect|useRef|useMemo|useCallback|useContext|useReducer|useLayoutEffect)'\)/i.test(
+      message
+    ) ||
+    /Failed to fetch dynamically imported module/i.test(message) ||
+    /Importing a module script failed/i.test(message) ||
+    /ChunkLoadError/i.test(message)
+  );
+}
+
 export class LazyErrorBoundary extends React.Component<
   LazyErrorBoundaryProps,
   LazyErrorBoundaryState
@@ -34,6 +53,27 @@ export class LazyErrorBoundary extends React.Component<
       hasError: true,
       errorMessage: message,
     };
+  }
+
+  componentDidCatch(error: unknown) {
+    if (
+      typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      navigator.onLine !== false &&
+      isRecoverableModuleVersionMismatch(error)
+    ) {
+      try {
+        const lastReloadRaw = window.sessionStorage.getItem(CHUNK_RELOAD_STORAGE_KEY);
+        const lastReloadTs = lastReloadRaw ? Number(lastReloadRaw) : 0;
+        const now = Date.now();
+        if (!Number.isFinite(lastReloadTs) || now - lastReloadTs > RELOAD_COOLDOWN_MS) {
+          window.sessionStorage.setItem(CHUNK_RELOAD_STORAGE_KEY, String(now));
+          window.location.reload();
+        }
+      } catch {
+        // Fallback para UI de recuperação amigável se sessionStorage estiver bloqueado
+      }
+    }
   }
 
   componentDidUpdate(prevProps: LazyErrorBoundaryProps) {

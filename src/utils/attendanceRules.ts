@@ -1,4 +1,4 @@
-import { ClassGroup, SchoolDay, Student } from '../types';
+import type { ClassGroup, SchoolDay, Student } from '../types/index.ts';
 
 export type ConsecutiveAlertTier = 'none' | '3d' | '5d' | '10d';
 

@@ -7,6 +7,7 @@ import {
   BinaryPdfUploadInput,
   BatchUploadProgress,
 } from '../services/db';
+import { isBackendApiAvailable } from '../services/apiEnvironment';
 import { isSupportedPdfFile, collectFilesFromDataTransfer } from '../utils/photoCompressor';
 import { validateAndOptimizePdf } from '../utils/pdfOptimizer';
 import { ModalPortal } from './ui/ModalPortal';
@@ -671,7 +672,11 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
             const cleanId = s.id.replace(/[^a-zA-Z0-9-_]/g, '_');
             return {
               ...s,
-              fichaPdfDriveUrl: r?.pdfUrl || `/api/pdfs/${cleanId}.pdf?v=${now}`,
+              fichaPdfDriveUrl:
+                r?.pdfUrl ||
+                (isBackendApiAvailable()
+                  ? `/api/pdfs/${cleanId}.pdf?v=${now}`
+                  : s.fichaPdfDriveUrl || ''),
               fichaPdfDriveId: r?.pdfId || cleanId,
               fichaPdfSha256: r?.sha256 || payload?.sha256 || s.fichaPdfSha256,
               fichaPdfManualLink: true,

@@ -25,6 +25,9 @@ interface MinhasTurmasScreenProps {
   onSelectClassForDetails: (classGroup: ClassGroup) => void;
   onOpenConfigDaysModal?: () => void;
   onNavigateToAcessos?: () => void;
+  hasMoreCloudClasses?: boolean;
+  isLoadingMoreCloudClasses?: boolean;
+  onLoadMoreCloudClasses?: () => void;
 }
 
 export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
@@ -33,6 +36,9 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
   onSelectClassForDetails,
   onOpenConfigDaysModal,
   onNavigateToAcessos,
+  hasMoreCloudClasses = false,
+  isLoadingMoreCloudClasses = false,
+  onLoadMoreCloudClasses,
 }) => {
   const [selectedShift, setSelectedShift] = useState<'Todos' | 'Turno Manhã' | 'Turno Tarde'>('Todos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -444,23 +450,42 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
         </div>
             )}
 
-            {filteredClasses.length > PAGE_SIZE && (
-              <PaginationBar
-                currentPage={showAllClasses ? 1 : safeClassPage}
-                totalItems={filteredClasses.length}
-                pageSize={showAllClasses ? filteredClasses.length : PAGE_SIZE}
-                onPageChange={handleClassPageChange}
-                itemLabel="turmas"
-                extraAction={
-                  <button
-                    type="button"
-                    onClick={() => setShowAllClasses((prev) => !prev)}
-                    className="px-3 py-1 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#0071E3] text-xs font-medium cursor-pointer transition-colors"
-                  >
-                    {showAllClasses ? `Paginar (${PAGE_SIZE} por página)` : `Ver todas (${filteredClasses.length})`}
-                  </button>
-                }
-              />
+            {(filteredClasses.length > PAGE_SIZE || (hasMoreCloudClasses && onLoadMoreCloudClasses)) && (
+              <div className="space-y-3">
+                {filteredClasses.length > PAGE_SIZE && (
+                  <PaginationBar
+                    currentPage={showAllClasses ? 1 : safeClassPage}
+                    totalItems={filteredClasses.length}
+                    pageSize={showAllClasses ? filteredClasses.length : PAGE_SIZE}
+                    onPageChange={handleClassPageChange}
+                    itemLabel="turmas"
+                    extraAction={
+                      <button
+                        type="button"
+                        onClick={() => setShowAllClasses((prev) => !prev)}
+                        className="px-3 py-1 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#0071E3] text-xs font-medium cursor-pointer transition-colors"
+                      >
+                        {showAllClasses ? `Paginar (${PAGE_SIZE} por página)` : `Ver todas (${filteredClasses.length})`}
+                      </button>
+                    }
+                  />
+                )}
+
+                {hasMoreCloudClasses && onLoadMoreCloudClasses && (
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      disabled={isLoadingMoreCloudClasses}
+                      onClick={onLoadMoreCloudClasses}
+                      className="min-h-[42px] px-6 py-2.5 rounded-full bg-white hover:bg-[#F5F5F7] text-[#0071E3] font-semibold text-xs sm:text-sm border border-[#0071E3]/25 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {isLoadingMoreCloudClasses
+                        ? 'Carregando mais turmas...'
+                        : 'Carregar mais turmas da nuvem (+20)'}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         );

@@ -12,7 +12,7 @@ import {
 import {
   collection,
   doc,
-  onSnapshot,
+  getDocs,
   query,
   orderBy,
   limit,
@@ -665,7 +665,6 @@ export function subscribeToFcmNotifications(params: {
 }): () => void {
   let cancelled = false;
   let unsubFcmForeground: (() => void) | null = null;
-  let unsubFirestoreAlerts: (() => void) | null = null;
   let unsubAuth: (() => void) | null = null;
   let pollIntervalId: number | null = null;
 
@@ -761,16 +760,9 @@ export function subscribeToFcmNotifications(params: {
     window.addEventListener('emeb-realtime-fcm-alert', handleRealtimeFcmEvent);
   }
 
-  // 3. Firestore real-time alerts (`school_fcm_alerts_2027`) apenas em hospedagem estática (sem backend)
-  const attachFirestoreAlertsListener = () => {
-    if (isBackendApiAvailable()) return;
-    if (unsubFirestoreAlerts) {
-      unsubFirestoreAlerts();
-      unsubFirestoreAlerts = null;
-    }
-    if (isFirestoreQuotaExceeded()) {
-      return;
-    }
+  // 3. Firestore alerts (`school_fcm_alerts_2027`) via leitura única paginada com limit(10) apenas em hospedagem estática (elimina onSnapshot desnecessário)
+  const checkFirestoreAlertsOnce = async () => {
+    if (isBackendApiAvailable() || isFirestoreQuotaExceeded()) return;
     try {
       const q = query(
         collection(firestoreDb, 'school_fcm_alerts_2027'),
@@ -778,24 +770,15 @@ export function subscribeToFcmNotifications(params: {
         limit(10)
       );
       const bootThresholdMs = Date.now() - 1000 * 60 * 60 * 12;
-      unsubFirestoreAlerts = onSnapshot(
-        q,
-        (snap) => {
-          snap.docChanges().forEach((change) => {
-            if (change.type === 'added') {
-              const alert = change.doc.data() as FcmWindowAlert;
-              if ((alert.createdAtMs || 0) >= bootThresholdMs) {
-                void processIncomingAlert(alert);
-              }
-            }
-          });
-        },
-        (err) => {
-          handleFirestoreError(err, OperationType.LIST, 'school_fcm_alerts_2027');
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        const alert = docSnap.data() as FcmWindowAlert;
+        if ((alert.createdAtMs || 0) >= bootThresholdMs) {
+          void processIncomingAlert(alert);
         }
-      );
-    } catch {
-      // ignore
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.LIST, 'school_fcm_alerts_2027');
     }
   };
 
@@ -803,15 +786,12 @@ export function subscribeToFcmNotifications(params: {
     try {
       const auth = getAuth(app);
       if (auth.currentUser) {
-        attachFirestoreAlertsListener();
+        void checkFirestoreAlertsOnce();
       }
       unsubAuth = onAuthStateChanged(auth, (user) => {
         if (cancelled) return;
         if (user) {
-          attachFirestoreAlertsListener();
-        } else if (unsubFirestoreAlerts) {
-          unsubFirestoreAlerts();
-          unsubFirestoreAlerts = null;
+          void checkFirestoreAlertsOnce();
         }
       });
     } catch {
@@ -858,7 +838,6 @@ export function subscribeToFcmNotifications(params: {
       window.removeEventListener('emeb-realtime-fcm-alert', handleRealtimeFcmEvent);
     }
     if (unsubFcmForeground) unsubFcmForeground();
-    if (unsubFirestoreAlerts) unsubFirestoreAlerts();
     if (unsubAuth) unsubAuth();
     if (pollIntervalId !== null) window.clearInterval(pollIntervalId);
   };
