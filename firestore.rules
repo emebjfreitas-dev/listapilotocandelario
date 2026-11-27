@@ -29,8 +29,8 @@ service cloud.firestore {
         request.auth.token.email != null &&
         request.auth.token.email_verified == true &&
         (
-          request.auth.token.email.matches('.*@educacao\\.jundiai\\.sp\\.gov\\.br$') ||
-          request.auth.token.email == 'emebjfreitas@jundiai.sp.gov.br'
+          request.auth.token.email.matches('.*@(educacao\\.)?jundiai\\.sp\\.gov\\.br$') ||
+          request.auth.token.email.matches('.*@jundiai\\.sp\\.gov\\.br$')
         );
     }
 
