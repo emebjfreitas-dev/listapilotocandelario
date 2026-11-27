@@ -711,7 +711,12 @@ export function subscribeToFcmNotifications(params: {
           minute: '2-digit',
         }),
       },
-      { showBanner: true, saveToFeed: true, userEmail: params.userEmail }
+      {
+        showBanner: true,
+        saveToFeed: true,
+        userEmail: params.userEmail,
+        deliverySource: 'fcm_incoming',
+      }
     );
     params.onAlertReceived?.(notice);
   };
@@ -740,7 +745,12 @@ export function subscribeToFcmNotifications(params: {
             targetScreen: (data.targetScreen as ScreenType) || 'frequencia_mensal',
             authorName: data.authorName || 'Firebase Cloud Messaging',
           },
-          { showBanner: true, saveToFeed: true, userEmail: params.userEmail }
+          {
+            showBanner: true,
+            saveToFeed: true,
+            userEmail: params.userEmail,
+            deliverySource: 'fcm_incoming',
+          }
         );
         params.onAlertReceived?.(notice);
       });
@@ -852,9 +862,16 @@ export async function evaluateAndTriggerWindowClosingReminder(params: {
   visibleClasses: ClassGroup[];
   userEmail: string;
   userRole: UserRole;
+  teacherRoleType?: AuthorizedUser['teacherRoleType'];
   forceNotify?: boolean;
 }): Promise<PushNoticeItem | null> {
-  // Notificações FCM compulsórias para todos os usuários
+  if (
+    params.userRole !== 'admin' ||
+    params.teacherRoleType === 'apoio' ||
+    params.teacherRoleType === 'aee'
+  ) {
+    return null;
+  }
   const fcmSysCfg = getStoredFcmSystemConfig();
 
   const win = evaluateAttendanceLaunchWindow(params.attendanceWindowConfig);
@@ -945,7 +962,14 @@ export async function evaluateAndTriggerWindowClosingReminder(params: {
       targetScreen: 'frequencia_mensal',
       authorName: 'FCM · Monitoramento de Prazos',
     },
-    { showBanner: true, saveToFeed: true, userEmail: params.userEmail }
+    {
+      showBanner: true,
+      saveToFeed: true,
+      userEmail: params.userEmail,
+      senderRole: params.userRole,
+      senderTeacherRoleType: params.teacherRoleType,
+      deliverySource: 'admin_action',
+    }
   );
 }
 
@@ -1090,7 +1114,13 @@ export async function evaluateAndTriggerTeacherEndOfDayReminder(params: {
   forceNotify?: boolean;
   onOpenClassAttendance?: (classId: string) => void;
 }): Promise<PushNoticeItem | null> {
-  // Notificações FCM compulsórias para todos os usuários
+  if (
+    params.userRole !== 'admin' ||
+    params.teacherRoleType === 'apoio' ||
+    params.teacherRoleType === 'aee'
+  ) {
+    return null;
+  }
   const summary = evaluateTeacherEndOfDayPendingClasses({
     attendanceWindowConfig: params.attendanceWindowConfig,
     visibleClasses: params.visibleClasses,
@@ -1181,7 +1211,14 @@ export async function evaluateAndTriggerTeacherEndOfDayReminder(params: {
       targetScreen: 'frequencia_mensal',
       authorName: 'Lembrete Fim de Turno · EMEB Candelário',
     },
-    { showBanner: true, saveToFeed: true, userEmail: params.userEmail }
+    {
+      showBanner: true,
+      saveToFeed: true,
+      userEmail: params.userEmail,
+      senderRole: params.userRole,
+      senderTeacherRoleType: params.teacherRoleType,
+      deliverySource: 'admin_action',
+    }
   );
 }
 
@@ -1209,7 +1246,7 @@ export async function dispatchWindowClosingFcmAlert(params: {
   message: string;
 }> {
   if (
-    (params.senderRole && params.senderRole !== 'admin') ||
+    params.senderRole !== 'admin' ||
     params.senderTeacherRoleType === 'apoio' ||
     params.senderTeacherRoleType === 'aee'
   ) {
@@ -1352,7 +1389,13 @@ export async function dispatchWindowClosingFcmAlert(params: {
       targetScreen: 'frequencia_mensal',
       authorName: alert.createdByName,
     },
-    { showBanner: true, saveToFeed: true }
+    {
+      showBanner: true,
+      saveToFeed: true,
+      senderRole: params.senderRole,
+      senderTeacherRoleType: params.senderTeacherRoleType,
+      deliverySource: 'admin_action',
+    }
   );
 
   return {

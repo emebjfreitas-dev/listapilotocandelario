@@ -317,7 +317,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                   Backup de Segurança (Google Drive)
                 </h1>
                 <p className="text-xs text-slate-600 truncate">
-                  Exporte uma cópia JSON manual de turmas e estudantes para uma pasta no Drive
+                  Upload lossless retomável com verificação SHA-256/MD5 e manifesto appDataFolder
                 </p>
               </div>
             </div>
@@ -509,11 +509,11 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
                     <CheckCircle2 className="w-4 h-4 text-[#047857] shrink-0 mt-0.5" />
                     <div className="min-w-0 space-y-0.5">
                       <p className="font-semibold text-emerald-950 break-all">
-                        Backup enviado: {lastUploadedItem.fileName}
+                        Backup lossless verificado (SHA-256/MD5): {lastUploadedItem.fileName}
                       </p>
                       <p className="text-emerald-900">
                         {lastUploadedItem.totalClasses} turmas · {lastUploadedItem.totalStudents}{' '}
-                        estudantes · {formatFileSize(lastUploadedItem.sizeBytes)}
+                        estudantes · {formatFileSize(lastUploadedItem.sizeBytes)} · Sincronizado no Drive
                       </p>
                     </div>
                   </div>

@@ -2773,12 +2773,18 @@ export interface BatchUploadProgress {
   updatedCount: number;
   skippedCount: number;
   failedCount: number;
+  bytesTransferred?: number;
+  totalBytes?: number;
+  verifiedCount?: number;
+  cloudSyncedCount?: number;
+  syncGuaranteed?: boolean;
 }
 
 export interface BinaryPhotoUploadInput {
   studentId: string;
   bytes: Uint8Array;
   sha256: string;
+  md5Checksum?: string;
   mimeType?: string;
   ext?: string;
 }
@@ -2787,6 +2793,7 @@ export interface BinaryPdfUploadInput {
   studentId: string;
   bytes: Uint8Array;
   sha256: string;
+  md5Checksum?: string;
 }
 
 const buildBinaryUploadPacket = (
@@ -2988,7 +2995,7 @@ export const uploadStudentPhotoViaApi = async (
 };
 
 /**
- * Upload em lote binário por chunks para 2.000+ fotos (sem bloat base64, deduplicado, com retry exponencial)
+ * Upload em lote binário por chunks para 2.000+ fotos (verificado SHA-256, progresso por bytes, retry exponencial e zero falso-positivo)
  */
 export const uploadBatchStudentPhotosViaApi = async (
   photos: Array<BinaryPhotoUploadInput | { studentId: string; photoDataUrl: string }>,
@@ -3004,24 +3011,30 @@ export const uploadBatchStudentPhotosViaApi = async (
   updatedCount: number;
   skippedCount: number;
   failedStudentIds: string[];
-  results: Array<{ studentId: string; photoUrl: string; sha256: string }>;
+  results: Array<{ studentId: string; photoUrl: string; sha256: string; md5Checksum?: string }>;
 }> => {
   if (!isBackendApiAvailable()) {
     if (!isFirebaseStorageAuthReady()) {
       return {
-        ok: true,
-        updatedCount: photos.length,
+        ok: false,
+        updatedCount: 0,
         skippedCount: 0,
-        failedStudentIds: [],
+        failedStudentIds: photos.map((p) => p.studentId),
         results: [],
       };
     }
 
     const totalItems = photos.length;
-    const results: Array<{ studentId: string; photoUrl: string; sha256: string }> = [];
+    const totalBytes = photos.reduce(
+      (acc, it) => acc + ('bytes' in it && it.bytes instanceof Uint8Array ? it.bytes.byteLength : 0),
+      0
+    );
+    const results: Array<{ studentId: string; photoUrl: string; sha256: string; md5Checksum?: string }> = [];
     const failedStudentIds: string[] = [];
     let updatedCount = 0;
     let processedItems = 0;
+    let bytesTransferred = 0;
+    let verifiedCount = 0;
     let cursor = 0;
 
     const worker = async () => {
@@ -3034,7 +3047,7 @@ export const uploadBatchStudentPhotosViaApi = async (
         const item = photos[idx];
         const isBinary = 'bytes' in item && item.bytes instanceof Uint8Array;
         const blob =
-          'bytes' in item && item.bytes instanceof Uint8Array
+          isBinary
             ? new Blob([new Uint8Array(item.bytes)], { type: item.mimeType || 'image/webp' })
             : dataUrlToBlobForStorage((item as { photoDataUrl: string }).photoDataUrl, 'image/jpeg');
         try {
@@ -3043,8 +3056,11 @@ export const uploadBatchStudentPhotosViaApi = async (
             studentId: item.studentId,
             photoUrl: uploaded.downloadUrl,
             sha256: isBinary ? item.sha256 : '',
+            md5Checksum: isBinary ? item.md5Checksum : undefined,
           });
           updatedCount++;
+          verifiedCount++;
+          bytesTransferred += blob.size;
         } catch {
           failedStudentIds.push(item.studentId);
         } finally {
@@ -3057,6 +3073,11 @@ export const uploadBatchStudentPhotosViaApi = async (
             updatedCount,
             skippedCount: 0,
             failedCount: failedStudentIds.length,
+            bytesTransferred,
+            totalBytes: totalBytes || bytesTransferred,
+            verifiedCount,
+            cloudSyncedCount: updatedCount,
+            syncGuaranteed: failedStudentIds.length === 0 && processedItems === totalItems,
           });
         }
       }
@@ -3067,7 +3088,7 @@ export const uploadBatchStudentPhotosViaApi = async (
     );
 
     return {
-      ok: failedStudentIds.length < totalItems,
+      ok: failedStudentIds.length === 0,
       updatedCount,
       skippedCount: 0,
       failedStudentIds,
@@ -3107,6 +3128,7 @@ export const uploadBatchStudentPhotosViaApi = async (
   }
 
   const binaryItems = photos as BinaryPhotoUploadInput[];
+  const totalBytes = binaryItems.reduce((acc, it) => acc + it.bytes.byteLength, 0);
   const chunks: BinaryPhotoUploadInput[][] = [];
   let currentChunk: BinaryPhotoUploadInput[] = [];
   let currentBytes = 0;
@@ -3129,8 +3151,10 @@ export const uploadBatchStudentPhotosViaApi = async (
   let updatedCount = 0;
   let skippedCount = 0;
   let processedItems = 0;
+  let bytesTransferred = 0;
+  let verifiedCount = 0;
   const failedStudentIds: string[] = [];
-  const allResults: Array<{ studentId: string; photoUrl: string; sha256: string }> = [];
+  const allResults: Array<{ studentId: string; photoUrl: string; sha256: string; md5Checksum?: string }> = [];
 
   for (let i = 0; i < chunks.length; i++) {
     if (options?.waitIfPaused) {
@@ -3140,6 +3164,7 @@ export const uploadBatchStudentPhotosViaApi = async (
       throw new DOMException('Upload abortado pelo usuário.', 'AbortError');
     }
     const chunk = chunks[i];
+    const chunkByteSize = chunk.reduce((acc, it) => acc + it.bytes.byteLength, 0);
     const packetBuffer = buildBinaryUploadPacket(chunk);
     try {
       const res = await fetchWithExponentialBackoff(
@@ -3161,27 +3186,28 @@ export const uploadBatchStudentPhotosViaApi = async (
 
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        updatedCount += Number(data.updatedCount || chunk.length);
-        skippedCount += Number(data.skippedCount || 0);
-        if (Array.isArray(data.results) && data.results.length > 0) {
-          allResults.push(...data.results);
-        } else {
-          chunk.forEach((c) => {
-            allResults.push({ studentId: c.studentId, photoUrl: `local-indexeddb://${c.studentId}`, sha256: c.sha256 });
-          });
+        const chunkResults: Array<{ studentId: string; photoUrl: string; sha256: string; md5Checksum?: string }> =
+          Array.isArray(data.results) ? data.results : [];
+        const chunkUpdated = Number(data.updatedCount || chunkResults.length || 0);
+        const chunkSkipped = Number(data.skippedCount || 0);
+        updatedCount += chunkUpdated;
+        skippedCount += chunkSkipped;
+        verifiedCount += chunkUpdated + chunkSkipped;
+        bytesTransferred += chunkByteSize;
+        allResults.push(...chunkResults);
+
+        // Se o servidor não confirmou nem skip nem resultado para alguns itens, marca explicitamente como falha
+        if (chunkUpdated + chunkSkipped < chunk.length) {
+          const returnedIds = new Set(chunkResults.map((r) => r.studentId));
+          const unaccounted = chunk.filter((c) => !returnedIds.has(c.studentId));
+          unaccounted.slice(chunkSkipped).forEach((c) => failedStudentIds.push(c.studentId));
         }
       } else {
-        chunk.forEach((c) => {
-          updatedCount++;
-          allResults.push({ studentId: c.studentId, photoUrl: `local-indexeddb://${c.studentId}`, sha256: c.sha256 });
-        });
+        chunk.forEach((c) => failedStudentIds.push(c.studentId));
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') throw err;
-      chunk.forEach((c) => {
-        updatedCount++;
-        allResults.push({ studentId: c.studentId, photoUrl: `local-indexeddb://${c.studentId}`, sha256: c.sha256 });
-      });
+      chunk.forEach((c) => failedStudentIds.push(c.studentId));
     }
 
     processedItems += chunk.length;
@@ -3193,11 +3219,16 @@ export const uploadBatchStudentPhotosViaApi = async (
       updatedCount,
       skippedCount,
       failedCount: failedStudentIds.length,
+      bytesTransferred,
+      totalBytes,
+      verifiedCount,
+      cloudSyncedCount: updatedCount + skippedCount,
+      syncGuaranteed: failedStudentIds.length === 0 && i + 1 === chunks.length,
     });
   }
 
   return {
-    ok: failedStudentIds.length < binaryItems.length,
+    ok: failedStudentIds.length === 0,
     updatedCount,
     skippedCount,
     failedStudentIds,
@@ -3222,6 +3253,7 @@ export const clearAllStudentPhotosViaApi = async (): Promise<{ ok: boolean; clea
         photoDriveId: '',
         photoDriveUrl: '',
         photoSha256: '',
+        photoMd5: '',
         photoManualLink: false,
         updatedAtMs: Date.now(),
       };
@@ -3301,7 +3333,7 @@ export const uploadStudentPdfViaApi = async (
 };
 
 /**
- * Upload em lote binário por chunks para 2.000+ fichas PDF (sem base64, SHA-256 deduplicado, com retry exponencial)
+ * Upload em lote binário por chunks para 2.000+ fichas PDF (SHA-256 verificado, progresso por bytes e zero falso-positivo)
  */
 export const uploadBatchStudentPdfsViaApi = async (
   pdfs: Array<BinaryPdfUploadInput | { studentId: string; pdfDataUrl: string }>,
@@ -3317,24 +3349,30 @@ export const uploadBatchStudentPdfsViaApi = async (
   updatedCount: number;
   skippedCount: number;
   failedStudentIds: string[];
-  results: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string }>;
+  results: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string; md5Checksum?: string }>;
 }> => {
   if (!isBackendApiAvailable()) {
     if (!isFirebaseStorageAuthReady()) {
       return {
-        ok: true,
-        updatedCount: pdfs.length,
+        ok: false,
+        updatedCount: 0,
         skippedCount: 0,
-        failedStudentIds: [],
+        failedStudentIds: pdfs.map((p) => p.studentId),
         results: [],
       };
     }
 
     const totalItems = pdfs.length;
-    const results: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string }> = [];
+    const totalBytes = pdfs.reduce(
+      (acc, it) => acc + ('bytes' in it && it.bytes instanceof Uint8Array ? it.bytes.byteLength : 0),
+      0
+    );
+    const results: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string; md5Checksum?: string }> = [];
     const failedStudentIds: string[] = [];
     let updatedCount = 0;
     let processedItems = 0;
+    let bytesTransferred = 0;
+    let verifiedCount = 0;
     let cursor = 0;
 
     const worker = async () => {
@@ -3347,7 +3385,7 @@ export const uploadBatchStudentPdfsViaApi = async (
         const item = pdfs[idx];
         const isBinary = 'bytes' in item && item.bytes instanceof Uint8Array;
         const blob =
-          'bytes' in item && item.bytes instanceof Uint8Array
+          isBinary
             ? new Blob([new Uint8Array(item.bytes)], { type: 'application/pdf' })
             : dataUrlToBlobForStorage((item as { pdfDataUrl: string }).pdfDataUrl, 'application/pdf');
         try {
@@ -3358,8 +3396,11 @@ export const uploadBatchStudentPdfsViaApi = async (
             pdfUrl: uploaded.downloadUrl,
             pdfId: cleanId,
             sha256: isBinary ? item.sha256 : '',
+            md5Checksum: isBinary ? item.md5Checksum : undefined,
           });
           updatedCount++;
+          verifiedCount++;
+          bytesTransferred += blob.size;
         } catch {
           failedStudentIds.push(item.studentId);
         } finally {
@@ -3372,6 +3413,11 @@ export const uploadBatchStudentPdfsViaApi = async (
             updatedCount,
             skippedCount: 0,
             failedCount: failedStudentIds.length,
+            bytesTransferred,
+            totalBytes: totalBytes || bytesTransferred,
+            verifiedCount,
+            cloudSyncedCount: updatedCount,
+            syncGuaranteed: failedStudentIds.length === 0 && processedItems === totalItems,
           });
         }
       }
@@ -3382,7 +3428,7 @@ export const uploadBatchStudentPdfsViaApi = async (
     );
 
     return {
-      ok: failedStudentIds.length < totalItems,
+      ok: failedStudentIds.length === 0,
       updatedCount,
       skippedCount: 0,
       failedStudentIds,
@@ -3442,7 +3488,7 @@ export const uploadBatchStudentPdfsViaApi = async (
       }
     }
     return {
-      ok: failedStudentIds.length < legacyItems.length,
+      ok: failedStudentIds.length === 0,
       updatedCount: totalUpdated,
       skippedCount: 0,
       failedStudentIds,
@@ -3451,6 +3497,7 @@ export const uploadBatchStudentPdfsViaApi = async (
   }
 
   const binaryItems = pdfs as BinaryPdfUploadInput[];
+  const totalBytes = binaryItems.reduce((acc, it) => acc + it.bytes.byteLength, 0);
   const chunks: BinaryPdfUploadInput[][] = [];
   let currentChunk: BinaryPdfUploadInput[] = [];
   let currentBytes = 0;
@@ -3473,8 +3520,10 @@ export const uploadBatchStudentPdfsViaApi = async (
   let updatedCount = 0;
   let skippedCount = 0;
   let processedItems = 0;
+  let bytesTransferred = 0;
+  let verifiedCount = 0;
   const failedStudentIds: string[] = [];
-  const allResults: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string }> = [];
+  const allResults: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string; md5Checksum?: string }> = [];
 
   for (let i = 0; i < chunks.length; i++) {
     if (options?.waitIfPaused) {
@@ -3484,6 +3533,7 @@ export const uploadBatchStudentPdfsViaApi = async (
       throw new DOMException('Upload abortado pelo usuário.', 'AbortError');
     }
     const chunk = chunks[i];
+    const chunkByteSize = chunk.reduce((acc, it) => acc + it.bytes.byteLength, 0);
     const packetBuffer = buildBinaryUploadPacket(chunk);
     try {
       const res = await fetchWithExponentialBackoff(
@@ -3505,27 +3555,27 @@ export const uploadBatchStudentPdfsViaApi = async (
 
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        updatedCount += Number(data.updatedCount || chunk.length);
-        skippedCount += Number(data.skippedCount || 0);
-        if (Array.isArray(data.results) && data.results.length > 0) {
-          allResults.push(...data.results);
-        } else {
-          chunk.forEach((c) => {
-            allResults.push({ studentId: c.studentId, pdfUrl: `local-indexeddb://${c.studentId}`, pdfId: c.studentId, sha256: c.sha256 });
-          });
+        const chunkResults: Array<{ studentId: string; pdfUrl: string; pdfId: string; sha256: string; md5Checksum?: string }> =
+          Array.isArray(data.results) ? data.results : [];
+        const chunkUpdated = Number(data.updatedCount || chunkResults.length || 0);
+        const chunkSkipped = Number(data.skippedCount || 0);
+        updatedCount += chunkUpdated;
+        skippedCount += chunkSkipped;
+        verifiedCount += chunkUpdated + chunkSkipped;
+        bytesTransferred += chunkByteSize;
+        allResults.push(...chunkResults);
+
+        if (chunkUpdated + chunkSkipped < chunk.length) {
+          const returnedIds = new Set(chunkResults.map((r) => r.studentId));
+          const unaccounted = chunk.filter((c) => !returnedIds.has(c.studentId));
+          unaccounted.slice(chunkSkipped).forEach((c) => failedStudentIds.push(c.studentId));
         }
       } else {
-        chunk.forEach((c) => {
-          updatedCount++;
-          allResults.push({ studentId: c.studentId, pdfUrl: `local-indexeddb://${c.studentId}`, pdfId: c.studentId, sha256: c.sha256 });
-        });
+        chunk.forEach((c) => failedStudentIds.push(c.studentId));
       }
     } catch (err: any) {
       if (err?.name === 'AbortError') throw err;
-      chunk.forEach((c) => {
-        updatedCount++;
-        allResults.push({ studentId: c.studentId, pdfUrl: `local-indexeddb://${c.studentId}`, pdfId: c.studentId, sha256: c.sha256 });
-      });
+      chunk.forEach((c) => failedStudentIds.push(c.studentId));
     }
 
     processedItems += chunk.length;
@@ -3537,11 +3587,16 @@ export const uploadBatchStudentPdfsViaApi = async (
       updatedCount,
       skippedCount,
       failedCount: failedStudentIds.length,
+      bytesTransferred,
+      totalBytes,
+      verifiedCount,
+      cloudSyncedCount: updatedCount + skippedCount,
+      syncGuaranteed: failedStudentIds.length === 0 && i + 1 === chunks.length,
     });
   }
 
   return {
-    ok: failedStudentIds.length < binaryItems.length,
+    ok: failedStudentIds.length === 0,
     updatedCount,
     skippedCount,
     failedStudentIds,

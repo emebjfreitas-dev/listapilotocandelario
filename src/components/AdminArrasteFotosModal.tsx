@@ -18,9 +18,12 @@ import {
   UploadedPhotoCacheEntry,
 } from '../services/photoIndexedDbCache';
 import { IndexedDbPhotoStorageModal } from './IndexedDbPhotoStorageModal';
+import { SyncQueueManager } from '../services/syncQueueManager';
+import { computeMd5Hex } from '../services/driveLosslessStorage';
 import { ModalPortal } from './ui/ModalPortal';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Download,
@@ -31,6 +34,7 @@ import {
   Pause,
   Play,
   RefreshCw,
+  ShieldCheck,
   Trash2,
   UploadCloud,
   X,
@@ -60,6 +64,7 @@ interface DroppedPhotoItem {
     blob: Blob;
     bytes: Uint8Array;
     sha256: string;
+    md5Checksum?: string;
     mimeType: string;
     ext: string;
     originalBytes: number;
@@ -153,6 +158,9 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
   const [pipelinePhase, setPipelinePhase] = useState<'idle' | 'optimizing' | 'uploading' | 'done'>('idle');
   const [optimizeProgress, setOptimizeProgress] = useState({ done: 0, total: 0, savedBytes: 0, skippedIdentical: 0, failed: 0 });
   const [uploadProgress, setUploadProgress] = useState<BatchUploadProgress | null>(null);
+  const [syncGuaranteeStatus, setSyncGuaranteeStatus] = useState<
+    'idle' | 'flushing' | 'guaranteed' | 'partial_or_pending'
+  >('idle');
   const [isPaused, setIsPaused] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -539,6 +547,7 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
     setIsSaving(true);
     setPipelinePhase('optimizing');
     setUploadProgress(null);
+    setSyncGuaranteeStatus('idle');
     setOptimizeProgress({
       done: 0,
       total: targetItems.length,
@@ -625,15 +634,21 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
           skippedIdentical++;
           itemUpdates.set(id, { status: 'skipped_identical', errorMsg: undefined, optimizedResult: preOpt });
         } else {
+          const preMd5 = preOpt.md5Checksum || (await computeMd5Hex(preOpt.bytes));
           blobByStudentId.set(student.id, preOpt.blob);
           readyPayloads.push({
             studentId: student.id,
             bytes: preOpt.bytes,
             sha256: preOpt.sha256,
+            md5Checksum: preMd5,
             mimeType: preOpt.mimeType,
             ext: preOpt.ext,
           });
-          itemUpdates.set(id, { status: 'ready', errorMsg: undefined, optimizedResult: preOpt });
+          itemUpdates.set(id, {
+            status: 'ready',
+            errorMsg: undefined,
+            optimizedResult: { ...preOpt, md5Checksum: preMd5 },
+          });
         }
       }
 
@@ -654,6 +669,7 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
           blob: resItem.result.blob,
           bytes: resItem.result.bytes,
           sha256: resItem.result.sha256,
+          md5Checksum: await computeMd5Hex(resItem.result.bytes),
           mimeType: resItem.result.mimeType,
           ext: resItem.result.extension,
           originalBytes: resItem.result.originalBytes,
@@ -672,6 +688,7 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
             studentId: student.id,
             bytes: opt.bytes,
             sha256: opt.sha256,
+            md5Checksum: opt.md5Checksum,
             mimeType: opt.mimeType,
             ext: opt.ext,
           });
@@ -781,6 +798,7 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
               ...s,
               photo: finalPhotoUrl,
               photoSha256: finalSha,
+              photoMd5: r?.md5Checksum || payload?.md5Checksum || s.photoMd5,
               photoManualLink: true,
               updatedAtMs: now,
             };
@@ -794,20 +812,32 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
       }
 
       onBatchPhotosSaved(updatedClasses);
+      setSyncGuaranteeStatus('flushing');
+      setStatusMessage('Confirmando sincronização na nuvem para todos os usuários...');
+      const flushOk = await SyncQueueManager.flushNow();
+      const stillPending = SyncQueueManager.hasPendingTasks();
+
       setPipelinePhase('done');
 
       const totalSkippedAll = skippedIdentical + (res.skippedCount || 0);
       const totalFailedAll = failedOptimize + res.failedStudentIds.length;
 
       if (totalFailedAll > 0) {
+        setSyncGuaranteeStatus('partial_or_pending');
         setStatusMessage(
           `⚠ Envio concluído com falhas: ${res.updatedCount} salva(s), ${totalSkippedAll} idêntica(s), ${totalFailedAll} COM FALHA. Clique em Reenviar Falhas.`
         );
-      } else {
+      } else if (flushOk && !stillPending) {
+        setSyncGuaranteeStatus('guaranteed');
         setStatusMessage(
-          `✓ Concluído com sucesso: ${res.updatedCount} foto(s) salva(s) · ${totalSkippedAll} idêntica(s) economizada(s) · ${formatBytesCompact(
+          `✓ Concluído e sincronizado para todos os usuários: ${res.updatedCount} foto(s) salva(s) com integridade SHA-256 · ${totalSkippedAll} idêntica(s) economizada(s) · ${formatBytesCompact(
             savedBytes
           )} economizados.`
+        );
+      } else {
+        setSyncGuaranteeStatus('partial_or_pending');
+        setStatusMessage(
+          `Fotos salvas (${res.updatedCount}), mas há pendência na fila de sincronização global. Clique em "Sincronizar agora" para confirmar para todos os usuários.`
         );
       }
     } catch (err: any) {
@@ -864,7 +894,9 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
   const pctOptimize =
     optimizeProgress.total > 0 ? Math.round((optimizeProgress.done / optimizeProgress.total) * 100) : 0;
   const pctUpload =
-    uploadProgress && uploadProgress.totalItems > 0
+    uploadProgress && uploadProgress.totalBytes && uploadProgress.totalBytes > 0
+      ? Math.min(100, Math.round(((uploadProgress.bytesTransferred || 0) / uploadProgress.totalBytes) * 100))
+      : uploadProgress && uploadProgress.totalItems > 0
       ? Math.round((uploadProgress.processedItems / uploadProgress.totalItems) * 100)
       : 0;
 
@@ -984,15 +1016,17 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
           </div>
         )}
 
-        {/* Progresso em tempo real (Otimização + Envio Binário) */}
+        {/* Progresso em tempo real (Otimização + Envio Binário + Garantia de Sync) */}
         {(isSaving || pipelinePhase === 'done') && optimizeProgress.total > 0 && (
           <div className="p-4 rounded-2xl bg-[#eef3f9] space-y-2.5 animate-fade-in">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-950">
               <span>
                 {pipelinePhase === 'optimizing'
-                  ? `Fase 1/2 · Otimizando Lossless (${optimizeProgress.done}/${optimizeProgress.total}) · ${pctOptimize}%`
+                  ? `Fase 1/2 · Otimizando e calculando SHA-256/MD5 (${optimizeProgress.done}/${optimizeProgress.total}) · ${pctOptimize}%`
                   : pipelinePhase === 'uploading'
-                  ? `Fase 2/2 · Enviando Pacotes Binários (${uploadProgress?.completedChunks || 0}/${uploadProgress?.totalChunks || 1}) · ${pctUpload}%`
+                  ? syncGuaranteeStatus === 'flushing'
+                    ? 'Sincronizando metadados para todos os usuários...'
+                    : `Fase 2/2 · Transferindo arquivos (${uploadProgress?.completedChunks || 0}/${uploadProgress?.totalChunks || 1} lotes) · ${pctUpload}%`
                   : 'Processamento Concluído'}
               </span>
               <div className="flex items-center gap-3">
@@ -1032,14 +1066,31 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
 
             <div className="w-full h-2.5 bg-[#dfe8f4] rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all duration-200 rounded-full ${isPaused ? 'bg-amber-500' : 'bg-[#14428c]'}`}
+                className={`h-full transition-all duration-200 rounded-full ${
+                  isPaused
+                    ? 'bg-amber-500'
+                    : syncGuaranteeStatus === 'guaranteed' && pipelinePhase === 'done'
+                    ? 'bg-[#047857]'
+                    : 'bg-[#14428c]'
+                }`}
                 style={{
                   width: `${pipelinePhase === 'optimizing' ? pctOptimize : pipelinePhase === 'uploading' ? pctUpload : 100}%`,
                 }}
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-700">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold text-slate-700">
+              {uploadProgress && typeof uploadProgress.totalBytes === 'number' && uploadProgress.totalBytes > 0 && (
+                <span className="tabular-nums text-slate-900">
+                  Transferência: {formatBytesCompact(uploadProgress.bytesTransferred || 0)} /{' '}
+                  {formatBytesCompact(uploadProgress.totalBytes)}
+                </span>
+              )}
+              {uploadProgress && typeof uploadProgress.verifiedCount === 'number' && (
+                <span className="tabular-nums text-[#065f46]">
+                  Verificados SHA-256: {uploadProgress.verifiedCount}
+                </span>
+              )}
               <span>Idênticas ignoradas: {optimizeProgress.skippedIdentical + (uploadProgress?.skippedCount || 0)}</span>
               {uploadProgress && <span>Gravadas no servidor: {uploadProgress.updatedCount}</span>}
               {(optimizeProgress.failed > 0 || (uploadProgress?.failedCount || 0) > 0) && (
@@ -1048,6 +1099,37 @@ export const AdminArrasteFotosModal: React.FC<AdminArrasteFotosModalProps> = ({
                 </span>
               )}
             </div>
+
+            {syncGuaranteeStatus === 'guaranteed' && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-100/80 text-emerald-950 text-xs font-semibold">
+                <ShieldCheck className="w-4 h-4 text-[#047857] shrink-0" />
+                <span>Sincronização garantida para todos os usuários (servidor e nuvem confirmados).</span>
+              </div>
+            )}
+
+            {syncGuaranteeStatus === 'partial_or_pending' && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-amber-100 text-amber-950 text-xs font-semibold">
+                <span className="inline-flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-800 shrink-0" />
+                  <span>Há alterações ou falhas pendentes de confirmação global.</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSyncGuaranteeStatus('flushing');
+                    const ok = await SyncQueueManager.flushNow();
+                    setSyncGuaranteeStatus(
+                      ok && !SyncQueueManager.hasPendingTasks() && errorCount === 0
+                        ? 'guaranteed'
+                        : 'partial_or_pending'
+                    );
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-bold cursor-pointer transition-colors"
+                >
+                  Sincronizar agora
+                </button>
+              </div>
+            )}
           </div>
         )}
 

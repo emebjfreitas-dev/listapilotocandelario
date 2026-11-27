@@ -1,11 +1,13 @@
 import { PDFDocument } from 'pdf-lib';
 import { computeBufferSha256 } from './photoCompressor';
+import { computeMd5Hex } from '../services/driveLosslessStorage';
 
 export interface OptimizedPdfResult {
   valid: boolean;
   reason?: string;
   bytes: Uint8Array;
   sha256: string;
+  md5Checksum?: string;
   originalBytes: number;
   optimizedBytes: number;
   wasOptimized: boolean;
@@ -33,9 +35,12 @@ export const hasPdfMagicHeader = (bytes: Uint8Array): boolean => {
 
 /**
  * Valida cabeçalho %PDF- e compacta o arquivo de forma 100% lossless (useObjectStreams: true)
- * mantendo estritamente o menor arquivo entre o original e o compactado (zero perda visual/vetorial).
+ * ou preserva exatamente os bytes originais quando `preserveOriginalBytes` estiver ativo.
  */
-export const validateAndOptimizePdf = async (file: File): Promise<OptimizedPdfResult> => {
+export const validateAndOptimizePdf = async (
+  file: File,
+  options?: { preserveOriginalBytes?: boolean }
+): Promise<OptimizedPdfResult> => {
   const originalBytes = file.size;
   if (originalBytes < 32) {
     return {
@@ -43,6 +48,7 @@ export const validateAndOptimizePdf = async (file: File): Promise<OptimizedPdfRe
       reason: 'Arquivo vazio ou corrompido.',
       bytes: new Uint8Array(0),
       sha256: '',
+      md5Checksum: '',
       originalBytes,
       optimizedBytes: 0,
       wasOptimized: false,
@@ -58,6 +64,7 @@ export const validateAndOptimizePdf = async (file: File): Promise<OptimizedPdfRe
       reason: 'Arquivo não possui assinatura PDF válida (%PDF-).',
       bytes: new Uint8Array(0),
       sha256: '',
+      md5Checksum: '',
       originalBytes,
       optimizedBytes: 0,
       wasOptimized: false,
@@ -75,7 +82,7 @@ export const validateAndOptimizePdf = async (file: File): Promise<OptimizedPdfRe
     });
     pageCount = pdfDoc.getPageCount();
 
-    if (!pdfDoc.isEncrypted && pageCount > 0) {
+    if (!options?.preserveOriginalBytes && !pdfDoc.isEncrypted && pageCount > 0) {
       const compacted = await pdfDoc.save({
         useObjectStreams: true,
         addDefaultPage: false,
@@ -94,15 +101,20 @@ export const validateAndOptimizePdf = async (file: File): Promise<OptimizedPdfRe
     wasOptimized = false;
   }
 
-  const sha256 = await computeBufferSha256(finalBytes);
+  const [sha256, md5Checksum] = await Promise.all([
+    computeBufferSha256(finalBytes),
+    computeMd5Hex(finalBytes),
+  ]);
 
   return {
     valid: true,
     bytes: finalBytes,
     sha256,
+    md5Checksum,
     originalBytes,
     optimizedBytes: finalBytes.byteLength,
     wasOptimized,
     pageCount,
   };
 };
+

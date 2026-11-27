@@ -3221,10 +3221,16 @@ async function startServer() {
     let skippedCount = 0;
     for (const item of items) {
       if (!item.studentId || !item.buffer || item.buffer.length === 0) continue;
-      const incomingSha = item.sha256 || crypto.createHash("sha256").update(item.buffer).digest("hex");
+      const actualSha = crypto.createHash("sha256").update(item.buffer).digest("hex");
+      if (item.sha256 && item.sha256.toLowerCase() !== actualSha) {
+        throw new Error(
+          `Falha de integridade SHA-256 na transfer\xEAncia da foto de ${item.studentId}.`
+        );
+      }
+      const md5Checksum = crypto.createHash("md5").update(item.buffer).digest("hex");
       const existingInfo = existingStudentShaMap.get(item.studentId);
       const cleanId = String(item.studentId).replace(/[^a-zA-Z0-9-_]/g, "_");
-      if (existingInfo?.sha256 && existingInfo.sha256 === incomingSha && existingInfo.photo) {
+      if (existingInfo?.sha256 && existingInfo.sha256 === actualSha && existingInfo.photo) {
         const rawPathName = existingInfo.photo.split("?")[0].split("/").pop() || `${cleanId}.webp`;
         if (fs.existsSync(path.join(PHOTOS_DIR, rawPathName))) {
           skippedCount++;
@@ -3232,7 +3238,11 @@ async function startServer() {
         }
       }
       const saved = savePhotoBufferToFile(item.studentId, item.buffer);
-      photoMap.set(item.studentId, { url: `${saved.photoUrl}?v=${now}`, sha256: saved.sha256 });
+      photoMap.set(item.studentId, {
+        url: `${saved.photoUrl}?v=${now}`,
+        sha256: saved.sha256,
+        md5Checksum
+      });
     }
     let updatedCount = 0;
     const changedClasses = [];
@@ -3249,6 +3259,7 @@ async function startServer() {
             ...s,
             photo: entry.url,
             photoSha256: entry.sha256,
+            photoMd5: entry.md5Checksum,
             photoManualLink: true,
             updatedAtMs: now
           };
@@ -3273,7 +3284,8 @@ async function startServer() {
     const results = Array.from(photoMap.entries()).map(([studentId, info]) => ({
       studentId,
       photoUrl: info.url,
-      sha256: info.sha256
+      sha256: info.sha256,
+      md5Checksum: info.md5Checksum
     }));
     return { updatedCount, skippedCount, results };
   };
@@ -3618,10 +3630,16 @@ async function startServer() {
     let skippedCount = 0;
     for (const item of items) {
       if (!item.studentId || !item.buffer || item.buffer.length === 0) continue;
-      const incomingSha = item.sha256 || crypto.createHash("sha256").update(item.buffer).digest("hex");
+      const actualSha = crypto.createHash("sha256").update(item.buffer).digest("hex");
+      if (item.sha256 && item.sha256.toLowerCase() !== actualSha) {
+        throw new Error(
+          `Falha de integridade SHA-256 na transfer\xEAncia do PDF de ${item.studentId}.`
+        );
+      }
+      const md5Checksum = crypto.createHash("md5").update(item.buffer).digest("hex");
       const cleanId = String(item.studentId).replace(/[^a-zA-Z0-9-_]/g, "_");
       const existingInfo = existingStudentShaMap.get(item.studentId);
-      if (existingInfo?.sha256 && existingInfo.sha256 === incomingSha && existingInfo.pdfUrl && fs.existsSync(path.join(PDFS_DIR, `${cleanId}.pdf`))) {
+      if (existingInfo?.sha256 && existingInfo.sha256 === actualSha && existingInfo.pdfUrl && fs.existsSync(path.join(PDFS_DIR, `${cleanId}.pdf`))) {
         skippedCount++;
         continue;
       }
@@ -3629,7 +3647,8 @@ async function startServer() {
       pdfMap.set(item.studentId, {
         url: `${saved.pdfUrl}?v=${now}`,
         id: saved.pdfId,
-        sha256: saved.sha256
+        sha256: saved.sha256,
+        md5Checksum
       });
     }
     let updatedCount = 0;
@@ -3648,6 +3667,7 @@ async function startServer() {
             fichaPdfDriveUrl: entry.url,
             fichaPdfDriveId: entry.id,
             fichaPdfSha256: entry.sha256,
+            fichaPdfMd5: entry.md5Checksum,
             fichaPdfManualLink: true,
             updatedAtMs: now
           };
@@ -3673,7 +3693,8 @@ async function startServer() {
       studentId,
       pdfUrl: info.url,
       pdfId: info.id,
-      sha256: info.sha256
+      sha256: info.sha256,
+      md5Checksum: info.md5Checksum
     }));
     return { updatedCount, skippedCount, results };
   };

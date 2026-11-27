@@ -10,9 +10,12 @@ import {
 import { isBackendApiAvailable } from '../services/apiEnvironment';
 import { isSupportedPdfFile, collectFilesFromDataTransfer } from '../utils/photoCompressor';
 import { validateAndOptimizePdf } from '../utils/pdfOptimizer';
+import { SyncQueueManager } from '../services/syncQueueManager';
+import { computeMd5Hex } from '../services/driveLosslessStorage';
 import { ModalPortal } from './ui/ModalPortal';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCheck,
   CheckCircle2,
@@ -24,6 +27,7 @@ import {
   Pause,
   Play,
   RefreshCw,
+  ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
@@ -50,6 +54,7 @@ interface DroppedPdfItem {
   optimizedResult?: {
     bytes: Uint8Array;
     sha256: string;
+    md5Checksum?: string;
     originalBytes: number;
     optimizedBytes: number;
     pageCount?: number;
@@ -104,6 +109,9 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
     failed: 0,
   });
   const [uploadProgress, setUploadProgress] = useState<BatchUploadProgress | null>(null);
+  const [syncGuaranteeStatus, setSyncGuaranteeStatus] = useState<
+    'idle' | 'flushing' | 'guaranteed' | 'partial_or_pending'
+  >('idle');
   const [isPaused, setIsPaused] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -494,6 +502,7 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
     setIsSaving(true);
     setPipelinePhase('optimizing');
     setUploadProgress(null);
+    setSyncGuaranteeStatus('idle');
     setOptimizeProgress({
       done: 0,
       total: targetItems.length,
@@ -546,10 +555,13 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
               opt = {
                 bytes: res.bytes,
                 sha256: res.sha256,
+                md5Checksum: res.md5Checksum || (await computeMd5Hex(res.bytes)),
                 originalBytes: res.originalBytes,
                 optimizedBytes: res.optimizedBytes,
                 pageCount: res.pageCount,
               };
+            } else if (!opt.md5Checksum) {
+              opt = { ...opt, md5Checksum: await computeMd5Hex(opt.bytes) };
             }
 
             savedBytes += Math.max(0, opt.originalBytes - opt.optimizedBytes);
@@ -569,6 +581,7 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
                 studentId: student.id,
                 bytes: seenBatchSha.get(opt.sha256)!,
                 sha256: opt.sha256,
+                md5Checksum: opt.md5Checksum,
               });
               itemUpdates.set(it.id, {
                 status: 'ready',
@@ -679,6 +692,7 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
                   : s.fichaPdfDriveUrl || ''),
               fichaPdfDriveId: r?.pdfId || cleanId,
               fichaPdfSha256: r?.sha256 || payload?.sha256 || s.fichaPdfSha256,
+              fichaPdfMd5: r?.md5Checksum || payload?.md5Checksum || s.fichaPdfMd5,
               fichaPdfManualLink: true,
               updatedAtMs: now,
             };
@@ -687,20 +701,32 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
       });
 
       onBatchPdfsSaved(updatedClasses);
+      setSyncGuaranteeStatus('flushing');
+      setStatusMessage('Confirmando sincronização na nuvem para todos os usuários...');
+      const flushOk = await SyncQueueManager.flushNow();
+      const stillPending = SyncQueueManager.hasPendingTasks();
+
       setPipelinePhase('done');
 
       const totalSkippedAll = skippedIdentical + (res.skippedCount || 0);
       const totalFailedAll = failedOptimize + res.failedStudentIds.length;
 
       if (totalFailedAll > 0) {
+        setSyncGuaranteeStatus('partial_or_pending');
         setStatusMessage(
           `⚠ Envio concluído com falhas: ${res.updatedCount} salva(s), ${totalSkippedAll} idêntica(s), ${totalFailedAll} COM FALHA. Clique em Reenviar Falhas.`
         );
-      } else {
+      } else if (flushOk && !stillPending) {
+        setSyncGuaranteeStatus('guaranteed');
         setStatusMessage(
-          `✓ Concluído com sucesso: ${res.updatedCount} ficha(s) salva(s) · ${totalSkippedAll} idêntica(s) economizada(s) · ${formatFileSize(
+          `✓ Concluído e sincronizado para todos os usuários: ${res.updatedCount} ficha(s) salva(s) com integridade SHA-256 · ${totalSkippedAll} idêntica(s) economizada(s) · ${formatFileSize(
             savedBytes
           )} economizados.`
+        );
+      } else {
+        setSyncGuaranteeStatus('partial_or_pending');
+        setStatusMessage(
+          `Fichas salvas (${res.updatedCount}), mas há pendência na fila de sincronização global. Clique em "Sincronizar agora" para confirmar para todos os usuários.`
         );
       }
     } catch (err: any) {
@@ -757,7 +783,9 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
   const pctOptimize =
     optimizeProgress.total > 0 ? Math.round((optimizeProgress.done / optimizeProgress.total) * 100) : 0;
   const pctUpload =
-    uploadProgress && uploadProgress.totalItems > 0
+    uploadProgress && uploadProgress.totalBytes && uploadProgress.totalBytes > 0
+      ? Math.min(100, Math.round(((uploadProgress.bytesTransferred || 0) / uploadProgress.totalBytes) * 100))
+      : uploadProgress && uploadProgress.totalItems > 0
       ? Math.round((uploadProgress.processedItems / uploadProgress.totalItems) * 100)
       : 0;
 
@@ -857,9 +885,11 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-950">
               <span>
                 {pipelinePhase === 'optimizing'
-                  ? `Fase 1/2 · Validando e Compactando PDFs (${optimizeProgress.done}/${optimizeProgress.total}) · ${pctOptimize}%`
+                  ? `Fase 1/2 · Validando e calculando SHA-256/MD5 (${optimizeProgress.done}/${optimizeProgress.total}) · ${pctOptimize}%`
                   : pipelinePhase === 'uploading'
-                  ? `Fase 2/2 · Enviando Pacotes Binários (${uploadProgress?.completedChunks || 0}/${uploadProgress?.totalChunks || 1}) · ${pctUpload}%`
+                  ? syncGuaranteeStatus === 'flushing'
+                    ? 'Sincronizando metadados para todos os usuários...'
+                    : `Fase 2/2 · Transferindo arquivos (${uploadProgress?.completedChunks || 0}/${uploadProgress?.totalChunks || 1} lotes) · ${pctUpload}%`
                   : 'Processamento Concluído'}
               </span>
               <div className="flex items-center gap-3">
@@ -899,14 +929,31 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
 
             <div className="w-full h-2.5 bg-[#dfe8f4] rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all duration-200 rounded-full ${isPaused ? 'bg-amber-500' : 'bg-[#14428c]'}`}
+                className={`h-full transition-all duration-200 rounded-full ${
+                  isPaused
+                    ? 'bg-amber-500'
+                    : syncGuaranteeStatus === 'guaranteed' && pipelinePhase === 'done'
+                    ? 'bg-[#047857]'
+                    : 'bg-[#14428c]'
+                }`}
                 style={{
                   width: `${pipelinePhase === 'optimizing' ? pctOptimize : pipelinePhase === 'uploading' ? pctUpload : 100}%`,
                 }}
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-700">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold text-slate-700">
+              {uploadProgress && typeof uploadProgress.totalBytes === 'number' && uploadProgress.totalBytes > 0 && (
+                <span className="tabular-nums text-slate-900">
+                  Transferência: {formatFileSize(uploadProgress.bytesTransferred || 0)} /{' '}
+                  {formatFileSize(uploadProgress.totalBytes)}
+                </span>
+              )}
+              {uploadProgress && typeof uploadProgress.verifiedCount === 'number' && (
+                <span className="tabular-nums text-[#065f46]">
+                  Verificados SHA-256: {uploadProgress.verifiedCount}
+                </span>
+              )}
               <span>Idênticos ignorados: {optimizeProgress.skippedIdentical + (uploadProgress?.skippedCount || 0)}</span>
               {uploadProgress && <span>Gravados no servidor: {uploadProgress.updatedCount}</span>}
               {(optimizeProgress.failed > 0 || (uploadProgress?.failedCount || 0) > 0) && (
@@ -915,6 +962,37 @@ export const AdminArrastePdfsModal: React.FC<AdminArrastePdfsModalProps> = ({
                 </span>
               )}
             </div>
+
+            {syncGuaranteeStatus === 'guaranteed' && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-100/80 text-emerald-950 text-xs font-semibold">
+                <ShieldCheck className="w-4 h-4 text-[#047857] shrink-0" />
+                <span>Sincronização garantida para todos os usuários (servidor e nuvem confirmados).</span>
+              </div>
+            )}
+
+            {syncGuaranteeStatus === 'partial_or_pending' && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-amber-100 text-amber-950 text-xs font-semibold">
+                <span className="inline-flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-800 shrink-0" />
+                  <span>Há alterações ou falhas pendentes de confirmação global.</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSyncGuaranteeStatus('flushing');
+                    const ok = await SyncQueueManager.flushNow();
+                    setSyncGuaranteeStatus(
+                      ok && !SyncQueueManager.hasPendingTasks() && errorCount === 0
+                        ? 'guaranteed'
+                        : 'partial_or_pending'
+                    );
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-bold cursor-pointer transition-colors"
+                >
+                  Sincronizar agora
+                </button>
+              </div>
+            )}
           </div>
         )}
 

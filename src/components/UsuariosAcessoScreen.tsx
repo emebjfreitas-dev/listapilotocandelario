@@ -1311,6 +1311,8 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
         classes,
         senderEmail: currentUserEmail,
         senderName: 'Coordenação / Direção Escolar',
+        senderRole: userRole,
+        senderTeacherRoleType: teacherRoleType,
       });
       triggerFeedback('success', res.message);
       await refreshFcmStatus();

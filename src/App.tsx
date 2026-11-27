@@ -499,6 +499,7 @@ export default function App() {
   };
 
   const handleSaveSchoolNotices = (updatedNotices: SchoolNotice[]) => {
+    if (!isStrictAdmin) return;
     setSchoolNotices(updatedNotices);
     saveStoredSchoolNotices(updatedNotices);
     pushSchoolNoticesToServer(updatedNotices);
@@ -2719,6 +2720,9 @@ export default function App() {
             className={gridModalData?.className || selectedClass.name}
             diasLetivosMes={gridModalData?.diasLetivosMes || 20}
             userRole={userRole}
+            teacherRoleType={activeTeacherRoleType}
+            currentUserEmail={simulatedTeacherEmail || currentUserEmail}
+            currentUserName={activeAuthorizedUser?.name || currentUserName}
             canEdit={gridModalData ? canEditClass(gridModalData.classId) : false}
             onSaveStudent={(updatedStudent) => {
               if (gridModalData) {

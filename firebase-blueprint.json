@@ -15,7 +15,11 @@
         "justifiedAbsences": { "type": "number" },
         "diasLetivosRecorte": { "type": "number" },
         "photoSha256": { "type": "string", "maxLength": 128 },
+        "photoMd5": { "type": "string", "maxLength": 64 },
+        "photoSyncVersion": { "type": "number" },
         "fichaPdfSha256": { "type": "string", "maxLength": 128 },
+        "fichaPdfMd5": { "type": "string", "maxLength": 64 },
+        "fichaPdfSyncVersion": { "type": "number" },
         "updatedAtMs": { "type": "number" },
         "isDeleted": { "type": "boolean" }
       },
@@ -111,6 +115,30 @@
         "pendingClassesCount": { "type": "number" }
       },
       "required": ["id", "title", "body", "category", "urgency", "createdAtMs", "createdByEmail"]
+    },
+    "DriveFileSyncMeta": {
+      "title": "DriveFileSyncMeta",
+      "description": "Lossless Google Drive file sync manifest with SHA-256 and MD5 checksums for cross-device consistency",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "maxLength": 128 },
+        "kind": { "type": "string", "enum": ["photo", "pdf", "metadata_backup"] },
+        "fileName": { "type": "string", "maxLength": 240 },
+        "driveFileId": { "type": "string", "maxLength": 160 },
+        "driveWebViewLink": { "type": "string", "maxLength": 512 },
+        "driveFolderId": { "type": "string", "maxLength": 160 },
+        "mimeType": { "type": "string", "maxLength": 120 },
+        "byteSize": { "type": "number" },
+        "sha256": { "type": "string", "maxLength": 128 },
+        "md5Checksum": { "type": "string", "maxLength": 64 },
+        "syncVersion": { "type": "number" },
+        "appDataBackedUp": { "type": "boolean" },
+        "updatedAtMs": { "type": "number" },
+        "updatedByEmail": { "type": "string", "maxLength": 160 }
+      },
+      "required": ["id", "kind", "driveFileId", "byteSize", "sha256", "md5Checksum", "syncVersion", "updatedAtMs", "updatedByEmail"]
     }
   },
   "firestore": {
@@ -129,6 +157,10 @@
     "/school_fcm_alerts_2027/{alertId}": {
       "schema": "FcmWindowAlert",
       "description": "Attendance closing window FCM push alerts dispatched to teachers"
+    },
+    "/school_drive_sync_2027/{fileKey}": {
+      "schema": "DriveFileSyncMeta",
+      "description": "Verified SHA-256/MD5 Drive file sync manifests shared across institutional users"
     }
   }
 }

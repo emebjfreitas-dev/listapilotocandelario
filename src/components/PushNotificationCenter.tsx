@@ -175,9 +175,9 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
     };
   }, [userEmail, userRole, teacherRoleType, userName, assignedClassIdsKey]);
 
-  // Monitora automaticamente o fechamento da janela e dispara lembrete de fim de turno ao educador
+  // Monitora automaticamente o fechamento da janela e dispara lembrete apenas no painel de Administradores estritos
   useEffect(() => {
-    if (!visibleClassesIdKey) return;
+    if (!isStrictAdmin || !visibleClassesIdKey) return;
     let cancelled = false;
     let cutoffTimeoutId: number | null = null;
     let pollIntervalId: number | null = null;
@@ -187,7 +187,7 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
       : [];
 
     const runChecks = async () => {
-      if (cancelled) return;
+      if (cancelled || !isStrictAdmin) return;
       const latestClasses = visibleClassesRef.current;
       const latestWindow = attendanceWindowConfigRef.current;
       await evaluateAndTriggerWindowClosingReminder({
@@ -195,6 +195,7 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
         visibleClasses: latestClasses,
         userEmail,
         userRole,
+        teacherRoleType,
       });
       const eodNotice = await evaluateAndTriggerTeacherEndOfDayReminder({
         attendanceWindowConfig: latestWindow,
@@ -254,6 +255,7 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
       document.removeEventListener('visibilitychange', handleVisibilityWake);
     };
   }, [
+    isStrictAdmin,
     attendanceWindowKey,
     visibleClassesIdKey,
     userEmail,
@@ -293,10 +295,10 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
 
   // Lista ativa: assim que o usuário dá ciência na notificação, ela desaparece da central
   const activeNotices = useMemo(() => {
-    return buildContextualPushNotices(visibleClasses, customNotices, readIds).filter(
-      (n) => !n.read
-    );
-  }, [visibleClasses, customNotices, readIds]);
+    return buildContextualPushNotices(visibleClasses, customNotices, readIds, {
+      isStrictAdmin,
+    }).filter((n) => !n.read);
+  }, [visibleClasses, customNotices, readIds, isStrictAdmin]);
 
   const unreadCount = activeNotices.length;
 
@@ -375,7 +377,14 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
           targetScreen: defaultScreen,
           authorName: userName || 'Coordenação / Admin',
         },
-        { saveToFeed: true, showBanner: true, userEmail }
+        {
+          saveToFeed: true,
+          showBanner: true,
+          userEmail,
+          senderRole: userRole,
+          senderTeacherRoleType: teacherRoleType,
+          deliverySource: 'admin_action',
+        }
       );
       setActionFeedbackMsg('Notificação enviada para a equipe.');
     }
@@ -489,10 +498,12 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
                 </h2>
                 <p className="text-xs text-[#86868B] tabular-nums mt-0.5">
                   {unreadCount === 0
-                    ? 'Tudo em dia'
+                    ? isStrictAdmin
+                      ? 'Tudo em dia'
+                      : 'Tudo em dia · Recebimento e ciência'
                     : unreadCount === 1
-                    ? '1 notificação pendente'
-                    : `${unreadCount} notificações pendentes`}
+                    ? '1 notificação aguardando ciência'
+                    : `${unreadCount} notificações aguardando ciência`}
                 </p>
               </div>
 
@@ -518,8 +529,9 @@ export const PushNotificationCenter: React.FC<PushNotificationCenterProps> = ({
               </div>
             </div>
 
-            {/* Lembrete Acionável de Fim de Turno (Somente quando há turmas pendentes do docente) */}
-            {teacherEodSummary.isEligibleTeacherRole &&
+            {/* Lembrete Acionável de Fim de Turno (Exclusivo para Administradores com turmas atribuídas) */}
+            {isStrictAdmin &&
+              teacherEodSummary.isEligibleTeacherRole &&
               teacherEodSummary.pendingEvaluations.length > 0 &&
               teacherEodSummary.windowEvaluation.isAllowedToLaunch && (
                 <div

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Student, UserRole } from '../types';
+import { AuthorizedUser, Student, UserRole } from '../types';
 import { OFFICIAL_OCTOBER_DAYS } from '../data/mockData';
 import { getStudentAttendanceMetrics } from '../utils/attendanceRules';
 import {
@@ -71,6 +71,7 @@ interface GradeDadosCriancaModalProps {
   className: string;
   diasLetivosMes: number;
   userRole: UserRole;
+  teacherRoleType?: AuthorizedUser['teacherRoleType'];
   canEdit: boolean;
   onSaveStudent: (updatedStudent: Student) => void;
   onOpenPhotoModal?: (student: Student) => void;
@@ -173,6 +174,7 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
   className,
   diasLetivosMes,
   userRole,
+  teacherRoleType,
   canEdit,
   onSaveStudent,
   onOpenPhotoModal,
@@ -181,6 +183,8 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
   currentUserEmail = 'educador@educacao.jundiai.sp.gov.br',
   currentUserName = 'Educador(a) Institucional',
 }) => {
+  const isStrictAdmin =
+    userRole === 'admin' && teacherRoleType !== 'apoio' && teacherRoleType !== 'aee';
   const [draft, setDraft] = useState<Student | null>(student);
   const [activeCategory, setActiveCategory] = useState<GridCategory>('todos');
   const [searchField, setSearchField] = useState('');
@@ -490,13 +494,18 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
   const primaryPhoneDigits = (draft.telefones || draft.guardianPhone || '').replace(/\D/g, '');
 
   const handleSendPushAlert = async () => {
-    if (!draft) return;
+    if (!draft || !isStrictAdmin) return;
     try {
       await triggerConsecutiveAbsencePushNotification(
         draft,
         className,
         effectiveConsecutiveDays,
-        `Contato imediato de Busca Ativa sugerido com ${guardian1Info.parentesco} (${guardian1Info.nomeLimpo || draft.guardianName || 'Responsável'})`
+        `Contato imediato de Busca Ativa sugerido com ${guardian1Info.parentesco} (${guardian1Info.nomeLimpo || draft.guardianName || 'Responsável'})`,
+        {
+          userRole,
+          teacherRoleType,
+          userEmail: currentUserEmail,
+        }
       );
       setPushAlertSent(true);
       setTimeout(() => setPushAlertSent(false), 4500);
@@ -818,27 +827,29 @@ export const GradeDadosCriancaModal: React.FC<GradeDadosCriancaModalProps> = ({
                   </a>
                 )}
 
-                <button
-                  type="button"
-                  onClick={handleSendPushAlert}
-                  className={`w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center text-center whitespace-normal gap-1.5 transition-all cursor-pointer shadow-xs ${
-                    pushAlertSent
-                      ? 'bg-emerald-200 text-emerald-950'
-                      : 'bg-white hover:bg-slate-100 text-orange-950'
-                  }`}
-                  title="Disparar notificação push imediata para a equipe escolar e coordenação"
-                >
-                  {pushAlertSent ? (
-                    <CheckCircle2 className="w-[18px] h-[18px] shrink-0" />
-                  ) : (
-                    <BellRing className="w-[18px] h-[18px] shrink-0" />
-                  )}
-                  <span>
-                    {pushAlertSent
-                      ? '✓ Notificação Push Enviada à Equipe!'
-                      : 'Disparar Notificação Push'}
-                  </span>
-                </button>
+                {isStrictAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleSendPushAlert}
+                    className={`w-full sm:w-auto min-h-[40px] px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center text-center whitespace-normal gap-1.5 transition-all cursor-pointer shadow-xs ${
+                      pushAlertSent
+                        ? 'bg-emerald-200 text-emerald-950'
+                        : 'bg-white hover:bg-slate-100 text-orange-950'
+                    }`}
+                    title="Disparar notificação push imediata para a equipe escolar e coordenação"
+                  >
+                    {pushAlertSent ? (
+                      <CheckCircle2 className="w-[18px] h-[18px] shrink-0" />
+                    ) : (
+                      <BellRing className="w-[18px] h-[18px] shrink-0" />
+                    )}
+                    <span>
+                      {pushAlertSent
+                        ? '✓ Notificação Push Enviada à Equipe!'
+                        : 'Disparar Notificação Push'}
+                    </span>
+                  </button>
+                )}
 
                 {onNavigateToConsecutiveAbsences && (
                   <button

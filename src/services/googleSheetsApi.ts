@@ -77,7 +77,12 @@ import {
   saveClassesToFirestoreCloud,
   saveConfigMetaToFirestoreCloud,
   getSyncStatusSnapshot,
+  upsertDriveFileSyncManifest,
 } from './firebaseSync';
+import {
+  uploadFileLosslessToDrive,
+  syncManifestWithDriveAppData,
+} from './driveLosslessStorage';
 import {
   getStudentAttendanceMetrics,
   getClassAttendanceMetrics,
@@ -96,7 +101,7 @@ export const OFFICIAL_WORKSPACE_HOSTED_DOMAIN = 'educacao.jundiai.sp.gov.br';
 export const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive.appdata',
 ];
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -2900,7 +2905,15 @@ export const uploadStudentPhotoToDrive = async (
   student: Student,
   className: string,
   dataUrl: string
-): Promise<{ fileId: string; webViewLink: string; thumbnailUrl: string; folderUrl: string }> => {
+): Promise<{
+  fileId: string;
+  webViewLink: string;
+  thumbnailUrl: string;
+  folderUrl: string;
+  sha256: string;
+  md5Checksum: string;
+  verified: boolean;
+}> => {
   const token = await getAccessToken();
   if (!token) {
     throw new Error(
@@ -2920,87 +2933,47 @@ export const uploadStudentPhotoToDrive = async (
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .trim();
-  const fileName = `${cleanStudentName}.jpg`;
 
   const arr = dataUrl.split(',');
   const mimeMatch = arr[0].match(/:(.*?);/);
   const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const ext = mimeType.includes('webp') ? 'webp' : mimeType.includes('png') ? 'png' : 'jpg';
+  const fileName = `${cleanStudentName}.${ext}`;
+
   const bstr = atob(arr[1] || '');
   let n = bstr.length;
   const u8arr = new Uint8Array(n);
   while (n--) {
     u8arr[n] = bstr.charCodeAt(n);
   }
-  const fileBlob = new Blob([u8arr], { type: mimeType });
 
-  // Check if file with same name already exists inside the Drive folder to avoid duplicates
-  let existingFileId: string | null = null;
-  try {
-    const qExisting = encodeURIComponent(
-      `'${folderId}' in parents and name = '${fileName.replace(/'/g, "\\'")}' and trashed = false`
-    );
-    const searchRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${qExisting}&fields=files(id)&pageSize=1`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (searchRes.ok) {
-      const searchData = await searchRes.json();
-      if (searchData.files && searchData.files.length > 0) {
-        existingFileId = searchData.files[0].id;
-      }
-    }
-  } catch {
-    // ignore search error and proceed to create
-  }
-
-  const metadata: Record<string, unknown> = {
-    name: fileName,
-    description: `Foto Oficial - ${student.name} (RA: ${student.ra || ''}) - Turma ${className}`,
-  };
-  if (!existingFileId) {
-    metadata.parents = [folderId];
-  }
-
-  const form = new FormData();
-  form.append(
-    'metadata',
-    new Blob([JSON.stringify(metadata)], { type: 'application/json' })
-  );
-  form.append('file', fileBlob);
-
-  const uploadEndpoint = existingFileId
-    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart&fields=id,name,webViewLink,thumbnailLink`
-    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,thumbnailLink';
-
-  const uploadRes = await fetch(uploadEndpoint, {
-    method: existingFileId ? 'PATCH' : 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: form,
+  const currentGoogle = getCurrentGoogleUser();
+  const uploaded = await uploadFileLosslessToDrive({
+    accessToken: token,
+    fileName,
+    bytes: u8arr,
+    mimeType,
+    folderId,
+    kind: 'photo',
+    studentId: student.id,
+    description: `Foto Oficial Lossless - ${student.name} (RA: ${student.ra || ''}) - Turma ${className}`,
+    updatedByEmail: currentGoogle?.email || OFFICIAL_ADMIN_EMAIL,
   });
 
-  if (!uploadRes.ok) {
-    const errData = await uploadRes.json().catch(() => ({}));
-    throw new Error(
-      errData?.error?.message ||
-        `Erro ao enviar foto para a pasta do Google Drive (${uploadRes.status}).`
-    );
-  }
+  void upsertDriveFileSyncManifest(uploaded.manifest).catch(() => {});
 
-  const uploaded = await uploadRes.json();
-  const fileId: string = uploaded.id;
-  const webViewLink: string =
-    uploaded.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
   const thumbnailUrl =
     uploaded.thumbnailLink?.replace(/=s\d+/, '=s400') ||
-    `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+    `https://drive.google.com/thumbnail?id=${uploaded.fileId}&sz=w400`;
 
   return {
-    fileId,
-    webViewLink,
+    fileId: uploaded.fileId,
+    webViewLink: uploaded.webViewLink,
     thumbnailUrl,
     folderUrl: folderUrl || `https://drive.google.com/drive/folders/${folderId}`,
+    sha256: uploaded.sha256,
+    md5Checksum: uploaded.md5Checksum,
+    verified: uploaded.verified,
   };
 };
 
@@ -5393,7 +5366,7 @@ export const uploadJsonBackupToGoogleDrive = async (params: {
     includeAuthorizedUsers
   );
   const jsonString = JSON.stringify(backupPayload, null, 2);
-  const jsonBlob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+  const jsonBytes = new TextEncoder().encode(jsonString);
 
   const now = new Date();
   const pad = (v: number) => String(v).padStart(2, '0');
@@ -5402,49 +5375,30 @@ export const uploadJsonBackupToGoogleDrive = async (params: {
   )}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
   const fileName = `backup_lista_piloto_2027_${fileTimestamp}.json`;
 
-  const metadata: Record<string, unknown> = {
-    name: fileName,
-    mimeType: 'application/json',
-    parents: [cleanFolderId],
-    description: `Backup de Segurança Manual · ${backupPayload.totalClasses} turmas · ${backupPayload.totalStudents} estudantes · Exportado por ${exportedBy}`,
-  };
-
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', jsonBlob);
-
-  const uploadRes = await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink,size,createdTime',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: form,
-    }
-  );
-
-  if (!uploadRes.ok) {
-    markDriveTokenExpiredOrForbidden(uploadRes.status);
-    const errData = await uploadRes.json().catch(() => ({}));
-    const rawMsg = errData?.error?.message || '';
-    if (uploadRes.status === 403 || uploadRes.status === 404) {
+  let uploaded;
+  try {
+    uploaded = await uploadFileLosslessToDrive({
+      accessToken: token,
+      fileName,
+      bytes: jsonBytes,
+      mimeType: 'application/json;charset=utf-8',
+      folderId: cleanFolderId,
+      kind: 'metadata_backup',
+      description: `Backup de Segurança Lossless · ${backupPayload.totalClasses} turmas · ${backupPayload.totalStudents} estudantes · Exportado por ${exportedBy}`,
+      updatedByEmail: exportedBy,
+    });
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('403') || msg.includes('404')) {
       throw new Error(
-        `Sem permissão de escrita na pasta selecionada (${uploadRes.status}: ${
-          rawMsg || 'escopo restrito ou ID inválido'
-        }). Use o botão "Criar Pasta Oficial de Backup no Drive" para garantir gravação direta ou verifique se a pasta é editável por sua conta.`
+        `Sem permissão de escrita na pasta selecionada (${msg}). Use o botão "Criar Pasta Oficial de Backup no Drive" para garantir gravação direta ou verifique se a pasta é editável por sua conta.`
       );
     }
-    throw new Error(
-      rawMsg || `Falha ao enviar o JSON de backup para o Google Drive (HTTP ${uploadRes.status}).`
-    );
+    throw err;
   }
 
-  const uploaded = await uploadRes.json();
-  const fileId: string = uploaded.id;
-  const webViewLink: string =
-    uploaded.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
-  const sizeBytes = uploaded.size ? Number(uploaded.size) : jsonBlob.size;
+  void upsertDriveFileSyncManifest(uploaded.manifest).catch(() => {});
+  void syncManifestWithDriveAppData(token, [uploaded.manifest], exportedBy).catch(() => {});
 
   saveBackupDriveFolderUrl(
     `https://drive.google.com/drive/folders/${cleanFolderId}`,
@@ -5453,16 +5407,16 @@ export const uploadJsonBackupToGoogleDrive = async (params: {
   );
 
   const historyItem: DriveBackupHistoryItem = {
-    fileId,
+    fileId: uploaded.fileId,
     fileName: uploaded.name || fileName,
-    webViewLink,
+    webViewLink: uploaded.webViewLink,
     folderId: cleanFolderId,
     folderName: targetFolderName || getSavedBackupDriveFolderInfo().folderName,
-    createdAtISO: uploaded.createdTime || now.toISOString(),
+    createdAtISO: now.toISOString(),
     exportedBy,
     totalClasses: backupPayload.totalClasses,
     totalStudents: backupPayload.totalStudents,
-    sizeBytes,
+    sizeBytes: uploaded.sizeBytes,
   };
 
   appendDriveBackupHistory(historyItem);
@@ -5472,8 +5426,8 @@ export const uploadJsonBackupToGoogleDrive = async (params: {
     userName: 'Administrador Escolar Candelário',
     userRole: 'admin',
     eventType: 'JSON_DATA_EXPORT_GENERATED',
-    actionTitle: 'Backup de Segurança JSON Enviado ao Google Drive',
-    details: `Arquivo "${historyItem.fileName}" (${backupPayload.totalClasses} turmas, ${backupPayload.totalStudents} estudantes) salvo na pasta Drive ${cleanFolderId}`,
+    actionTitle: 'Backup de Segurança JSON Verificado (SHA-256/MD5) Enviado ao Google Drive',
+    details: `Arquivo "${historyItem.fileName}" (${backupPayload.totalClasses} turmas, ${backupPayload.totalStudents} estudantes, SHA-256 ${uploaded.sha256.slice(0, 12)}…) salvo na pasta Drive ${cleanFolderId}`,
     severity: 'info',
   });
 

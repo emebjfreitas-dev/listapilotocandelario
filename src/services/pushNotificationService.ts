@@ -1,4 +1,4 @@
-import { ClassGroup, ScreenType } from '../types';
+import { AuthorizedUser, ClassGroup, ScreenType, UserRole } from '../types';
 
 export type PushNoticeCategory = 'prazo' | 'aviso' | 'busca_ativa';
 
@@ -12,6 +12,13 @@ export interface PushNoticeItem {
   createdAt: string;
   authorName?: string;
   read?: boolean;
+}
+
+export function isStrictAdminNotificationSender(
+  userRole?: UserRole,
+  teacherRoleType?: AuthorizedUser['teacherRoleType']
+): boolean {
+  return userRole === 'admin' && teacherRoleType !== 'apoio' && teacherRoleType !== 'aee';
 }
 
 export interface PushPreferences {
@@ -137,7 +144,14 @@ const getReadStorageKey = (userEmail?: string): string => {
  */
 export async function triggerPushNotification(
   notice: Omit<PushNoticeItem, 'id' | 'createdAt'> & { id?: string; createdAt?: string },
-  options?: { showBanner?: boolean; saveToFeed?: boolean; userEmail?: string }
+  options?: {
+    showBanner?: boolean;
+    saveToFeed?: boolean;
+    userEmail?: string;
+    senderRole?: UserRole;
+    senderTeacherRoleType?: AuthorizedUser['teacherRoleType'];
+    deliverySource?: 'admin_action' | 'fcm_incoming';
+  }
 ): Promise<PushNoticeItem> {
   const fullNotice: PushNoticeItem = {
     id: notice.id || `push_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -155,6 +169,16 @@ export async function triggerPushNotification(
     authorName: notice.authorName || 'Coordenação EMEB Candelário',
     read: false,
   };
+
+  // Somente administradores estritos podem gerar novas notificações; demais perfis apenas recebem via FCM/admin
+  const isIncomingFromServerOrAdmin = options?.deliverySource === 'fcm_incoming';
+  const isAllowedAdminSender = isStrictAdminNotificationSender(
+    options?.senderRole,
+    options?.senderTeacherRoleType
+  );
+  if (!isIncomingFromServerOrAdmin && !isAllowedAdminSender) {
+    return { ...fullNotice, read: true };
+  }
 
   // Se este usuário já deu ciência nesta notificação, não reexibe banner nem OS push
   const alreadyReadByUser = getReadPushNoticeIds(options?.userEmail).includes(fullNotice.id);
@@ -349,9 +373,11 @@ export function getStudentCumulativeOccurrences(student: ClassGroup['students'][
 export function buildContextualPushNotices(
   visibleClasses: ClassGroup[],
   customNotices: PushNoticeItem[],
-  readIds: string[]
+  readIds: string[],
+  options?: { isStrictAdmin?: boolean }
 ): PushNoticeItem[] {
   const dynamicNotices: PushNoticeItem[] = [];
+  const allowLocalSynthesis = Boolean(options?.isStrictAdmin);
 
   for (const cls of visibleClasses) {
     const activeStudents = cls.students.filter((s) => {
@@ -359,7 +385,7 @@ export function buildContextualPushNotices(
       return !sit.includes('BXTR') && !sit.includes('TRANSF') && !sit.includes('REMAN');
     });
 
-    // 1. Todos os retornos da família registrados pela secretaria nas ocorrências acumuladas
+    // 1. Retornos da família registrados pela Administração/Secretaria (recebimento para ciência)
     activeStudents.forEach((s) => {
       const occs = getStudentCumulativeOccurrences(s);
       occs.forEach((occ, idx) => {
@@ -379,58 +405,61 @@ export function buildContextualPushNotices(
       });
     });
 
-    // 2. Alerta imediato de Busca Ativa quando estudante excede 3 faltas consecutivas
-    activeStudents.forEach((s) => {
-      const occs = getStudentCumulativeOccurrences(s);
-      const latestOcc = occs.length > 0 ? occs[occs.length - 1] : undefined;
-      const streak = Math.max(
-        latestOcc?.selectedDates?.length || 0,
-        s.consecutiveAbsenceAlert?.active
-          ? Math.max(3, s.consecutiveAbsenceAlert?.selectedDates?.length || 0)
-          : (s.totalAbsencesMonth || 0) >= 3 && (s.justifiedAbsences || 0) === 0
-          ? s.totalAbsencesMonth || 0
-          : 0
-      );
-      if (streak >= 3) {
-        const hasFeedback = Boolean(
-          latestOcc?.familyFeedback?.trim() ||
-            s.consecutiveAbsenceAlert?.familyFeedback?.trim()
+    // Alertas locais de monitoramento são exibidos apenas para o Admin decidir quando notificar a equipe
+    if (allowLocalSynthesis) {
+      // 2. Alerta imediato de Busca Ativa quando estudante excede 3 faltas consecutivas
+      activeStudents.forEach((s) => {
+        const occs = getStudentCumulativeOccurrences(s);
+        const latestOcc = occs.length > 0 ? occs[occs.length - 1] : undefined;
+        const streak = Math.max(
+          latestOcc?.selectedDates?.length || 0,
+          s.consecutiveAbsenceAlert?.active
+            ? Math.max(3, s.consecutiveAbsenceAlert?.selectedDates?.length || 0)
+            : (s.totalAbsencesMonth || 0) >= 3 && (s.justifiedAbsences || 0) === 0
+            ? s.totalAbsencesMonth || 0
+            : 0
         );
-        const datesStr =
-          latestOcc?.selectedDates && latestOcc.selectedDates.length > 0
-            ? ` (${latestOcc.selectedDates.join(', ')})`
-            : '';
+        if (streak >= 3) {
+          const hasFeedback = Boolean(
+            latestOcc?.familyFeedback?.trim() ||
+              s.consecutiveAbsenceAlert?.familyFeedback?.trim()
+          );
+          const datesStr =
+            latestOcc?.selectedDates && latestOcc.selectedDates.length > 0
+              ? ` (${latestOcc.selectedDates.join(', ')})`
+              : '';
+          dynamicNotices.push({
+            id: `auto_busca_ativa_3d_${cls.id}_${s.id}`,
+            title: `Busca Ativa • ${s.name.split(' ')[0]} (${streak} Faltas Seguidas)`,
+            body: hasFeedback
+              ? `Estudante da turma ${cls.name} excedeu 3 faltas consecutivas${datesStr}. Retorno da família já registrado.`
+              : `Estudante da turma ${cls.name} excedeu 3 faltas consecutivas${datesStr}. Sugerida ação imediata de Contato de Busca Ativa com os responsáveis.`,
+            category: 'busca_ativa',
+            targetClassId: cls.id,
+            targetScreen: 'faltas_consecutivas',
+            createdAt: latestOcc?.reportedAt || 'Alerta Ativo',
+            authorName: 'Busca Ativa Escolar',
+          });
+        }
+      });
+
+      // 3. Prazo / Pendência de observação pedagógica ou estudantes com faltas elevadas
+      const highAbsenceUnjustified = activeStudents.filter(
+        (s) => (s.totalAbsencesMonth || 0) >= 4 && (s.justifiedAbsences || 0) === 0
+      );
+
+      if (highAbsenceUnjustified.length > 0) {
         dynamicNotices.push({
-          id: `auto_busca_ativa_3d_${cls.id}_${s.id}`,
-          title: `Busca Ativa • ${s.name.split(' ')[0]} (${streak} Faltas Seguidas)`,
-          body: hasFeedback
-            ? `Estudante da turma ${cls.name} excedeu 3 faltas consecutivas${datesStr}. Retorno da família já registrado.`
-            : `Estudante da turma ${cls.name} excedeu 3 faltas consecutivas${datesStr}. Sugerida ação imediata de Contato de Busca Ativa com os responsáveis.`,
-          category: 'busca_ativa',
+          id: `auto_prazo_faltas_${cls.id}`,
+          title: `Atenção ao Prazo • Turma ${cls.name}`,
+          body: `${highAbsenceUnjustified.length} estudante(s) com 4+ faltas no mês aguardando conferência ou alerta de busca ativa.`,
+          category: 'prazo',
           targetClassId: cls.id,
-          targetScreen: 'faltas_consecutivas',
-          createdAt: latestOcc?.reportedAt || 'Alerta Ativo',
-          authorName: 'Busca Ativa Escolar',
+          targetScreen: 'frequencia_mensal',
+          createdAt: 'Prazo Mensal',
+          authorName: 'Monitoramento Automático',
         });
       }
-    });
-
-    // 3. Prazo / Pendência de observação pedagógica ou estudantes com faltas elevadas
-    const highAbsenceUnjustified = activeStudents.filter(
-      (s) => (s.totalAbsencesMonth || 0) >= 4 && (s.justifiedAbsences || 0) === 0
-    );
-
-    if (highAbsenceUnjustified.length > 0) {
-      dynamicNotices.push({
-        id: `auto_prazo_faltas_${cls.id}`,
-        title: `Atenção ao Prazo • Turma ${cls.name}`,
-        body: `${highAbsenceUnjustified.length} estudante(s) com 4+ faltas no mês aguardando conferência ou alerta de busca ativa.`,
-        category: 'prazo',
-        targetClassId: cls.id,
-        targetScreen: 'frequencia_mensal',
-        createdAt: 'Prazo Mensal',
-        authorName: 'Monitoramento Automático',
-      });
     }
   }
 
@@ -459,8 +488,8 @@ export function buildContextualPushNotices(
 }
 
 /**
- * Dispara notificação push instantânea (Web Push via Service Worker + banner Apple)
- * para toda a equipe escolar quando um estudante exceder 3 faltas consecutivas.
+ * Dispara notificação push instantânea (Web Push via Service Worker + banner)
+ * exclusivamente por Administradores estritos quando um estudante exceder 3 faltas consecutivas.
  */
 export async function triggerConsecutiveAbsencePushNotification(
   student: {
@@ -474,11 +503,16 @@ export async function triggerConsecutiveAbsencePushNotification(
   },
   className: string,
   consecutiveDays: number,
-  customActionText?: string
+  customActionText?: string,
+  senderContext?: {
+    userRole?: UserRole;
+    teacherRoleType?: AuthorizedUser['teacherRoleType'];
+    userEmail?: string;
+  }
 ): Promise<PushNoticeItem> {
   const shortName = student.name.split(' ')[0];
   const notice: Omit<PushNoticeItem, 'id' | 'createdAt'> = {
-    title: `🚨 Busca Ativa Urgente • ${shortName} (${consecutiveDays} Faltas Seguidas)`,
+    title: `Busca Ativa Urgente • ${shortName} (${consecutiveDays} Faltas Seguidas)`,
     body: `${student.name} excedeu 3 faltas consecutivas na turma ${className}. ${
       customActionText || 'Sugerida ação de Contato de Busca Ativa com os responsáveis.'
     }`,
@@ -491,5 +525,9 @@ export async function triggerConsecutiveAbsencePushNotification(
   return triggerPushNotification(notice, {
     showBanner: true,
     saveToFeed: true,
+    userEmail: senderContext?.userEmail,
+    senderRole: senderContext?.userRole,
+    senderTeacherRoleType: senderContext?.teacherRoleType,
+    deliverySource: 'admin_action',
   });
 }

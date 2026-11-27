@@ -100,6 +100,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const tapAnimation = prefersReducedMotion ? undefined : { scale: 0.97 };
 
   const [selectedShiftFilter, setSelectedShiftFilter] = useState<'TODOS' | 'MANHÃ' | 'TARDE'>('TODOS');
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [turmaSearchInput, setTurmaSearchInput] = useState('');
   const [classesPage, setClassesPage] = useState(1);
   const classesSectionRef = useRef<HTMLElement | null>(null);
@@ -252,6 +253,68 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     return list;
   }, [visibleBaseClasses, selectedShiftFilter, turmaSearchInput]);
+
+  const globalSearchResults = useMemo(() => {
+    const normalizeSearch = (val?: string) =>
+      String(val || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+    const q = normalizeSearch(globalSearchQuery);
+    if (!q) {
+      return {
+        hasQuery: false,
+        classes: [] as ClassGroup[],
+        students: [] as Array<{ student: Student; classGroup: ClassGroup }>,
+        totalStudentsMatched: 0,
+      };
+    }
+
+    const qDigits = q.replace(/\D/g, '');
+    const matchedClasses = visibleBaseClasses.filter((cls) => {
+      return (
+        normalizeSearch(cls.name).includes(q) ||
+        normalizeSearch(cls.turmaAbrev).includes(q) ||
+        normalizeSearch(cls.teacherName).includes(q) ||
+        normalizeSearch(cls.room).includes(q) ||
+        normalizeSearch(cls.shift).includes(q)
+      );
+    });
+
+    const matchedStudents: Array<{ student: Student; classGroup: ClassGroup }> = [];
+    for (const cls of visibleBaseClasses) {
+      for (const st of cls.students) {
+        const nameNorm = normalizeSearch(st.estudante || st.name);
+        const altNameNorm = normalizeSearch(st.name);
+        const raNorm = normalizeSearch(st.ra);
+        const raDigits = (st.ra || '').replace(/\D/g, '');
+        const numStr = String(st.number ?? '').padStart(2, '0');
+        const clsNorm = normalizeSearch(cls.name);
+
+        const matches =
+          nameNorm.includes(q) ||
+          altNameNorm.includes(q) ||
+          raNorm.includes(q) ||
+          (qDigits.length >= 2 && raDigits.includes(qDigits)) ||
+          numStr === q ||
+          String(st.number) === q ||
+          (`${clsNorm} ${numStr}`).includes(q);
+
+        if (matches) {
+          matchedStudents.push({ student: st, classGroup: cls });
+        }
+      }
+    }
+
+    return {
+      hasQuery: true,
+      classes: matchedClasses,
+      students: matchedStudents.slice(0, 12),
+      totalStudentsMatched: matchedStudents.length,
+    };
+  }, [visibleBaseClasses, globalSearchQuery]);
 
   useEffect(() => {
     setClassesPage(1);
@@ -682,6 +745,185 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Barra de Pesquisa Global Instantânea (Turmas e Estudantes) */}
+        <div className="pt-2 border-t border-black/[0.05] space-y-3 min-w-0">
+          <div className="relative w-full">
+            <SFSymbol
+              name="search"
+              size={18}
+              weight={500}
+              className="text-[#86868B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+            />
+            <input
+              type="search"
+              value={globalSearchQuery}
+              onChange={(e) => setGlobalSearchQuery(e.target.value)}
+              placeholder="Pesquisar turma, docente, estudante ou RA instantaneamente..."
+              aria-label="Pesquisa global de turmas e estudantes"
+              className="w-full min-h-[46px] pl-11 pr-10 rounded-2xl bg-[#F5F5F7] border border-black/[0.08] focus:bg-white focus:border-[#0071E3] focus:outline-hidden text-sm sm:text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] transition-colors duration-150"
+            />
+            {globalSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setGlobalSearchQuery('')}
+                aria-label="Limpar pesquisa global"
+                className="w-7 h-7 rounded-full bg-black/[0.06] hover:bg-black/[0.12] text-[#424245] flex items-center justify-center absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer transition-colors"
+              >
+                <span className="text-xs font-bold leading-none">✕</span>
+              </button>
+            )}
+          </div>
+
+          {globalSearchResults.hasQuery && (
+            <div
+              role="region"
+              aria-label="Resultados da pesquisa global"
+              className="rounded-2xl bg-[#F5F5F7] border border-black/[0.06] p-4 space-y-4 min-w-0 animate-fade-in"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#424245]">
+                <span className="font-semibold">
+                  Resultados para &ldquo;{globalSearchQuery.trim()}&rdquo;:{' '}
+                  <strong className="text-[#1D1D1F] tabular-nums">
+                    {globalSearchResults.classes.length} turma(s)
+                  </strong>{' '}
+                  e{' '}
+                  <strong className="text-[#1D1D1F] tabular-nums">
+                    {globalSearchResults.totalStudentsMatched} estudante(s)
+                  </strong>
+                </span>
+                {globalSearchResults.totalStudentsMatched > globalSearchResults.students.length && (
+                  <span className="text-[11px] font-medium text-[#86868B]">
+                    Exibindo os primeiros {globalSearchResults.students.length} estudantes
+                  </span>
+                )}
+              </div>
+
+              {globalSearchResults.classes.length === 0 && globalSearchResults.totalStudentsMatched === 0 ? (
+                <div className="p-4 rounded-xl bg-white border border-black/[0.05] text-center space-y-1">
+                  <p className="text-sm font-semibold text-[#1D1D1F]">
+                    Nenhuma turma ou estudante encontrado.
+                  </p>
+                  <p className="text-xs text-[#86868B]">
+                    Tente buscar por parte do nome do estudante, número do RA, turma (ex: 1º A) ou docente.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4 min-w-0">
+                  {globalSearchResults.classes.length > 0 && (
+                    <div className="space-y-2 min-w-0">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[#86868B]">
+                        Turmas encontradas ({globalSearchResults.classes.length})
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 min-w-0">
+                        {globalSearchResults.classes.slice(0, 6).map((cls) => (
+                          <button
+                            key={`gsearch-cls-${cls.id}`}
+                            type="button"
+                            onClick={() => {
+                              triggerMenuHaptic('light');
+                              if (onSelectClassForDetails) onSelectClassForDetails(cls);
+                              else onNavigateToScreen('detalhes');
+                            }}
+                            className="text-left p-3.5 rounded-xl bg-white hover:bg-[#FAFAFC] border border-black/[0.06] flex items-center justify-between gap-2.5 cursor-pointer transition-colors min-w-0 group"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-[#1D1D1F] group-hover:text-[#0071E3] truncate">
+                                {cls.name}
+                              </p>
+                              <p className="text-xs text-[#86868B] truncate">
+                                {cls.teacherName || 'Regente'} · {cls.students.length} aluno(s)
+                              </p>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-[#EAF7EE] text-[#1B873F] tabular-nums shrink-0">
+                              {cls.students.length === 0 ? '—' : `${cls.presenceRate}%`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {globalSearchResults.students.length > 0 && (
+                    <div className="space-y-2 min-w-0">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[#86868B]">
+                        Estudantes encontrados ({globalSearchResults.totalStudentsMatched})
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 min-w-0">
+                        {globalSearchResults.students.map(({ student: st, classGroup: cls }) => {
+                          const hasPdf = Boolean(
+                            (st.fichaPdfDriveUrl && st.fichaPdfDriveUrl.trim().length > 0) ||
+                              (st.fichaPdfDriveId && st.fichaPdfDriveId.trim().length > 0)
+                          );
+                          return (
+                            <div
+                              key={`gsearch-stu-${cls.id}-${st.id}`}
+                              className="p-3.5 rounded-xl bg-white border border-black/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="text-xs font-mono font-semibold text-[#0071E3] shrink-0">
+                                    #{String(st.number).padStart(2, '0')}
+                                  </span>
+                                  <p className="text-sm font-semibold text-[#1D1D1F] truncate">
+                                    {st.estudante || st.name}
+                                  </p>
+                                </div>
+                                <p className="text-xs text-[#86868B] truncate mt-0.5">
+                                  {cls.name}
+                                  {st.ra ? ` · RA ${st.ra}` : ''}
+                                  {st.situacao && st.situacao !== 'ATIVO' ? ` · ${st.situacao}` : ''}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                {onOpenStudentGrid && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      triggerMenuHaptic('light');
+                                      onOpenStudentGrid(st);
+                                    }}
+                                    className="min-h-[34px] px-3 py-1 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold cursor-pointer transition-colors"
+                                  >
+                                    Grade
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    triggerMenuHaptic('light');
+                                    if (onSelectClassForDetails) onSelectClassForDetails(cls);
+                                    else onNavigateToScreen('detalhes');
+                                  }}
+                                  className="min-h-[34px] px-3 py-1 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] text-xs font-semibold cursor-pointer transition-colors"
+                                >
+                                  Turma
+                                </button>
+                                {hasPdf && onOpenStudentPdf && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      triggerMenuHaptic('light');
+                                      onOpenStudentPdf(st, cls.name);
+                                    }}
+                                    className="min-h-[34px] px-3 py-1 rounded-full bg-[#EAF7EE] hover:bg-[#DCF2E3] text-[#1B873F] text-xs font-semibold cursor-pointer transition-colors"
+                                  >
+                                    Ficha PDF
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

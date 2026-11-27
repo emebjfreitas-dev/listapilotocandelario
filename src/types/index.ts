@@ -120,11 +120,15 @@ export interface Student extends StudentSedData {
   photoDriveUrl?: string;
   photoManualLink?: boolean;
   photoSha256?: string;
+  photoMd5?: string;
+  photoSyncVersion?: number;
   fichaPdfDriveId?: string;
   fichaPdfDriveUrl?: string;
   fichaPdfSubfolder?: string;
   fichaPdfManualLink?: boolean;
   fichaPdfSha256?: string;
+  fichaPdfMd5?: string;
+  fichaPdfSyncVersion?: number;
   updatedAtMs?: number;
   initials?: string;
   status: AttendanceStatus;
@@ -543,5 +547,40 @@ export interface FcmSystemConfig {
   updatedAtMs?: number;
   updatedByEmail?: string;
 }
+
+export type DriveFileKind = 'photo' | 'pdf' | 'metadata_backup';
+
+export interface DriveSyncFileManifest {
+  id: string;
+  studentId?: string;
+  classId?: string;
+  kind: DriveFileKind;
+  fileName: string;
+  driveFileId: string;
+  driveWebViewLink?: string;
+  driveFolderId?: string;
+  mimeType: string;
+  byteSize: number;
+  sha256: string;
+  md5Checksum: string;
+  syncVersion: number;
+  appDataBackedUp?: boolean;
+  updatedAtMs: number;
+  updatedByEmail: string;
+}
+
+export interface DriveTransferProgress {
+  phase: 'hashing' | 'uploading' | 'verifying' | 'downloading' | 'done' | 'error';
+  fileName: string;
+  bytesTransferred: number;
+  totalBytes: number;
+  percent: number;
+  completedFiles: number;
+  totalFiles: number;
+  verifiedCount: number;
+  failedCount: number;
+  resumedSession?: boolean;
+}
+
 
 

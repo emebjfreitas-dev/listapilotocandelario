@@ -9,6 +9,8 @@
  * - Calcula SHA-256 para deduplicação absoluta (zero redundância)
  */
 
+import { computeMd5Hex } from '../services/driveLosslessStorage';
+
 export interface OptimizedPhotoResult {
   blob: Blob;
   bytes: Uint8Array;
@@ -20,6 +22,7 @@ export interface OptimizedPhotoResult {
   originalBytes: number;
   compressedBytes: number;
   sha256: string;
+  md5Checksum?: string;
   usedOriginalBytes: boolean;
 }
 
@@ -27,6 +30,7 @@ export interface OptimizePhotoOptions {
   maxDimension?: number;
   quality?: number;
   includeDataUrl?: boolean;
+  losslessRaw?: boolean;
 }
 
 export interface CollectedTransferFile {
@@ -244,6 +248,39 @@ export const optimizeStudentPhoto = async (
     throw new Error('Arquivo de imagem vazio (0 bytes).');
   }
 
+  // Modo 100% lossless bit-a-bit: preserva bytes originais sem recompressão Canvas (exceto HEIC iOS para compatibilidade web)
+  if (options.losslessRaw) {
+    const losslessBlob = await convertHeicBlobIfNeeded(sourceBlob, filename);
+    const decodedRaw = await decodeBlobForCanvas(losslessBlob);
+    try {
+      const buf = await losslessBlob.arrayBuffer();
+      const rawBytes = new Uint8Array(buf);
+      const [sha256, md5Checksum] = await Promise.all([
+        computeBufferSha256(rawBytes),
+        computeMd5Hex(rawBytes),
+      ]);
+      const mimeType = losslessBlob.type || 'image/jpeg';
+      const extension = extensionForMime(mimeType);
+      const dataUrl = includeDataUrl ? await blobToDataUrl(losslessBlob) : undefined;
+      return {
+        blob: losslessBlob,
+        bytes: rawBytes,
+        dataUrl,
+        mimeType,
+        extension,
+        width: decodedRaw.width,
+        height: decodedRaw.height,
+        originalBytes,
+        compressedBytes: rawBytes.byteLength,
+        sha256,
+        md5Checksum,
+        usedOriginalBytes: losslessBlob === sourceBlob,
+      };
+    } finally {
+      decodedRaw.cleanup();
+    }
+  }
+
   // Converte HEIC/HEIF de iPhone se aplicável
   const decodedInputBlob = await convertHeicBlobIfNeeded(sourceBlob, filename);
   const decoded = await decodeBlobForCanvas(decodedInputBlob);
@@ -320,7 +357,10 @@ export const optimizeStudentPhoto = async (
 
     const arrayBuffer = await finalBlob.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
-    const sha256 = await computeBufferSha256(bytes);
+    const [sha256, md5Checksum] = await Promise.all([
+      computeBufferSha256(bytes),
+      computeMd5Hex(bytes),
+    ]);
     const mimeType = finalBlob.type || 'image/webp';
     const extension = extensionForMime(mimeType);
     const dataUrl = includeDataUrl ? await blobToDataUrl(finalBlob) : undefined;
@@ -336,6 +376,7 @@ export const optimizeStudentPhoto = async (
       originalBytes,
       compressedBytes: bytes.byteLength,
       sha256,
+      md5Checksum,
       usedOriginalBytes,
     };
   } finally {

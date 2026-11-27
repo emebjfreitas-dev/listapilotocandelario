@@ -35,6 +35,7 @@ import {
   UserAccessSessionLog,
   PendingSyncOperation,
   SyncStateStatus,
+  DriveSyncFileManifest,
 } from '../types';
 import {
   NameGenderEntry,
@@ -1927,5 +1928,131 @@ export const registerOfflineFlushHandler = (flushFn: () => Promise<void>): (() =
   window.addEventListener('online', handleOnline);
   return () => window.removeEventListener('online', handleOnline);
 };
+
+/**
+ * Verifies live Firestore connectivity against the server using getDocFromServer.
+ */
+export const testFirestoreConnection = async (): Promise<{
+  connected: boolean;
+  offline: boolean;
+  error?: string;
+}> => {
+  try {
+    await getDocFromServer(doc(firestoreDb, 'school_meta_2027', 'state'));
+    return { connected: true, offline: false };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const isOffline =
+      msg.includes('the client is offline') ||
+      msg.includes('Failed to get document because the client is offline');
+    if (isOffline) {
+      return { connected: false, offline: true, error: msg };
+    }
+    return { connected: false, offline: false, error: msg };
+  }
+};
+
+const sanitizeDriveManifestForFirestore = (
+  manifest: DriveSyncFileManifest
+): DriveSyncFileManifest => {
+  const cleanId = manifest.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+  const authEmail = getAuth(app).currentUser?.email || manifest.updatedByEmail || 'emebjfreitas@jundiai.sp.gov.br';
+  const cleaned: DriveSyncFileManifest = {
+    id: cleanId,
+    kind: manifest.kind,
+    fileName: (manifest.fileName || `${cleanId}.bin`).slice(0, 240),
+    driveFileId: manifest.driveFileId.slice(0, 160),
+    mimeType: (manifest.mimeType || 'application/octet-stream').slice(0, 120),
+    byteSize: Math.max(0, Number(manifest.byteSize || 0)),
+    sha256: manifest.sha256.slice(0, 128),
+    md5Checksum: manifest.md5Checksum.slice(0, 64),
+    syncVersion: Math.max(1, Number(manifest.syncVersion || Date.now())),
+    updatedAtMs: Math.max(1, Number(manifest.updatedAtMs || Date.now())),
+    updatedByEmail: authEmail.slice(0, 160),
+    appDataBackedUp: Boolean(manifest.appDataBackedUp),
+  };
+  if (manifest.studentId) cleaned.studentId = manifest.studentId.slice(0, 128);
+  if (manifest.classId) cleaned.classId = manifest.classId.slice(0, 128);
+  if (manifest.driveWebViewLink) cleaned.driveWebViewLink = manifest.driveWebViewLink.slice(0, 512);
+  if (manifest.driveFolderId) cleaned.driveFolderId = manifest.driveFolderId.slice(0, 160);
+  return cleaned;
+};
+
+/**
+ * Upserts a single verified Google Drive file manifest into /school_drive_sync_2027/{fileKey}.
+ */
+export const upsertDriveFileSyncManifest = async (
+  manifest: DriveSyncFileManifest
+): Promise<boolean> => {
+  return upsertDriveFileSyncBatch([manifest]);
+};
+
+/**
+ * Upserts verified Google Drive file manifests into /school_drive_sync_2027/{fileKey}
+ * in bounded transactions so all institutional users see identical lossless assets.
+ */
+export const upsertDriveFileSyncBatch = async (
+  manifests: DriveSyncFileManifest[]
+): Promise<boolean> => {
+  if (manifests.length === 0 || isFirestoreQuotaExceeded()) {
+    return false;
+  }
+  const auth = getAuth(app);
+  if (!auth.currentUser || !auth.currentUser.emailVerified) {
+    return false;
+  }
+
+  try {
+    const CHUNK_SIZE = 20;
+    for (let i = 0; i < manifests.length; i += CHUNK_SIZE) {
+      const batch = manifests.slice(i, i + CHUNK_SIZE).map(sanitizeDriveManifestForFirestore);
+      await commitViaUnaryTransaction((tx) => {
+        for (const item of batch) {
+          if (!item.id || !item.driveFileId) continue;
+          const ref = doc(firestoreDb, 'school_drive_sync_2027', item.id);
+          tx.set(ref, stripUndefinedDeep(item), { merge: true });
+        }
+      });
+    }
+    return true;
+  } catch (error) {
+    if (isFirestoreQuotaExceededError(error)) {
+      markFirestoreQuotaExceeded(error);
+    }
+    handleFirestoreError(error, OperationType.WRITE, 'school_drive_sync_2027');
+    return false;
+  }
+};
+
+/**
+ * Fetches verified Drive lossless file manifests from Firestore for cross-device reconciliation.
+ */
+export const fetchDriveFileSyncManifests = async (
+  pageLimit = 200
+): Promise<DriveSyncFileManifest[]> => {
+  if (isFirestoreQuotaExceeded()) {
+    return [];
+  }
+  const auth = getAuth(app);
+  if (!auth.currentUser || !auth.currentUser.emailVerified) {
+    return [];
+  }
+  try {
+    const q = query(collection(firestoreDb, 'school_drive_sync_2027'), limit(pageLimit));
+    const snap = await getDocs(q);
+    const items: DriveSyncFileManifest[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as DriveSyncFileManifest;
+      if (data && data.id && data.driveFileId) {
+        items.push(data);
+      }
+    });
+    return items;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'school_drive_sync_2027');
+    return [];
+  }
+};
+
 
 

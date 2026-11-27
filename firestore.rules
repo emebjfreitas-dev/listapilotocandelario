@@ -132,6 +132,35 @@ service cloud.firestore {
         data.createdByEmail.size() <= 160;
     }
 
+    function isValidDriveFileSyncMeta(data) {
+      return data.keys().hasAll([
+          'id', 'kind', 'driveFileId', 'byteSize', 'sha256',
+          'md5Checksum', 'syncVersion', 'updatedAtMs', 'updatedByEmail'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'studentId', 'classId', 'kind', 'fileName',
+          'driveFileId', 'driveWebViewLink', 'driveFolderId',
+          'mimeType', 'byteSize', 'sha256', 'md5Checksum',
+          'syncVersion', 'appDataBackedUp', 'updatedAtMs', 'updatedByEmail'
+        ]) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.kind in ['photo', 'pdf', 'metadata_backup'] &&
+        data.driveFileId is string && data.driveFileId.size() >= 1 && data.driveFileId.size() <= 160 &&
+        data.byteSize is number && data.byteSize >= 0 &&
+        data.sha256 is string && data.sha256.size() >= 16 && data.sha256.size() <= 128 &&
+        data.md5Checksum is string && data.md5Checksum.size() >= 16 && data.md5Checksum.size() <= 64 &&
+        data.syncVersion is number && data.syncVersion >= 1 &&
+        data.updatedAtMs is number &&
+        data.updatedByEmail is string && data.updatedByEmail.size() <= 160 &&
+        (!('studentId' in data) || (data.studentId is string && data.studentId.size() <= 128)) &&
+        (!('classId' in data) || (data.classId is string && data.classId.size() <= 128)) &&
+        (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 240)) &&
+        (!('driveWebViewLink' in data) || (data.driveWebViewLink is string && data.driveWebViewLink.size() <= 512)) &&
+        (!('driveFolderId' in data) || (data.driveFolderId is string && data.driveFolderId.size() <= 160)) &&
+        (!('mimeType' in data) || (data.mimeType is string && data.mimeType.size() <= 120)) &&
+        (!('appDataBackedUp' in data) || data.appDataBackedUp is bool);
+    }
+
     // Classes collection (1 document per class, max 60 students per class, <1MB each)
     // Only Admins may create/delete classes; assigned PEB I teachers may only update their own class(es) without wiping rosters.
     match /school_classes_2027/{classId} {
@@ -200,6 +229,18 @@ service cloud.firestore {
         incoming().id == alertId &&
         isValidFcmAlert(incoming());
       allow delete: if isAdmin() && isValidId(alertId);
+    }
+
+    // Verified Lossless Google Drive File Sync Manifests (cross-device integrity ledger)
+    match /school_drive_sync_2027/{fileKey} {
+      allow get: if isInstitutionalUser() && isValidId(fileKey);
+      allow list: if isInstitutionalUser();
+      allow create, update: if isInstitutionalUser() &&
+        isValidId(fileKey) &&
+        incoming().id == fileKey &&
+        isValidDriveFileSyncMeta(incoming()) &&
+        (isAdmin() || incoming().updatedByEmail.lower() == request.auth.token.email.lower());
+      allow delete: if isAdmin() && isValidId(fileKey);
     }
   }
 }

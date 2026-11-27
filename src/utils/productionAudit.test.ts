@@ -85,6 +85,19 @@ import {
   uploadStudentPhotoToStorage,
   uploadStudentPdfToStorage,
 } from '../services/firebaseStorage';
+import {
+  computeMd5Hex,
+  computeSha256Hex,
+  compressJsonMetadataGzip,
+  decompressJsonMetadataGzip,
+} from '../services/driveLosslessStorage';
+import {
+  isStrictAdminNotificationSender,
+  triggerPushNotification,
+  triggerConsecutiveAbsencePushNotification,
+  buildContextualPushNotices,
+} from '../services/pushNotificationService';
+import { dispatchWindowClosingFcmAlert } from '../services/fcmService';
 
 console.log('Iniciando suíte de validação de produção — Lista Piloto 2027...');
 
@@ -903,6 +916,98 @@ assert.equal(typeof uploadFileWithCacheControl, 'function', 'Função de upload 
 assert.equal(typeof uploadStudentPhotoToStorage, 'function', 'Upload otimizado de foto no Storage deve estar disponível');
 assert.equal(typeof uploadStudentPdfToStorage, 'function', 'Upload otimizado de PDF no Storage deve estar disponível');
 
-console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting, otimização de cotas Firestore/Storage e cache IndexedDB passaram com sucesso!');
+// Validações de Integridade Lossless (MD5 RFC 1321, SHA-256 e Gzip apenas em metadados JSON)
+const rfcMd5Empty = await computeMd5Hex(new Uint8Array(0));
+assert.equal(rfcMd5Empty, 'd41d8cd98f00b204e9800998ecf8427e', 'MD5 de buffer vazio deve seguir RFC 1321');
+const rfcMd5Abc = await computeMd5Hex(new TextEncoder().encode('abc'));
+assert.equal(rfcMd5Abc, '900150983cd24fb0d6963f7d28e17f72', 'MD5 de "abc" deve seguir RFC 1321');
+const shaAbc = await computeSha256Hex(new TextEncoder().encode('abc'));
+assert.equal(
+  shaAbc,
+  'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+  'SHA-256 de "abc" deve bater com digest padrão'
+);
+const metadataPayload = { version: 1, classesCount: 40, lossless: true };
+const compressedMeta = await compressJsonMetadataGzip(metadataPayload);
+const restoredMeta = await decompressJsonMetadataGzip<typeof metadataPayload>(compressedMeta.bytes);
+assert.deepEqual(restoredMeta, metadataPayload, 'Metadados JSON compactados em gzip devem restaurar sem perdas');
+
+// 16. Validação estrita de RBAC de Notificações (Apenas Admin estrito gera; demais apenas recebem e dão ciência)
+assert.equal(isStrictAdminNotificationSender('admin', undefined), true);
+assert.equal(isStrictAdminNotificationSender('admin', 'regente'), true);
+assert.equal(isStrictAdminNotificationSender('admin', 'apoio'), false, 'Apoio não pode gerar notificações');
+assert.equal(isStrictAdminNotificationSender('admin', 'aee'), false, 'AEE não pode gerar notificações');
+assert.equal(isStrictAdminNotificationSender('usuario', undefined), false, 'PEB I não pode gerar notificações');
+assert.equal(isStrictAdminNotificationSender('peb2', undefined), false, 'PEB II não pode gerar notificações');
+
+const blockedTeacherPush = await triggerPushNotification(
+  {
+    title: 'Tentativa não autorizada',
+    body: 'Não deve ser emitida',
+    category: 'aviso',
+  },
+  { senderRole: 'usuario', deliverySource: 'admin_action' }
+);
+assert.equal(blockedTeacherPush.read, true, 'Envio direto por não-admin deve ser bloqueado sem gerar notificação');
+
+const blockedConsecutivePush = await triggerConsecutiveAbsencePushNotification(
+  { id: 'stu-test', name: 'ALUNO TESTE', turma: g4Class.id },
+  g4Class.name,
+  4,
+  undefined,
+  { userRole: 'usuario', userEmail: 'prof@educacao.jundiai.sp.gov.br' }
+);
+assert.equal(blockedConsecutivePush.read, true, 'Trigger consecutivo por PEB I deve ser bloqueado');
+
+const blockedFcmDispatch = await dispatchWindowClosingFcmAlert({
+  attendanceWindowConfig: { exceptionalOverrideOpen: false },
+  classes: [g4Class],
+  senderEmail: 'prof@educacao.jundiai.sp.gov.br',
+  senderName: 'Docente PEB I',
+  senderRole: 'usuario',
+});
+assert.equal(blockedFcmDispatch.ok, false, 'dispatchWindowClosingFcmAlert deve recusar não-admin');
+
+const incomingAdminPush = await triggerPushNotification(
+  {
+    id: 'fcm_admin_incoming_test',
+    title: 'Comunicado Oficial da Direção',
+    body: 'Favor conferir lista até sexta-feira.',
+    category: 'aviso',
+  },
+  { deliverySource: 'fcm_incoming', saveToFeed: false, showBanner: false }
+);
+assert.equal(incomingAdminPush.read, false, 'Recebimento via fcm_incoming deve permanecer pendente de ciência para o usuário');
+
+const classWithHighAbsence: ClassGroup = {
+  ...g4Class,
+  students: [
+    {
+      ...baseInfantilStudent,
+      id: 'stu-high-abs',
+      name: 'ESTUDANTE TESTE FALTAS',
+      totalAbsencesMonth: 5,
+      justifiedAbsences: 0,
+    },
+  ],
+};
+const userReceivedOnlyFeed = buildContextualPushNotices([classWithHighAbsence], [], [], {
+  isStrictAdmin: false,
+});
+assert.equal(
+  userReceivedOnlyFeed.some((n) => n.id.startsWith('auto_prazo_faltas_') || n.id.startsWith('auto_busca_ativa_3d_')),
+  false,
+  'Usuário comum não deve gerar alertas locais automáticos'
+);
+const adminMonitorFeed = buildContextualPushNotices([classWithHighAbsence], [], [], {
+  isStrictAdmin: true,
+});
+assert.equal(
+  adminMonitorFeed.some((n) => n.id.startsWith('auto_prazo_faltas_') || n.id.startsWith('auto_busca_ativa_3d_')),
+  true,
+  'Administrador estrito mantém monitoramento de alertas locais'
+);
+
+console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, RBAC de notificações, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting, otimização de cotas Firestore/Storage, armazenamento lossless Drive e cache IndexedDB passaram com sucesso!');
 
 

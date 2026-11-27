@@ -757,7 +757,13 @@ export const FaltasConsecutivasScreen: React.FC<FaltasConsecutivasScreenProps> =
         targetScreen: 'faltas_consecutivas',
         authorName: authorLabel,
       },
-      { saveToFeed: true, showBanner: true }
+      {
+        saveToFeed: true,
+        showBanner: true,
+        senderRole: userRole,
+        senderTeacherRoleType: teacherRoleType,
+        deliverySource: 'admin_action',
+      }
     );
   };
 
