@@ -98,10 +98,13 @@
   input,
   select,
   textarea,
-  fieldset,
+  fieldset {
+    border-style: none;
+    border-width: 0;
+  }
+
   iframe {
-    border-style: solid;
-    border-color: var(--apple-border);
+    border: none;
   }
 
   /* Padronização Apple Clean Canvas (#F5F5F7) + Superfícies (#FFFFFF) */
@@ -502,11 +505,10 @@ svg.lucide {
 .card-modern {
   border-radius: 1.25rem;
   background-color: var(--apple-white);
-  border: 1px solid var(--apple-border);
+  border: none;
   box-shadow: var(--apple-shadow-card);
   transition: transform var(--duration-normal) var(--ease-apple-spring),
               box-shadow var(--duration-normal) var(--ease-apple),
-              border-color var(--duration-fast) ease,
               background-color var(--duration-fast) ease;
 }
 
@@ -547,10 +549,10 @@ svg.lucide {
 .apple-btn-secondary {
   background-color: var(--apple-gray-50);
   color: var(--apple-black);
-  border: 1px solid var(--apple-border);
+  border: none;
   border-radius: 9999px;
   font-weight: 500;
-  transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease;
+  transition: background-color var(--duration-fast) ease;
 }
 .apple-btn-secondary:hover:not(:disabled) {
   background-color: var(--apple-gray-100);
@@ -567,7 +569,7 @@ svg.lucide {
 
 .modal-shell {
   background-color: var(--apple-white);
-  border: 1px solid var(--apple-border);
+  border: none;
   border-radius: 1.5rem;
   box-shadow: var(--apple-shadow-modal);
 }
@@ -579,7 +581,7 @@ svg.lucide {
 /* Segmented Control Estilo Apple */
 .ios-segmented {
   background: var(--apple-gray-50);
-  border: 1px solid var(--apple-border);
+  border: none;
   padding: 3px;
   border-radius: 14px;
   display: inline-flex;
@@ -765,7 +767,7 @@ svg.lucide {
 }
 
 [data-sonner-toaster] [data-sonner-toast].sonner-sf-toast {
-  border: 1px solid var(--apple-border) !important;
+  border: none !important;
   border-radius: 1rem !important;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.04) !important;
   font-family: var(--font-sans) !important;

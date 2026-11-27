@@ -8,7 +8,6 @@ import { ModalPortal } from './ui/ModalPortal';
 import { SFSymbol } from './ui/SFSymbol';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { triggerMenuHaptic } from '../utils/haptics';
-import { SyncElapsedTimeBadge } from './SyncElapsedTimeBadge';
 
 interface BottomNavProps {
   currentScreen: ScreenType;
@@ -185,12 +184,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       {/* Barra de Navegação Inferior Estilo Apple (Mobile & Tablet) */}
       <nav
         aria-label="Barra de Navegação Inferior"
-        className="relative fixed bottom-0 left-0 right-0 w-full z-40 pb-safe bg-white/90 backdrop-blur-2xl border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"
+        className="fixed bottom-0 left-0 right-0 w-full z-40 pb-safe bg-white/90 backdrop-blur-2xl border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"
       >
-        <SyncElapsedTimeBadge
-          syncSnapshot={syncSnapshot}
-          className="absolute -top-9 left-1/2 -translate-x-1/2 text-[11px] shadow-sm bg-white/95 py-1 px-2.5"
-        />
         <div
           className={`grid ${gridColsClass} items-center h-[64px] px-2 max-w-lg mx-auto gap-1`}
         >
@@ -360,7 +355,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               </div>
 
               {/* Cartão Apple de Nuvem & Sincronização */}
-              <div className="p-3.5 rounded-2xl bg-[#F5F5F7] border border-black/[0.06] text-[#1D1D1F] flex items-center justify-between gap-3 min-w-0">
+              <div className="p-3.5 rounded-2xl bg-[#F5F5F7] text-[#1D1D1F] flex items-center justify-between gap-3 min-w-0">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-white ${
@@ -441,10 +436,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                         setShowMoreMenu(false);
                         onChangeScreen(item.id);
                       }}
-                      className={`w-full p-3 rounded-2xl border flex items-center justify-between gap-3 text-left transition-all duration-150 cursor-pointer min-w-0 ${
+                      className={`w-full p-3 rounded-2xl border-0 flex items-center justify-between gap-3 text-left transition-all duration-150 cursor-pointer min-w-0 ${
                         isActive
-                          ? 'bg-[#0071E3] border-transparent text-white'
-                          : 'bg-[#F5F5F7]/70 hover:bg-[#F5F5F7] border-black/[0.05] text-[#1D1D1F]'
+                          ? 'bg-[#0071E3] text-white'
+                          : 'bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F]'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">

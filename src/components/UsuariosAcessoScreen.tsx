@@ -1611,7 +1611,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
       )}
 
       {/* 1. CABEÇALHO UNIFICADO DA CENTRAL ADMINISTRATIVA */}
-      <section className="bg-white rounded-3xl px-4 py-4 sm:px-6 sm:py-5 border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] space-y-4 min-w-0">
+      <section className="bg-white rounded-3xl px-4 py-4 sm:px-6 sm:py-5 border-0 shadow-sm space-y-4 min-w-0">
         <div className="space-y-1 min-w-0">
           <button
             type="button"
@@ -1648,7 +1648,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
           <button
             type="button"
             onClick={() => handleSelectSection('acesso', 'quadro_turmas')}
-            className="text-left p-4 rounded-2xl bg-[#F5F5F7] hover:bg-black/[0.04] border border-black/[0.06] card-interactive cursor-pointer min-w-0 break-words transition-all"
+            className="text-left p-4 rounded-2xl bg-[#F5F5F7] hover:bg-[#EAEAEA] border-0 card-interactive cursor-pointer min-w-0 break-words transition-all"
           >
             <span className="text-xs font-medium text-[#86868B] block">Turmas Oficiais</span>
             <span className="text-2xl sm:text-3xl font-semibold text-[#1D1D1F] tabular-nums block mt-0.5">
@@ -1666,7 +1666,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
               handleSelectSection('acesso', 'contas_acesso');
               setRoleFilter('all');
             }}
-            className="text-left p-4 rounded-2xl bg-[#F5F5F7] hover:bg-black/[0.04] border border-black/[0.06] card-interactive cursor-pointer min-w-0 break-words transition-all"
+            className="text-left p-4 rounded-2xl bg-[#F5F5F7] hover:bg-[#EAEAEA] border-0 card-interactive cursor-pointer min-w-0 break-words transition-all"
           >
             <span className="text-xs font-medium text-[#86868B] block">Perfis Cadastrados</span>
             <span className="text-2xl sm:text-3xl font-semibold text-[#1D1D1F] tabular-nums block mt-0.5">
@@ -1680,7 +1680,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
           <button
             type="button"
             onClick={() => handleSelectSection('seguranca', 'monitoramento')}
-            className="text-left p-4 rounded-2xl bg-[#F5F5F7] hover:bg-black/[0.04] border border-black/[0.06] card-interactive cursor-pointer min-w-0 break-words transition-all"
+            className="text-left p-4 rounded-2xl bg-[#F5F5F7] hover:bg-[#EAEAEA] border-0 card-interactive cursor-pointer min-w-0 break-words transition-all"
           >
             <span className="text-xs font-medium text-[#86868B] block">Acessos &amp; Sessões</span>
             <span className="text-2xl sm:text-3xl font-semibold text-[#1D1D1F] tabular-nums block mt-0.5">
@@ -1694,7 +1694,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
           <button
             type="button"
             onClick={() => handleSelectSection('seguranca', 'seguranca_lgpd')}
-            className="text-left p-4 rounded-2xl bg-[#F5F5F7] hover:bg-black/[0.04] border border-black/[0.06] card-interactive cursor-pointer min-w-0 break-words transition-all"
+            className="text-left p-4 rounded-2xl bg-[#F5F5F7] hover:bg-[#EAEAEA] border-0 card-interactive cursor-pointer min-w-0 break-words transition-all"
           >
             <span className="text-xs font-medium text-[#86868B] block">Tempo Total &amp; LGPD</span>
             <span className="text-2xl sm:text-3xl font-semibold text-[#1D1D1F] tabular-nums block mt-0.5 break-words">
@@ -1732,7 +1732,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                   handleSelectSection('uploads');
                   setActiveUploadTool('pdfs');
                 }}
-                className="min-h-[34px] px-3 py-1 rounded-xl bg-[#F5F5F7] hover:bg-black/[0.06] text-[#1D1D1F] border border-black/[0.08] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer tabular-nums transition-colors"
+                className="min-h-[34px] px-3 py-1 rounded-xl bg-[#F5F5F7] hover:bg-black/[0.06] text-[#1D1D1F] border-0 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer tabular-nums transition-colors"
               >
                 <FileText className="w-3.5 h-3.5 shrink-0 text-[#0071E3]" />
                 <span>{missingPdfsCount} sem ficha PDF</span>
@@ -1745,7 +1745,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                   handleSelectSection('acesso', 'quadro_turmas');
                   setMatrixShiftFilter('VAGAS');
                 }}
-                className="min-h-[34px] px-3 py-1 rounded-xl bg-[#fee2e2] hover:bg-[#fecaca]/80 text-[#991b1b] border border-[#991b1b]/15 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer tabular-nums transition-colors"
+                className="min-h-[34px] px-3 py-1 rounded-xl bg-[#fee2e2] hover:bg-[#fecaca]/80 text-[#991b1b] border-0 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer tabular-nums transition-colors"
               >
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span>{vacantTurmasCount} turmas vagas</span>
@@ -1787,7 +1787,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
               <button
                 type="button"
                 onClick={() => handleSelectSection('calendario', 'janela_fcm')}
-                className="min-h-[38px] px-3.5 rounded-full bg-white hover:bg-[#F5F5F7] text-[#1D1D1F] border border-black/[0.08] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3.5 rounded-full bg-white hover:bg-[#F5F5F7] text-[#1D1D1F] border-0 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 shadow-2xs"
               >
                 <BellRing className="w-3.5 h-3.5 shrink-0 text-[#0071E3]" />
                 <span>Regras &amp; FCM</span>
@@ -1798,7 +1798,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                 disabled={isSendingFcmAlert}
                 onClick={() => handleSendWindowClosingFcmFromAcessos('pending_only')}
                 title="Enviar notificação push Firebase Cloud Messaging para turmas pendentes sobre o fechamento da janela"
-                className="min-h-[38px] px-4 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 transition-colors shadow-2xs whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-4 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 transition-colors shadow-2xs whitespace-nowrap shrink-0 border-0"
               >
                 <BellRing className="w-3.5 h-3.5 shrink-0" />
                 <span>{isSendingFcmAlert ? 'Enviando FCM...' : 'Alertar Pendentes (FCM)'}</span>
@@ -1821,7 +1821,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
         {/* Barra Primária dos 5 Pilares */}
         <nav
           aria-label="Seções da central administrativa"
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 p-1 bg-[#F5F5F7] rounded-2xl lg:rounded-full border border-black/[0.06]"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 p-1 bg-[#F5F5F7] rounded-2xl lg:rounded-full border-0"
         >
           {primarySections.map((sec) => {
             const isActive = activeSection === sec.id;
@@ -1853,7 +1853,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                   key={t.id}
                   type="button"
                   onClick={() => setActiveSubTab(t.id)}
-                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all border border-black/[0.06] ${
+                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all border-0 ${
                     isActive
                       ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
                       : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
@@ -1885,7 +1885,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                   key={t.id}
                   type="button"
                   onClick={() => setActiveSubTab(t.id)}
-                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all border border-black/[0.06] ${
+                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all border-0 ${
                     isActive
                       ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
                       : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
@@ -1917,7 +1917,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                   key={t.id}
                   type="button"
                   onClick={() => setActiveSubTab(t.id)}
-                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all border border-black/[0.06] ${
+                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all border-0 ${
                     isActive
                       ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
                       : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
@@ -1949,7 +1949,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
                   key={t.id}
                   type="button"
                   onClick={() => setActiveSubTab(t.id)}
-                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all border border-black/[0.06] ${
+                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-all border-0 ${
                     isActive
                       ? 'bg-[#0071E3] text-white font-semibold shadow-xs'
                       : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-black/[0.05]'
@@ -2139,7 +2139,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
 
       {/* PILAR 3: IMPORTAÇÕES ESCOLARES */}
       {activeSection === 'uploads' && (
-        <section className="bg-white rounded-3xl p-4 sm:p-5 border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] space-y-4">
+        <section className="bg-white rounded-3xl p-4 sm:p-5 border-0 shadow-sm space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {uploadTools.map((tool) => {
               const isActive = activeUploadTool === tool.id;
@@ -2237,7 +2237,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
       {/* PILAR 4: SEGURANÇA & LGPD */}
       {activeSection === 'seguranca' && activeSubTab === 'seguranca_lgpd' && (
         <div className="space-y-4">
-          <section className="bg-white rounded-3xl p-4 sm:p-5 border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] space-y-4">
+          <section className="bg-white rounded-3xl p-4 sm:p-5 border-0 shadow-sm space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div className="space-y-1">
                 <h2 className="text-base sm:text-lg font-semibold text-slate-950">

@@ -5,11 +5,13 @@ import { SFSymbol } from './ui/SFSymbol';
 interface SyncElapsedTimeBadgeProps {
   className?: string;
   syncSnapshot?: SyncStatusSnapshot;
+  variant?: 'text' | 'subtle';
 }
 
 export const SyncElapsedTimeBadge: React.FC<SyncElapsedTimeBadgeProps> = ({
   className = '',
   syncSnapshot: propSnapshot,
+  variant = 'text',
 }) => {
   const [snapshot, setSnapshot] = useState<SyncStatusSnapshot>(
     propSnapshot || {
@@ -70,26 +72,41 @@ export const SyncElapsedTimeBadge: React.FC<SyncElapsedTimeBadgeProps> = ({
     return () => clearInterval(interval);
   }, [snapshot.lastSyncedAtISO]);
 
+  const statusColorClass =
+    snapshot.status === 'error'
+      ? 'bg-[#FF3B30]'
+      : snapshot.pendingCount > 0
+      ? 'bg-[#FF9500]'
+      : 'bg-[#34C759]';
+
+  if (variant === 'subtle') {
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-normal text-[#424245] bg-[#F5F5F7] ${className}`}
+        title={
+          snapshot.lastSyncedAtISO
+            ? `Última sincronização: ${new Date(snapshot.lastSyncedAtISO).toLocaleString('pt-BR')}`
+            : 'Nenhuma sincronização recente'
+        }
+      >
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColorClass}`} />
+        <SFSymbol name="sync" size={13} weight={400} className="text-[#86868B]" />
+        <span>{elapsedText}</span>
+      </span>
+    );
+  }
+
   return (
-    <div
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium bg-black/[0.04] text-[#424245] border border-black/[0.06] backdrop-blur-md shadow-2xs ${className}`}
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs sm:text-sm text-[#86868B] tabular-nums font-normal ${className}`}
       title={
         snapshot.lastSyncedAtISO
           ? `Última sincronização: ${new Date(snapshot.lastSyncedAtISO).toLocaleString('pt-BR')}`
           : 'Nenhuma sincronização recente'
       }
     >
-      <span
-        className={`w-2 h-2 rounded-full shrink-0 ${
-          snapshot.status === 'error'
-            ? 'bg-[#FF3B30]'
-            : snapshot.pendingCount > 0
-            ? 'bg-[#FF9500]'
-            : 'bg-[#34C759]'
-        }`}
-      />
-      <SFSymbol name="sync" size={13} weight={420} className="text-[#86868B]" />
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColorClass}`} />
       <span>{elapsedText}</span>
-    </div>
+    </span>
   );
 };

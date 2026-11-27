@@ -491,7 +491,7 @@ export const Header: React.FC<HeaderProps> = ({
 
                       {/* Cartão Apple Limpo de Sincronização em Nuvem */}
                       <div className="pt-1 border-t border-black/[0.06]">
-                        <div className="p-3 rounded-xl bg-[#F5F5F7] border border-black/[0.05] text-[#1D1D1F] flex items-center justify-between gap-2.5 min-w-0">
+                        <div className="p-3 rounded-xl bg-[#F5F5F7] text-[#1D1D1F] flex items-center justify-between gap-2.5 min-w-0">
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             <div
                               className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white ${
@@ -563,12 +563,12 @@ export const Header: React.FC<HeaderProps> = ({
                   ? `Sincronizar Agora (${unifiedPendingCount} pendência(s) na fila, limpar cache e atualizar do servidor)`
                   : 'Sincronizar Agora — Enviar fila, limpar cache do Service Worker e atualizar do servidor'
               }
-              className={`relative h-9 px-2.5 sm:px-3 lg:px-2.5 xl:px-3 rounded-full flex items-center justify-center gap-1.5 text-[12.5px] font-medium transition-colors cursor-pointer shrink-0 border disabled:opacity-60 whitespace-nowrap ${
+              className={`relative h-9 px-2.5 sm:px-3 lg:px-2.5 xl:px-3 rounded-full flex items-center justify-center gap-1.5 text-[12.5px] font-medium transition-colors cursor-pointer shrink-0 border-0 disabled:opacity-60 whitespace-nowrap ${
                 unifiedIsSyncing
-                  ? 'bg-[#0071E3]/10 border-[#0071E3]/25 text-[#0071E3]'
+                  ? 'bg-[#0071E3]/12 text-[#0071E3]'
                   : unifiedPendingCount > 0
-                  ? 'bg-[#B25000]/10 border-[#B25000]/25 text-[#B25000] hover:bg-[#B25000]/15'
-                  : 'bg-[#F5F5F7] border-black/[0.06] hover:bg-[#E8E8ED] text-[#1D1D1F]'
+                  ? 'bg-[#B25000]/12 text-[#B25000] hover:bg-[#B25000]/18'
+                  : 'bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F]'
               }`}
             >
               <SFSymbol
@@ -603,10 +603,10 @@ export const Header: React.FC<HeaderProps> = ({
                   ? 'Sair da tela cheia'
                   : 'Expandir para tela cheia (ou deslize para cima no topo)'
               }
-              className={`h-9 w-9 rounded-full flex items-center justify-center transition-colors cursor-pointer shrink-0 border ${
+              className={`h-9 w-9 rounded-full flex items-center justify-center transition-colors cursor-pointer shrink-0 border-0 ${
                 isFullscreen
-                  ? 'bg-[#0071E3] border-transparent text-white shadow-[0_2px_8px_rgba(0,113,227,0.28)]'
-                  : 'bg-[#F5F5F7] border-black/[0.06] hover:bg-[#E8E8ED] text-[#424245] hover:text-[#1D1D1F]'
+                  ? 'bg-[#0071E3] text-white shadow-[0_2px_8px_rgba(0,113,227,0.28)]'
+                  : 'bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#424245] hover:text-[#1D1D1F]'
               }`}
             >
               <SFSymbol
@@ -643,7 +643,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setShowAdminNavDropdown(false);
                 }}
                 aria-label="Menu do perfil e sair"
-                className="h-9 pl-1.5 pr-2 sm:pr-3 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.06] flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                className="h-9 pl-1.5 pr-2 sm:pr-3 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] border-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-colors whitespace-nowrap shrink-0"
               >
                 <StudentAvatar
                   name={userName || userEmail || 'Educador'}
@@ -671,7 +671,7 @@ export const Header: React.FC<HeaderProps> = ({
                     onClick={() => setShowProfileMenu(false)}
                   />
                   <div className="absolute right-0 mt-2.5 w-[min(20rem,calc(100vw-1.5rem))] bg-white/96 backdrop-blur-2xl rounded-2xl border border-black/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.14),0_4px_12px_rgba(0,0,0,0.06)] p-3 z-50 animate-apple-pop space-y-2">
-                    <div className="p-3 rounded-xl bg-[#F5F5F7] border border-black/[0.04] flex items-center gap-3 min-w-0">
+                    <div className="p-3 rounded-xl bg-[#F5F5F7] flex items-center gap-3 min-w-0">
                       <StudentAvatar
                         name={userName || userEmail || 'Educador'}
                         size="sm"

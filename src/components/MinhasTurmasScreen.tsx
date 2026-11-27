@@ -128,7 +128,7 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
   return (
     <div className="flex flex-col w-full min-w-0 max-w-[1600px] mx-auto space-y-5 pb-16 animate-gentle-fade text-[#1D1D1F]">
       {/* Cabeçalho Institucional */}
-      <section className="bg-white rounded-3xl p-6 sm:p-7 border border-black/[0.06] shadow-sm min-w-0">
+      <section className="bg-white rounded-3xl p-6 sm:p-7 shadow-[0_2px_14px_rgba(0,0,0,0.04)] min-w-0 border-0">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
           <div className="space-y-1.5 min-w-0 flex-1">
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] break-words">
@@ -172,7 +172,7 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
               <button
                 onClick={onNavigateToAcessos || onOpenConfigDaysModal}
                 type="button"
-                className="w-full sm:w-auto min-h-[40px] py-2 px-4 rounded-full bg-[#F5F5F7] hover:bg-black/[0.05] text-[#1D1D1F] font-medium text-xs sm:text-[13px] flex items-center justify-center text-center whitespace-normal gap-2 cursor-pointer transition-colors border border-black/[0.06]"
+                className="w-full sm:w-auto min-h-[40px] py-2 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] font-medium text-xs sm:text-[13px] flex items-center justify-center text-center whitespace-normal gap-2 cursor-pointer transition-colors border-0"
               >
                 <ShieldCheck className="w-4 h-4 text-[#0071E3] shrink-0" />
                 <span>Central Administrativa</span>
@@ -184,14 +184,14 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
 
       {/* Barra de Filtros e Busca */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 min-w-0">
-        <div className="flex flex-wrap sm:inline-flex items-center p-1 bg-white rounded-full text-xs font-medium w-full sm:w-auto max-w-full gap-1 border border-black/[0.06] shadow-2xs">
+        <div className="flex flex-wrap sm:inline-flex items-center p-1 bg-[#F5F5F7] rounded-full text-xs font-medium w-full sm:w-auto max-w-full gap-1 border-0">
           <button
             onClick={() => setSelectedShift('Todos')}
             type="button"
-            className={`flex-1 sm:flex-initial min-h-[34px] px-3.5 py-1.5 rounded-full transition-all duration-150 cursor-pointer text-center whitespace-normal ${
+            className={`flex-1 sm:flex-initial min-h-[34px] px-3.5 py-1.5 rounded-full transition-all duration-150 cursor-pointer text-center whitespace-normal border-0 ${
               selectedShift === 'Todos'
                 ? 'bg-[#0071E3] text-white shadow-xs font-semibold'
-                : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'
+                : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04]'
             }`}
           >
             Todas ({classes.length})
@@ -199,10 +199,10 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
           <button
             onClick={() => setSelectedShift('Turno Manhã')}
             type="button"
-            className={`flex-1 sm:flex-initial min-h-[34px] px-3.5 py-1.5 rounded-full transition-all duration-150 cursor-pointer flex items-center justify-center text-center whitespace-normal gap-1.5 ${
+            className={`flex-1 sm:flex-initial min-h-[34px] px-3.5 py-1.5 rounded-full transition-all duration-150 cursor-pointer flex items-center justify-center text-center whitespace-normal gap-1.5 border-0 ${
               selectedShift === 'Turno Manhã'
                 ? 'bg-[#0071E3] text-white shadow-xs font-semibold'
-                : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'
+                : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04]'
             }`}
           >
             <Sun className={`w-3.5 h-3.5 shrink-0 ${selectedShift === 'Turno Manhã' ? 'text-white' : 'text-[#B25000]'}`} />
@@ -211,10 +211,10 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
           <button
             onClick={() => setSelectedShift('Turno Tarde')}
             type="button"
-            className={`flex-1 sm:flex-initial min-h-[34px] px-3.5 py-1.5 rounded-full transition-all duration-150 cursor-pointer flex items-center justify-center text-center whitespace-normal gap-1.5 ${
+            className={`flex-1 sm:flex-initial min-h-[34px] px-3.5 py-1.5 rounded-full transition-all duration-150 cursor-pointer flex items-center justify-center text-center whitespace-normal gap-1.5 border-0 ${
               selectedShift === 'Turno Tarde'
                 ? 'bg-[#0071E3] text-white shadow-xs font-semibold'
-                : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'
+                : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.04]'
             }`}
           >
             <Sunset className={`w-3.5 h-3.5 shrink-0 ${selectedShift === 'Turno Tarde' ? 'text-white' : 'text-[#0071E3]'}`} />
@@ -230,7 +230,7 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Buscar turma, regente ou código SED..."
-              className="w-full min-h-[42px] pl-10 pr-9 bg-white text-[#1D1D1F] text-sm rounded-full transition-all placeholder:text-[#86868B] border border-black/[0.08] shadow-2xs focus:border-[#0071E3] focus:ring-2 focus:ring-[#0071E3]/20 focus:outline-hidden"
+              className="w-full min-h-[42px] pl-10 pr-9 bg-[#F5F5F7] focus:bg-white text-[#1D1D1F] text-sm rounded-full transition-all placeholder:text-[#86868B] border-0 shadow-2xs focus:ring-2 focus:ring-[#0071E3]/20 focus:outline-hidden"
             />
             {searchTerm && (
               <button
@@ -244,13 +244,13 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
             )}
           </div>
 
-          <div className="inline-flex items-center p-1 bg-white rounded-full shrink-0 border border-black/[0.06] shadow-2xs gap-0.5">
+          <div className="inline-flex items-center p-1 bg-[#F5F5F7] rounded-full shrink-0 border-0 gap-0.5">
             <button
               type="button"
               onClick={() => setTurmasViewMode('grid')}
               title="Grade de Cartões"
               aria-label="Visualizar em cartões"
-              className={`min-h-[34px] min-w-[34px] p-1.5 rounded-full transition-all duration-150 cursor-pointer flex items-center justify-center ${
+              className={`min-h-[34px] min-w-[34px] p-1.5 rounded-full transition-all duration-150 cursor-pointer flex items-center justify-center border-0 ${
                 turmasViewMode === 'grid'
                   ? 'bg-[#0071E3] text-white shadow-xs'
                   : 'text-[#86868B] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'
@@ -294,9 +294,9 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
         return (
           <div ref={classesTopRef} className="space-y-4 scroll-mt-24">
             {turmasViewMode === 'table' ? (
-        <div className="bg-white rounded-3xl overflow-x-auto border border-black/[0.06] shadow-sm">
+        <div className="bg-white rounded-3xl overflow-x-auto border-0 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
           <table className="w-full text-left text-xs sm:text-[13px] min-w-[780px]">
-            <thead className="bg-[#F5F5F7] text-[#86868B] font-medium text-xs border-b border-black/[0.06]">
+            <thead className="bg-[#F5F5F7] text-[#86868B] font-medium text-xs border-b border-black/[0.04]">
               <tr>
                 <th className="py-3.5 px-4">Turma</th>
                 <th className="py-3.5 px-3">Turno e Sala</th>
@@ -380,14 +380,14 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
         /* Cartões Ultra-Minimalistas (Clique direto abre os estudantes) */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 items-stretch">
           {filteredClasses.length === 0 ? (
-            <div className="bg-white rounded-3xl p-8 text-center border border-black/[0.06] shadow-sm col-span-full space-y-3">
+            <div className="bg-white rounded-3xl p-8 text-center border-0 shadow-sm col-span-full space-y-3">
               <p className="text-sm sm:text-base text-[#86868B]">
                 Nenhuma turma encontrada para "{searchTerm}".
               </p>
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="min-h-[40px] px-5 py-2 bg-[#0071E3] text-white font-medium rounded-full text-xs sm:text-sm cursor-pointer hover:bg-[#0077ED] transition-colors"
+                className="min-h-[40px] px-5 py-2 bg-[#0071E3] text-white font-medium rounded-full text-xs sm:text-sm cursor-pointer hover:bg-[#0077ED] transition-colors border-0"
               >
                 Limpar Busca
               </button>
@@ -399,7 +399,7 @@ export const MinhasTurmasScreen: React.FC<MinhasTurmasScreenProps> = ({
                   key={cls.id}
                   type="button"
                   onClick={() => onSelectClassForDetails(cls)}
-                  className="w-full min-w-0 text-left bg-white hover:bg-[#F5F5F7]/80 rounded-2xl p-5 border border-black/[0.06] shadow-sm card-interactive flex flex-col justify-between gap-3 cursor-pointer group min-h-[124px] transition-all"
+                  className="w-full min-w-0 text-left bg-white hover:bg-[#F5F5F7]/80 rounded-2xl p-5 border-0 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] card-interactive flex flex-col justify-between gap-3 cursor-pointer group min-h-[124px] transition-all"
                 >
                   <div className="flex items-start justify-between gap-2.5 w-full min-w-0">
                     <div className="flex items-center gap-3 min-w-0 flex-1">

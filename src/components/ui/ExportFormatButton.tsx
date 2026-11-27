@@ -185,8 +185,8 @@ export const ExportFormatButton: React.FC<ExportFormatButtonProps> = ({
       : variant === 'dark'
       ? 'min-h-[38px] px-4 py-2 rounded-full bg-[#1D1D1F] hover:bg-[#424245] text-white font-semibold text-xs sm:text-[13px]'
       : variant === 'compact'
-      ? 'min-h-[36px] py-1.5 px-3 rounded-full bg-white hover:bg-[#F5F5F7] border border-black/[0.08] text-[#1D1D1F] font-semibold text-[12.5px]'
-      : 'min-h-[38px] px-4 py-2 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.06] text-[#1D1D1F] font-semibold text-xs sm:text-[13px]';
+      ? 'min-h-[36px] py-1.5 px-3 rounded-full bg-white hover:bg-[#F5F5F7] text-[#1D1D1F] font-semibold text-[12.5px] border-0 shadow-2xs'
+      : 'min-h-[38px] px-4 py-2 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] font-semibold text-xs sm:text-[13px] border-0';
 
   const isBusy = loadingFormat !== null;
 

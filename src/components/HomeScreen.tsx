@@ -534,7 +534,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   return (
     <div className="flex flex-col w-full min-w-0 max-w-[1600px] mx-auto space-y-6 pb-20 text-[#1D1D1F] animate-gentle-fade">
       {/* 1. CABEÇALHO INSTITUCIONAL APPLE HIG + INDICADORES ESSENCIAIS */}
-      <section className="bg-white rounded-3xl p-6 sm:p-8 border border-black/[0.06] shadow-sm space-y-6 min-w-0">
+      <section className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_2px_14px_rgba(0,0,0,0.04)] space-y-6 min-w-0 border-0">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
           <div className="space-y-1.5 min-w-0 flex-1">
             <p className="text-xs sm:text-[13px] font-semibold text-[#86868B] tracking-tight text-balance break-words flex items-center gap-1.5 uppercase">
@@ -556,11 +556,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <span className="font-medium text-[#1B873F]">
                 {windowEval.isAllowedToLaunch ? 'Chamada aberta' : 'Consulta ativa'}
               </span>
+              <span aria-hidden="true">·</span>
+              <SyncElapsedTimeBadge />
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto min-w-0 shrink-0">
-            <SyncElapsedTimeBadge />
             <ExportFormatButton
               label="Exportar Panorama"
               variant="secondary"
@@ -782,7 +783,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div
               role="region"
               aria-label="Resultados da pesquisa global"
-              className="rounded-2xl bg-[#F5F5F7] border border-black/[0.06] p-4 space-y-4 min-w-0 animate-fade-in"
+              className="rounded-2xl bg-[#F5F5F7] p-4 space-y-4 min-w-0 animate-fade-in"
             >
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#424245]">
                 <span className="font-semibold">
@@ -803,7 +804,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </div>
 
               {globalSearchResults.classes.length === 0 && globalSearchResults.totalStudentsMatched === 0 ? (
-                <div className="p-4 rounded-xl bg-white border border-black/[0.05] text-center space-y-1">
+                <div className="p-4 rounded-xl bg-white shadow-2xs text-center space-y-1">
                   <p className="text-sm font-semibold text-[#1D1D1F]">
                     Nenhuma turma ou estudante encontrado.
                   </p>
@@ -828,7 +829,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                               if (onSelectClassForDetails) onSelectClassForDetails(cls);
                               else onNavigateToScreen('detalhes');
                             }}
-                            className="text-left p-3.5 rounded-xl bg-white hover:bg-[#FAFAFC] border border-black/[0.06] flex items-center justify-between gap-2.5 cursor-pointer transition-colors min-w-0 group"
+                            className="text-left p-3.5 rounded-xl bg-white hover:bg-[#FAFAFC] shadow-2xs flex items-center justify-between gap-2.5 cursor-pointer transition-colors min-w-0 group border-0"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-semibold text-[#1D1D1F] group-hover:text-[#0071E3] truncate">
@@ -861,7 +862,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           return (
                             <div
                               key={`gsearch-stu-${cls.id}-${st.id}`}
-                              className="p-3.5 rounded-xl bg-white border border-black/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0"
+                              className="p-3.5 rounded-xl bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0"
                             >
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5 min-w-0">
