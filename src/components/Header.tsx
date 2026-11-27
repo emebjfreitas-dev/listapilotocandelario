@@ -563,12 +563,12 @@ export const Header: React.FC<HeaderProps> = ({
                   ? `Sincronizar Agora (${unifiedPendingCount} pendência(s) na fila, limpar cache e atualizar do servidor)`
                   : 'Sincronizar Agora — Enviar fila, limpar cache do Service Worker e atualizar do servidor'
               }
-              className={`relative h-9 px-2.5 sm:px-3 lg:px-2.5 xl:px-3 rounded-full flex items-center justify-center gap-1.5 text-[12.5px] font-medium transition-colors cursor-pointer shrink-0 border-0 disabled:opacity-60 whitespace-nowrap ${
+              className={`relative h-10 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-2 text-[12.5px] font-semibold transition-all duration-200 cursor-pointer shrink-0 border shadow-sm disabled:opacity-60 disabled:cursor-wait whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                 unifiedIsSyncing
-                  ? 'bg-[#0071E3]/12 text-[#0071E3]'
+                  ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-blue-100'
                   : unifiedPendingCount > 0
-                  ? 'bg-[#B25000]/12 text-[#B25000] hover:bg-[#B25000]/18'
-                  : 'bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F]'
+                  ? 'bg-amber-500 border-amber-400 text-white hover:bg-amber-600 shadow-amber-200/50'
+                  : 'bg-gradient-to-b from-[#1677F2] to-[#0057C2] border-blue-600 text-white hover:from-[#2684FF] hover:to-[#0066DD] hover:shadow-md hover:-translate-y-px active:translate-y-0'
               }`}
             >
               <SFSymbol

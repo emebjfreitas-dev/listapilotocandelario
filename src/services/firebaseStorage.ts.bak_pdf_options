@@ -1,0 +1,338 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+  SettableMetadata,
+  FirebaseStorage,
+} from 'firebase/storage';
+import firebaseConfig from '../../firebase-applet-config.json';
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+let storageInstance: FirebaseStorage | null = null;
+
+export const getFirebaseStorage = (): FirebaseStorage => {
+  if (storageInstance) return storageInstance;
+  const bucketUrl = (firebaseConfig as Record<string, string | undefined>).storageBucket;
+  storageInstance = bucketUrl ? getStorage(app, `gs://${bucketUrl}`) : getStorage(app);
+  return storageInstance;
+};
+
+/**
+ * Função utilitária no frontend usando HTML5 Canvas que redimensiona fotos maiores que 1280px
+ * e converte para WebP com qualidade 0.8 para economizar espaço e banda de download no Firebase Storage.
+ */
+export const resizePhotoWithCanvasToWebp = async (
+  fileOrBlob: File | Blob,
+  maxDimension = 1280,
+  quality = 0.8
+): Promise<{
+  blob: Blob;
+  width: number;
+  height: number;
+  originalBytes: number;
+  compressedBytes: number;
+}> => {
+  const originalBytes = fileOrBlob.size;
+  if (originalBytes <= 0) {
+    throw new Error('Arquivo vazio fornecido para compressão (0 bytes).');
+  }
+
+  // 1. Decodifica a imagem usando Image element com blob URL
+  const objectUrl = URL.createObjectURL(fileOrBlob);
+  const img = new Image();
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Falha ao decodificar imagem no navegador.'));
+      img.src = objectUrl;
+    });
+
+    const srcW = img.naturalWidth || img.width;
+    const srcH = img.naturalHeight || img.height;
+
+    if (srcW <= 0 || srcH <= 0) {
+      throw new Error('Dimensões inválidas da imagem fornecida.');
+    }
+
+    // 2. Calcula proporções mantendo aspect ratio se ultrapassar 1280px
+    let targetW = srcW;
+    let targetH = srcH;
+
+    if (srcW > maxDimension || srcH > maxDimension) {
+      if (srcW > srcH) {
+        targetH = Math.max(1, Math.round((srcH * maxDimension) / srcW));
+        targetW = maxDimension;
+      } else {
+        targetW = Math.max(1, Math.round((srcW * maxDimension) / srcH));
+        targetH = maxDimension;
+      }
+    }
+
+    // 3. Renderiza no HTML5 Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Contexto Canvas 2D indisponível.');
+    }
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+
+    // 4. Converte para WebP com qualidade 0.8
+    const outputBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), 'image/webp', quality);
+    });
+
+    if (!outputBlob) {
+      // Fallback para JPEG com qualidade 0.8 se WebP não for suportado
+      const fallbackBlob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', quality);
+      });
+      if (!fallbackBlob) {
+        throw new Error('Falha ao codificar imagem otimizada com HTML5 Canvas.');
+      }
+      return {
+        blob: fallbackBlob,
+        width: targetW,
+        height: targetH,
+        originalBytes,
+        compressedBytes: fallbackBlob.size,
+      };
+    }
+
+    return {
+      blob: outputBlob,
+      width: targetW,
+      height: targetH,
+      originalBytes,
+      compressedBytes: outputBlob.size,
+    };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
+export interface StorageUploadOptions {
+  contentType?: string;
+  cacheControl?: string;
+  customMetadata?: Record<string, string>;
+  onProgress?: (progressPercent: number) => void;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+const throwIfStorageAborted = (signal?: AbortSignal) => {
+  if (signal?.aborted) {
+    throw new DOMException('Upload abortado pelo usuário.', 'AbortError');
+  }
+};
+
+/**
+ * Upload de arquivo com cacheControl: 'public, max-age=86400' para economizar cota de download no Storage.
+ */
+export const uploadFileWithCacheControl = async (
+  storagePath: string,
+  fileOrBlob: File | Blob,
+  options?: StorageUploadOptions
+): Promise<{
+  downloadUrl: string;
+  fullPath: string;
+  sizeBytes: number;
+}> => {
+  const timeoutMs = Math.max(10_000, options?.timeoutMs ?? 90_000);
+  throwIfStorageAborted(options?.signal);
+
+  throwIfStorageAborted(options?.signal);
+
+  const storage = getFirebaseStorage();
+  const fileRef = ref(storage, storagePath);
+
+  // Metadados obrigatórios de cache para impedir downloads repetidos do mesmo arquivo
+  const metadata: SettableMetadata = {
+    contentType: options?.contentType || (fileOrBlob.type || 'application/octet-stream'),
+    cacheControl: options?.cacheControl || 'public, max-age=86400',
+    customMetadata: {
+      ...options?.customMetadata,
+      uploadedAtISO: new Date().toISOString(),
+      cacheOptimized: 'true',
+    },
+  };
+
+  if (options?.onProgress || options?.signal) {
+    const uploadTask = uploadBytesResumable(fileRef, fileOrBlob, metadata);
+
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout>;
+
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        options?.signal?.removeEventListener('abort', onAbort);
+        fn();
+      };
+
+      const onAbort = () => {
+        uploadTask.cancel();
+        finish(() =>
+          reject(new DOMException('Upload abortado pelo usuário.', 'AbortError'))
+        );
+      };
+
+      timer = setTimeout(() => {
+        uploadTask.cancel();
+        finish(() =>
+          reject(new Error(
+            `Timeout no upload da foto após ${Math.round(timeoutMs / 1000)}s.`
+          ))
+        );
+      }, timeoutMs);
+
+      options?.signal?.addEventListener('abort', onAbort, { once: true });
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          options.onProgress?.(Math.round(progress));
+        },
+        (error) => finish(() => reject(error)),
+        () => finish(resolve)
+      );
+    });
+  } else {
+    await Promise.race([
+      uploadBytes(fileRef, fileOrBlob, metadata),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(new Error(
+              `Timeout no upload da foto após ${Math.round(timeoutMs / 1000)}s.`
+            )),
+          timeoutMs
+        )
+      ),
+    ]);
+  }
+
+  throwIfStorageAborted(options?.signal);
+
+  const downloadUrl = await Promise.race([
+    getDownloadURL(fileRef),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(new Error(
+            `Timeout ao obter URL da foto após ${Math.round(timeoutMs / 1000)}s.`
+          )),
+        timeoutMs
+      )
+    ),
+  ]);
+  return {
+    downloadUrl,
+    fullPath: fileRef.fullPath,
+    sizeBytes: fileOrBlob.size,
+  };
+};
+
+/**
+ * Upload otimizado de foto de estudante no Firebase Storage:
+ * 1. Redimensiona fotos maiores que 1280px e converte para WebP (qualidade 0.8) via Canvas.
+ * 2. Aplica cacheControl: 'public, max-age=86400' nos metadados.
+ */
+export const uploadStudentPhotoToStorage = async (
+  studentId: string,
+  imageFile: File | Blob,
+  onProgress?: (percent: number) => void,
+  options?: { signal?: AbortSignal; timeoutMs?: number }
+): Promise<{
+  downloadUrl: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+}> => {
+  // Otimização pré-upload no frontend
+  throwIfStorageAborted(options?.signal);
+  const optimized = await resizePhotoWithCanvasToWebp(imageFile, 1280, 0.8);
+  const storagePath = `student_photos_2027/${studentId}.webp`;
+
+  const uploaded = await uploadFileWithCacheControl(storagePath, optimized.blob, {
+    contentType: 'image/webp',
+    cacheControl: 'public, max-age=86400',
+    customMetadata: {
+      studentId,
+      width: String(optimized.width),
+      height: String(optimized.height),
+      originalBytes: String(optimized.originalBytes),
+      optimizedBytes: String(optimized.compressedBytes),
+    },
+    onProgress,
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
+  });
+
+  return {
+    downloadUrl: uploaded.downloadUrl,
+    sizeBytes: uploaded.sizeBytes,
+    width: optimized.width,
+    height: optimized.height,
+  };
+};
+
+/**
+ * Upload otimizado de PDF no Firebase Storage:
+ * Aplica cacheControl: 'public, max-age=86400' nos metadados.
+ */
+export const uploadStudentPdfToStorage = async (
+  studentId: string,
+  pdfFile: File | Blob,
+  onProgress?: (percent: number) => void
+): Promise<{
+  downloadUrl: string;
+  sizeBytes: number;
+}> => {
+  const storagePath = `student_fichas_pdf_2027/${studentId}.pdf`;
+
+  const uploaded = await uploadFileWithCacheControl(storagePath, pdfFile, {
+    contentType: 'application/pdf',
+    cacheControl: 'public, max-age=86400',
+    customMetadata: {
+      studentId,
+      fileSize: String(pdfFile.size),
+    },
+    onProgress,
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
+  });
+
+  return {
+    downloadUrl: uploaded.downloadUrl,
+    sizeBytes: uploaded.sizeBytes,
+  };
+};
+
+/**
+ * Exclui arquivo do Firebase Storage
+ */
+export const deleteFileFromStorage = async (storagePath: string): Promise<boolean> => {
+  try {
+    const storage = getFirebaseStorage();
+    const fileRef = ref(storage, storagePath);
+    await deleteObject(fileRef);
+    return true;
+  } catch {
+    return false;
+  }
+};

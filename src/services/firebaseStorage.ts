@@ -151,6 +151,8 @@ export const uploadFileWithCacheControl = async (
   const timeoutMs = Math.max(10_000, options?.timeoutMs ?? 90_000);
   throwIfStorageAborted(options?.signal);
 
+  throwIfStorageAborted(options?.signal);
+
   const storage = getFirebaseStorage();
   const fileRef = ref(storage, storagePath);
 
@@ -296,7 +298,8 @@ export const uploadStudentPhotoToStorage = async (
 export const uploadStudentPdfToStorage = async (
   studentId: string,
   pdfFile: File | Blob,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  options?: { signal?: AbortSignal; timeoutMs?: number }
 ): Promise<{
   downloadUrl: string;
   sizeBytes: number;
@@ -311,6 +314,8 @@ export const uploadStudentPdfToStorage = async (
       fileSize: String(pdfFile.size),
     },
     onProgress,
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
   });
 
   return {

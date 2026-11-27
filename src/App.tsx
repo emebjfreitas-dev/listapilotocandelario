@@ -2172,7 +2172,15 @@ export default function App() {
     try {
       // 1. Força processamento imediato de todas as tarefas pendentes no SyncQueueManager
       const queueFlushed = await SyncQueueManager.flushNow();
-      await flushPendingOfflineQueue();
+      const offlineQueueFlushed = await flushPendingOfflineQueue();
+
+      // Não declarar sucesso se houver falha nas filas críticas.
+      if (!queueFlushed || !offlineQueueFlushed || SyncQueueManager.hasPendingTasks()) {
+        toast.warning('Sincronização incompleta', {
+          description: 'Uma ou mais filas não foram confirmadas. Os dados locais foram preservados.',
+        });
+        return { ok: false, message: 'Falha nas filas de sincronização' };
+      }
 
       // 2. Limpa o cache do Service Worker e verifica atualização de versão no servidor
       const swResult = await clearServiceWorkerCachesAndUpdate();
@@ -2180,6 +2188,12 @@ export default function App() {
       // 3. Obtém o estado mais recente diretamente do servidor (Backend ou Firestore Server)
       if (isBackendApiAvailable()) {
         const shared = await pullSharedSchoolStateFromServer({ forceRefresh: true });
+        if (!shared) {
+          toast.warning('Sincronização incompleta', {
+            description: 'O envio foi realizado, mas não foi possível confirmar a leitura do estado remoto.',
+          });
+          return { ok: false, message: 'Falha na confirmação remota' };
+        }
         await pullOfficialCalendarFromServer().catch(() => null);
         if (shared) {
           if (shared.authorizedUsers && shared.authorizedUsers.length > 0) {
@@ -2208,7 +2222,13 @@ export default function App() {
           }
         }
       } else {
-        await forceRefreshFirestoreFromServer();
+        const firestoreRefreshOk = await forceRefreshFirestoreFromServer();
+        if (!firestoreRefreshOk) {
+          toast.warning('Sincronização incompleta', {
+            description: 'Não foi possível confirmar a atualização diretamente no Firestore.',
+          });
+          return { ok: false, message: 'Falha na atualização Firestore' };
+        }
       }
 
       if (swResult.updateActivated) {
