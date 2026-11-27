@@ -790,3 +790,5 @@ svg.lucide {
     transform: none !important;
   }
 }
+
+*:focus{outline:none!important;box-shadow:none!important}
