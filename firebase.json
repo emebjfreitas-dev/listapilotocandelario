@@ -1,4 +1,10 @@
 {
+  "firestore": [
+    {
+      "database": "ai-studio-listapiloto2027-83713dd2-d627-4928-b0b4-739717a32a0d",
+      "rules": "firestore.rules"
+    }
+  ],
   "hosting": {
     "site": "listapilotocandelario",
     "public": "dist",
@@ -14,45 +20,6 @@
         "source": "**",
         "destination": "/index.html"
       }
-    ],
-    "headers": [
-      {
-        "source": "/@(index.html|sw.js|firebase-messaging-sw.js|manifest.json)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/assets/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=31536000, immutable"
-          }
-        ]
-      },
-      {
-        "source": "**",
-        "headers": [
-          {
-            "key": "X-Content-Type-Options",
-            "value": "nosniff"
-          },
-          {
-            "key": "Referrer-Policy",
-            "value": "strict-origin-when-cross-origin"
-          }
-        ]
-      }
     ]
-  },
-  "firestore": [
-    {
-      "database": "ai-studio-listapiloto2027-83713dd2-d627-4928-b0b4-739717a32a0d",
-      "rules": "firestore.rules"
-    }
-  ]
+  }
 }
