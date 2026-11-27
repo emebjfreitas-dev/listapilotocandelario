@@ -8,6 +8,7 @@ import { ModalPortal } from './ui/ModalPortal';
 import { SFSymbol } from './ui/SFSymbol';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { triggerMenuHaptic } from '../utils/haptics';
+import { SyncElapsedTimeBadge } from './SyncElapsedTimeBadge';
 
 interface BottomNavProps {
   currentScreen: ScreenType;
@@ -184,8 +185,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       {/* Barra de Navegação Inferior Estilo Apple (Mobile & Tablet) */}
       <nav
         aria-label="Barra de Navegação Inferior"
-        className="fixed bottom-0 left-0 right-0 w-full z-40 pb-safe bg-white/90 backdrop-blur-2xl border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"
+        className="relative fixed bottom-0 left-0 right-0 w-full z-40 pb-safe bg-white/90 backdrop-blur-2xl border-t border-black/[0.08] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"
       >
+        <SyncElapsedTimeBadge
+          syncSnapshot={syncSnapshot}
+          className="absolute -top-9 left-1/2 -translate-x-1/2 text-[11px] shadow-sm bg-white/95 py-1 px-2.5"
+        />
         <div
           className={`grid ${gridColsClass} items-center h-[64px] px-2 max-w-lg mx-auto gap-1`}
         >

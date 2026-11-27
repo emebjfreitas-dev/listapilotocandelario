@@ -17,6 +17,7 @@ import { QuadroAvisosDirecao } from './QuadroAvisosDirecao';
 import { LembretePrazoFrequenciaCard } from './LembretePrazoFrequenciaCard';
 import { ResumoFaltasCriticasCard } from './ResumoFaltasCriticasCard';
 import { PaginationBar } from './ui/PaginationBar';
+import { SyncElapsedTimeBadge } from './SyncElapsedTimeBadge';
 import { motion, useReducedMotion } from 'framer-motion';
 import { SFSymbol } from './ui/SFSymbol';
 import { triggerMenuHaptic } from '../utils/haptics';
@@ -559,6 +560,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto min-w-0 shrink-0">
+            <SyncElapsedTimeBadge />
             <ExportFormatButton
               label="Exportar Panorama"
               variant="secondary"
