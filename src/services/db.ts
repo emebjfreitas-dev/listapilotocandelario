@@ -15,7 +15,10 @@ import {
   INITIAL_AUTHORIZED_USERS,
   INSTITUTIONAL_EMAIL_DOMAIN,
 } from '../data/mockData';
-import { sortClassesInOfficialOrder } from '../data/officialMatrix2027';
+import {
+  OFFICIAL_MATRIX_REVISION,
+  sortClassesInOfficialOrder,
+} from '../data/officialMatrix2027';
 import { resolveCanonicalClassId } from '../data/officialSedStudents';
 import { getAuth } from 'firebase/auth';
 import {
@@ -1924,10 +1927,35 @@ const enrichClassesWithOfficialMatrix = (loadedClasses: ClassGroup[]): ClassGrou
     });
 
     const isEmptyClass = enrichedStudents.length === 0;
+    const preserveCustomMatrix =
+      loaded.matrixRevision === OFFICIAL_MATRIX_REVISION && Boolean(loaded.matrixCustomizedAtMs);
 
     return {
       ...loaded,
-      ...off, // Always enforce official 2027 teacher and shift
+      ...off, // Always enforce official 2027 baseline unless customized on current revision
+      ...(preserveCustomMatrix
+        ? {
+            teacherName: loaded.teacherName ?? off.teacherName,
+            pronoun: loaded.pronoun ?? loaded.teacherPronoun ?? off.pronoun,
+            teacherPronoun: loaded.teacherPronoun ?? loaded.pronoun ?? off.teacherPronoun,
+            teacherFirstName: loaded.teacherFirstName ?? off.teacherFirstName,
+            room: loaded.room ?? off.room,
+            shift: loaded.shift ?? off.shift,
+            periodo: loaded.periodo ?? (loaded.shift === 'Turno Tarde' ? 'TARDE' : 'MANHÃ'),
+            sedClassName: loaded.sedClassName ?? loaded.turmaSedName ?? off.sedClassName,
+            turmaSedName: loaded.turmaSedName ?? loaded.sedClassName ?? off.turmaSedName,
+            classeSedCode: loaded.classeSedCode ?? off.classeSedCode,
+            sedExpectedStudents: loaded.sedExpectedStudents ?? off.sedExpectedStudents,
+            artTeacher: loaded.artTeacher ?? off.artTeacher,
+            peTeacher: loaded.peTeacher ?? off.peTeacher,
+            englishTeacher: loaded.englishTeacher ?? off.englishTeacher,
+            isVaga: typeof loaded.isVaga === 'boolean' ? loaded.isVaga : off.isVaga,
+            matrixCustomizedAtMs: loaded.matrixCustomizedAtMs,
+          }
+        : {
+            matrixCustomizedAtMs: undefined,
+          }),
+      matrixRevision: OFFICIAL_MATRIX_REVISION,
       students: enrichedStudents,
       totalStudents: enrichedStudents.length,
       classesHeld: loaded.classesHeld ?? off.classesHeld,

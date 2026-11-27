@@ -11,8 +11,12 @@ export {
   PEB2_SPECIALISTS_BY_EMAIL,
   INITIAL_AUTHORIZED_USERS,
 } from './authorizedUsersData.ts';
-import { type OfficialMatrixRow, OFFICIAL_SCHOOL_MATRIX_2027 } from './officialMatrix2027.ts';
-export { type OfficialMatrixRow, OFFICIAL_SCHOOL_MATRIX_2027 };
+import {
+  type OfficialMatrixRow,
+  OFFICIAL_MATRIX_REVISION,
+  OFFICIAL_SCHOOL_MATRIX_2027,
+} from './officialMatrix2027.ts';
+export { type OfficialMatrixRow, OFFICIAL_MATRIX_REVISION, OFFICIAL_SCHOOL_MATRIX_2027 };
 
 const APP_BASE_URL =
   (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
@@ -1063,8 +1067,10 @@ export const INITIAL_CLASSES: ClassGroup[] = OFFICIAL_SCHOOL_MATRIX_2027.map((cf
   teacherName: cfg.teacherName,
   teacherEmail: cfg.teacherEmail,
   pronoun: cfg.pronoun,
+  teacherPronoun: cfg.pronoun,
   teacherFirstName: cfg.teacherFirstName,
   sedClassName: cfg.sedClassName,
+  turmaSedName: cfg.sedClassName,
   sedExpectedStudents: cfg.sedExpectedStudents,
   classeSedCode: cfg.classeSedCode,
   artTeacher: cfg.artTeacher,
@@ -1083,6 +1089,7 @@ export const INITIAL_CLASSES: ClassGroup[] = OFFICIAL_SCHOOL_MATRIX_2027.map((cf
   pedagogicalNotes: '',
   isVaga: Boolean(cfg.isVaga),
   periodo: cfg.periodo,
+  matrixRevision: OFFICIAL_MATRIX_REVISION,
 }));
 
 export const TOTAL_STUDENTS_COUNT = 0;

@@ -10,7 +10,12 @@ import {
   LgpdProtectionConfig,
   FcmSystemConfig,
 } from '../types';
-import { INSTITUTIONAL_EMAIL_DOMAIN, INITIAL_AUTHORIZED_USERS } from '../data/mockData';
+import {
+  INSTITUTIONAL_EMAIL_DOMAIN,
+  INITIAL_AUTHORIZED_USERS,
+  INITIAL_CLASSES,
+  OFFICIAL_MATRIX_REVISION,
+} from '../data/mockData';
 import {
   isOfficialSchoolAdminEmail,
   isValidInstitutionalEmail,
@@ -551,12 +556,12 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
     setEditingMatrixClassId(cls.id);
     setMatrixDraft({
       teacherName: cls.teacherName || '',
-      teacherPronoun: cls.teacherPronoun || 'PROFESSORA',
+      teacherPronoun: cls.teacherPronoun || cls.pronoun || 'PROFESSORA',
       teacherFirstName:
         cls.teacherFirstName || (cls.teacherName || '').split(' ')[0] || '',
       room: cls.room || '',
       shift: cls.shift === 'Turno Tarde' ? 'Turno Tarde' : 'Turno Manhã',
-      turmaSedName: cls.turmaSedName || '',
+      turmaSedName: cls.turmaSedName || cls.sedClassName || '',
       classeSedCode: cls.classeSedCode || '',
       artTeacher: cls.artTeacher || '',
       peTeacher: cls.peTeacher || '',
@@ -569,22 +574,31 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
 
     const trimmedTeacher = matrixDraft.teacherName.trim().toUpperCase();
     const isVagaNow = trimmedTeacher === 'TURMA VAGA' || trimmedTeacher === '';
+    const nextPronoun = matrixDraft.teacherPronoun.trim().toUpperCase();
+    const nextSedName = matrixDraft.turmaSedName.trim().toUpperCase();
+    const nowMs = Date.now();
 
     const updatedClasses = classes.map((c) =>
       c.id === cls.id
         ? {
             ...c,
             teacherName: trimmedTeacher || 'TURMA VAGA',
-            teacherPronoun: matrixDraft.teacherPronoun.trim().toUpperCase(),
+            pronoun: nextPronoun,
+            teacherPronoun: nextPronoun,
             teacherFirstName: matrixDraft.teacherFirstName.trim().toUpperCase(),
             room: matrixDraft.room.trim().toUpperCase(),
             shift: matrixDraft.shift,
-            turmaSedName: matrixDraft.turmaSedName.trim().toUpperCase(),
+            periodo: (matrixDraft.shift === 'Turno Tarde' ? 'TARDE' : 'MANHÃ') as 'MANHÃ' | 'TARDE',
+            sedClassName: nextSedName,
+            turmaSedName: nextSedName,
             classeSedCode: matrixDraft.classeSedCode.trim(),
             artTeacher: matrixDraft.artTeacher.trim().toUpperCase(),
             peTeacher: matrixDraft.peTeacher.trim().toUpperCase(),
             englishTeacher: matrixDraft.englishTeacher.trim().toUpperCase(),
             isVaga: isVagaNow,
+            matrixRevision: OFFICIAL_MATRIX_REVISION,
+            matrixCustomizedAtMs: nowMs,
+            updatedAtMs: nowMs,
           }
         : c
     );
@@ -1093,6 +1107,7 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
 
   const handleRestoreOfficialSchoolMatrix = () => {
     if (!canManage) return;
+    const nowMs = Date.now();
     const metricsByEmail = new Map(
       authorizedUsers.map((u) => [u.email.trim().toLowerCase(), u])
     );
@@ -1107,10 +1122,38 @@ export const UsuariosAcessoScreen: React.FC<UsuariosAcessoScreenProps> = ({
         lastLoginAt: existing?.lastLoginAt,
         lastActiveAt: existing?.lastActiveAt,
         lastScreenVisited: existing?.lastScreenVisited,
-        updatedAtMs: Date.now(),
+        updatedAtMs: nowMs,
       };
     });
     onSaveAuthorizedUsers(mergedUsers);
+
+    if (onUpdateClasses) {
+      const currentById = new Map(classes.map((c) => [c.id, c]));
+      const syncedClasses = INITIAL_CLASSES.map((off) => {
+        const current = currentById.get(off.id);
+        if (!current) return { ...off, updatedAtMs: nowMs };
+        return {
+          ...current,
+          ...off,
+          students: current.students,
+          totalStudents: current.students.length,
+          classesHeld: current.classesHeld,
+          classesPlanned: current.classesPlanned,
+          monthlySchoolDays: current.monthlySchoolDays || off.monthlySchoolDays,
+          pedagogicalNotes: current.pedagogicalNotes,
+          statusText: current.statusText,
+          monthlyAbsences: current.monthlyAbsences,
+          presenceRate: current.presenceRate,
+          weeklyPerformance: current.weeklyPerformance,
+          driveFolderUrl: current.driveFolderUrl,
+          matrixCustomizedAtMs: undefined,
+          matrixRevision: OFFICIAL_MATRIX_REVISION,
+          updatedAtMs: nowMs,
+        };
+      });
+      onUpdateClasses(syncedClasses);
+    }
+
     triggerFeedback(
       'success',
       `Quadro Oficial sincronizado com ${classes.length} turmas e especialistas.`

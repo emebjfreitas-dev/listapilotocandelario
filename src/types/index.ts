@@ -233,6 +233,8 @@ export interface ClassGroup {
   updatedAtMs?: number;
   isVaga?: boolean;
   periodo?: 'MANHÃ' | 'TARDE';
+  matrixRevision?: string;
+  matrixCustomizedAtMs?: number;
 }
 
 export interface SheetTabInfo {
