@@ -126,7 +126,15 @@ export interface StorageUploadOptions {
   cacheControl?: string;
   customMetadata?: Record<string, string>;
   onProgress?: (progressPercent: number) => void;
+  signal?: AbortSignal;
+  timeoutMs?: number;
 }
+
+const throwIfStorageAborted = (signal?: AbortSignal) => {
+  if (signal?.aborted) {
+    throw new DOMException('Upload abortado pelo usuário.', 'AbortError');
+  }
+};
 
 /**
  * Upload de arquivo com cacheControl: 'public, max-age=86400' para economizar cota de download no Storage.
@@ -140,6 +148,9 @@ export const uploadFileWithCacheControl = async (
   fullPath: string;
   sizeBytes: number;
 }> => {
+  const timeoutMs = Math.max(10_000, options?.timeoutMs ?? 90_000);
+  throwIfStorageAborted(options?.signal);
+
   const storage = getFirebaseStorage();
   const fileRef = ref(storage, storagePath);
 
@@ -154,24 +165,79 @@ export const uploadFileWithCacheControl = async (
     },
   };
 
-  if (options?.onProgress) {
+  if (options?.onProgress || options?.signal) {
     const uploadTask = uploadBytesResumable(fileRef, fileOrBlob, metadata);
+
     await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout>;
+
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        options?.signal?.removeEventListener('abort', onAbort);
+        fn();
+      };
+
+      const onAbort = () => {
+        uploadTask.cancel();
+        finish(() =>
+          reject(new DOMException('Upload abortado pelo usuário.', 'AbortError'))
+        );
+      };
+
+      timer = setTimeout(() => {
+        uploadTask.cancel();
+        finish(() =>
+          reject(new Error(
+            `Timeout no upload da foto após ${Math.round(timeoutMs / 1000)}s.`
+          ))
+        );
+      }, timeoutMs);
+
+      options?.signal?.addEventListener('abort', onAbort, { once: true });
+
       uploadTask.on(
         'state_changed',
         (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          const progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           options.onProgress?.(Math.round(progress));
         },
-        (error) => reject(error),
-        () => resolve()
+        (error) => finish(() => reject(error)),
+        () => finish(resolve)
       );
     });
   } else {
-    await uploadBytes(fileRef, fileOrBlob, metadata);
+    await Promise.race([
+      uploadBytes(fileRef, fileOrBlob, metadata),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(new Error(
+              `Timeout no upload da foto após ${Math.round(timeoutMs / 1000)}s.`
+            )),
+          timeoutMs
+        )
+      ),
+    ]);
   }
 
-  const downloadUrl = await getDownloadURL(fileRef);
+  throwIfStorageAborted(options?.signal);
+
+  const downloadUrl = await Promise.race([
+    getDownloadURL(fileRef),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(new Error(
+            `Timeout ao obter URL da foto após ${Math.round(timeoutMs / 1000)}s.`
+          )),
+        timeoutMs
+      )
+    ),
+  ]);
   return {
     downloadUrl,
     fullPath: fileRef.fullPath,
@@ -187,7 +253,8 @@ export const uploadFileWithCacheControl = async (
 export const uploadStudentPhotoToStorage = async (
   studentId: string,
   imageFile: File | Blob,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  options?: { signal?: AbortSignal; timeoutMs?: number }
 ): Promise<{
   downloadUrl: string;
   sizeBytes: number;
@@ -195,6 +262,7 @@ export const uploadStudentPhotoToStorage = async (
   height: number;
 }> => {
   // Otimização pré-upload no frontend
+  throwIfStorageAborted(options?.signal);
   const optimized = await resizePhotoWithCanvasToWebp(imageFile, 1280, 0.8);
   const storagePath = `student_photos_2027/${studentId}.webp`;
 
@@ -209,6 +277,8 @@ export const uploadStudentPhotoToStorage = async (
       optimizedBytes: String(optimized.compressedBytes),
     },
     onProgress,
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
   });
 
   return {

@@ -3089,7 +3089,45 @@ export const uploadBatchStudentPhotosViaApi = async (
             ? new Blob([new Uint8Array(item.bytes)], { type: item.mimeType || 'image/webp' })
             : dataUrlToBlobForStorage((item as { photoDataUrl: string }).photoDataUrl, 'image/jpeg');
         try {
-          const uploaded = await uploadStudentPhotoToStorage(item.studentId, blob);
+          let uploaded: Awaited<
+            ReturnType<typeof uploadStudentPhotoToStorage>
+          > | null = null;
+          let lastError: any = null;
+
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            if (options?.signal?.aborted) {
+              throw new DOMException(
+                'Upload abortado pelo usuário.',
+                'AbortError'
+              );
+            }
+
+            try {
+              uploaded = await uploadStudentPhotoToStorage(
+                item.studentId,
+                blob,
+                undefined,
+                {
+                  signal: options?.signal,
+                  timeoutMs: 90_000,
+                }
+              );
+              break;
+            } catch (err: any) {
+              lastError = err;
+              if (err?.name === 'AbortError' || attempt === 2) {
+                throw err;
+              }
+              await new Promise((resolve) =>
+                setTimeout(resolve, 750 * attempt)
+              );
+            }
+          }
+
+          if (!uploaded) {
+            throw lastError || new Error('Upload não retornou resultado.');
+          }
+
           results.push({
             studentId: item.studentId,
             photoUrl: uploaded.downloadUrl,
