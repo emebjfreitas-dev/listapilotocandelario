@@ -28,7 +28,7 @@ import {
   DocumentSnapshot,
   disableNetwork,
   enableNetwork,
-  setLogLevel,
+  setLogLevel, documentId, orderBy
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import {
@@ -754,18 +754,59 @@ export async function monitorFirestoreIntegrityOnBoot(options?: {
         }
 
         let remoteHasStudents = false;
+
         try {
-          const remoteClassesSnap = await getDocs(
-            query(collection(firestoreDb, 'school_classes_2027'), limit(5))
-          );
-          remoteClassesSnap.forEach((d) => {
-            const data = d.data() as ClassGroup;
-            if (data && Array.isArray(data.students) && data.students.length > 0) {
-              remoteHasStudents = true;
+          let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
+
+          while (true) {
+            const classesQuery: Query<DocumentData> = cursor
+              ? query(
+                  collection(firestoreDb, 'school_classes_2027'),
+                  orderBy(documentId()),
+                  startAfter(cursor),
+                  limit(100)
+                )
+              : query(
+                  collection(firestoreDb, 'school_classes_2027'),
+                  orderBy(documentId()),
+                  limit(100)
+                );
+
+            const snapshot: QuerySnapshot<DocumentData> = await getDocs(classesQuery);
+
+            for (const document of snapshot.docs) {
+              const data = document.data();
+
+              if (Array.isArray(data.students) && data.students.length > 0) {
+                remoteHasStudents = true;
+                break;
+              }
             }
+
+            if (remoteHasStudents || snapshot.docs.length < 100) break;
+
+            cursor = snapshot.docs[snapshot.docs.length - 1];
+          }
+        } catch (error) {
+          console.error('[EPOCH] Falha ao verificar estudantes remotos:', error);
+
+          return setIntegrityReport({
+            status: 'offline_local_preserved',
+            connected: false,
+            checkedAtISO,
+            localEpochId: localMeta.epochId,
+            remoteEpochId,
+            localEpochVersion,
+            remoteEpochVersion,
+            localEpochUpdatedAtMs: localMeta.epochUpdatedAtMs,
+            remoteEpochUpdatedAtMs,
+            localClassesUpdatedAtMs: localMeta.classesUpdatedAtMs,
+            remoteClassesUpdatedAtMs,
+            pendingLocalOperations: pendingQueue.length,
+            preventedRemoteOverwrite: true,
+            protectedLocalWatermarkMs: localWatermark,
+            reason: 'Consulta remota inconclusiva. Limpeza automática bloqueada.',
           });
-        } catch {
-          // ignore query error
         }
 
         if (remoteHasStudents) {
@@ -789,7 +830,16 @@ export async function monitorFirestoreIntegrityOnBoot(options?: {
         }
 
         if (options?.baseClasses && options.baseClasses.length > 0) {
-          await wipeFirestoreSchoolDataOnly(options.baseClasses, CLEAN_DB_RESET_EPOCH_ID);
+          const wipeSuccess = await wipeFirestoreSchoolDataOnly(
+            options.baseClasses,
+            CLEAN_DB_RESET_EPOCH_ID
+          );
+
+          if (!wipeSuccess) {
+            throw new Error(
+              'Limpeza remota não confirmada. Epoch não será inicializado.'
+            );
+          }
         }
 
         const syncedAtMs = Date.now();

@@ -2746,61 +2746,9 @@ export const importSchoolDataFromJson = async (
 export const resetEntireAppData = async (
   _userEmail = 'emebjfreitas@jundiai.sp.gov.br'
 ): Promise<ClassGroup[]> => {
-  const nowMs = Date.now();
-  clearLocalSchoolDataOnly();
-  clearStoredSecurityAuditLogs();
-  try {
-    localStorage.setItem(DB_CLEAN_EPOCH_STORAGE_KEY, CLEAN_DB_RESET_EPOCH_ID);
-  } catch {
-    // ignore storage errors
-  }
-
-  // Gera turmas limpas sem estudantes e com métricas zeradas
-  const pristineClasses: ClassGroup[] = INITIAL_CLASSES.map((c) => ({
-    ...c,
-    students: [],
-    totalStudents: 0,
-    monthlyAbsences: 0,
-    presenceRate: 0,
-    statusText: 'Aguardando importação de estudantes',
-    isPending: false,
-    weeklyPerformance: [],
-    pedagogicalNotes: '',
-    updatedAtMs: nowMs,
-  }));
-
-  memoryCachedClasses = pristineClasses;
-  saveStoredClasses(pristineClasses, true);
-  setLocalClassesUpdatedAtMs(nowMs);
-
-  // Notificar backend
-  if (isBackendApiAvailable()) {
-    try {
-      const headers = await getActiveUserAuthHeadersAsync();
-      await fetch('/api/school-state/reset', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...headers,
-        },
-        credentials: 'include',
-        body: JSON.stringify({ freshClasses: pristineClasses }),
-      });
-    } catch (e) {
-      console.warn('Aviso: falha na rota /api/school-state/reset:', e);
-    }
-  }
-
-  // Limpar apenas os dados no Firestore Cloud (respeitando limite de cota quando em modo backend)
-  if (!isFirestoreQuotaExceeded()) {
-    try {
-      await wipeFirestoreSchoolDataOnly(pristineClasses, CLEAN_DB_RESET_EPOCH_ID);
-    } catch (e) {
-      console.warn('Aviso: falha ao limpar dados no Firestore:', e);
-    }
-  }
-
-  return pristineClasses;
+  throw new Error(
+    'RESET BLOQUEADO: operação desabilitada até a implementação de backup, confirmação remota e recuperação transacional.'
+  );
 };
 
 export interface BatchUploadProgress {
