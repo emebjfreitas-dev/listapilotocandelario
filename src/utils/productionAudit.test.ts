@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { INITIAL_CLASSES } from '../data/mockData';
 import {
   getStudentAttendanceMetrics,
@@ -1028,6 +1030,71 @@ assert.equal(
   'Delta remoto mais recente deve atualizar a turma correspondente'
 );
 
-console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, RBAC de notificações, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting, otimização de cotas Firestore/Storage, armazenamento lossless Drive e cache IndexedDB passaram com sucesso!');
+// 18. Validação das proteções contra cache obsoleto de navegador e Service Worker PWA
+const swSource = fs.readFileSync(path.join(process.cwd(), 'public', 'sw.js'), 'utf8');
+assert.ok(
+  swSource.includes("cache: 'reload'") && swSource.includes("cache: 'no-store'"),
+  'Service Worker deve ignorar HTTP disk cache no precache mutável e navegações HTML'
+);
+assert.ok(
+  swSource.includes('candelario_student_photos_db_v1') && swSource.includes('isImmutableStaticAsset'),
+  'Cache offline de fotos (IndexedDB) e assets com hash deve permanecer preservado'
+);
+
+const mainSource = fs.readFileSync(path.join(process.cwd(), 'src', 'main.tsx'), 'utf8');
+assert.ok(
+  mainSource.includes("updateViaCache: 'none'") &&
+    mainSource.includes('controllerchange') &&
+    mainSource.includes('SW_RELOAD_COOLDOWN_MS'),
+  'Registro principal do SW deve forçar updateViaCache: none e reload seguro com anti-loop em controllerchange'
+);
+
+const pushSource = fs.readFileSync(
+  path.join(process.cwd(), 'src', 'services', 'pushNotificationService.ts'),
+  'utf8'
+);
+assert.ok(
+  pushSource.includes("updateViaCache: 'none'"),
+  'Registro secundário do SW no serviço de Push também deve usar updateViaCache: none'
+);
+
+const hostingConfig = fs.readFileSync(path.join(process.cwd(), 'firebase.json'), 'utf8');
+assert.ok(
+  hostingConfig.includes('no-cache, no-store, must-revalidate') &&
+    hostingConfig.includes('sw.js'),
+  'Firebase Hosting deve servir index.html e sw.js sem cache HTTP persistente'
+);
+
+assert.ok(
+  swSource.includes('CLEAR_SW_CACHE') && swSource.includes('caches.delete'),
+  'Service Worker deve suportar limpeza sob demanda do CacheStorage via CLEAR_SW_CACHE'
+);
+
+const headerSource = fs.readFileSync(path.join(process.cwd(), 'src', 'components', 'Header.tsx'), 'utf8');
+assert.ok(
+  headerSource.includes('Sincronizar Agora') && headerSource.includes('onForceSyncNow'),
+  'Barra de cabeçalho deve expor o botão Sincronizar Agora ligado ao fluxo onForceSyncNow'
+);
+
+const firebaseSyncSource = fs.readFileSync(
+  path.join(process.cwd(), 'src', 'services', 'firebaseSync.ts'),
+  'utf8'
+);
+assert.ok(
+  firebaseSyncSource.includes('forceRefreshFirestoreFromServer') &&
+    firebaseSyncSource.includes('forcePullAll'),
+  'firebaseSync deve expor forceRefreshFirestoreFromServer para leitura direta do servidor'
+);
+
+const swCacheHelperSource = fs.readFileSync(
+  path.join(process.cwd(), 'src', 'utils', 'serviceWorkerCache.ts'),
+  'utf8'
+);
+assert.ok(
+  swCacheHelperSource.includes('clearServiceWorkerCachesAndUpdate'),
+  'Helper clearServiceWorkerCachesAndUpdate deve estar presente'
+);
+
+console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, RBAC de notificações, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting, otimização de cotas Firestore/Storage, armazenamento lossless Drive, cache do navegador/PWA, Sincronizar Agora e IndexedDB passaram com sucesso!');
 
 

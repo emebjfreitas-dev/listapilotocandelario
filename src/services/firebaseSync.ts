@@ -49,6 +49,30 @@ export const CLEAN_DB_RESET_EPOCH_ID = 'clean_zero_data_2026_11_16_v1';
 export const DB_CLEAN_EPOCH_STORAGE_KEY = 'emeb_candelario_db_clean_epoch_v1';
 export const DB_EPOCH_META_STORAGE_KEY = 'emeb_candelario_db_epoch_meta_v1';
 export const CLASSES_UPDATED_AT_STORAGE_KEY = 'emeb_candelario_classes_updated_at_ms_2027';
+export const CONFIG_UPDATED_AT_STORAGE_KEY = 'emeb_candelario_config_updated_at_ms_2027';
+
+const getLocalConfigUpdatedAtMs = (): number => {
+  try {
+    if (typeof localStorage === 'undefined') return 0;
+    const raw = localStorage.getItem(CONFIG_UPDATED_AT_STORAGE_KEY);
+    const parsed = raw ? Number(raw) : 0;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const setLocalConfigUpdatedAtMs = (tsMs: number): void => {
+  try {
+    if (typeof localStorage === 'undefined' || !Number.isFinite(tsMs) || tsMs <= 0) return;
+    const current = getLocalConfigUpdatedAtMs();
+    if (tsMs > current) {
+      localStorage.setItem(CONFIG_UPDATED_AT_STORAGE_KEY, String(tsMs));
+    }
+  } catch {
+    // ignore storage quota errors
+  }
+};
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
@@ -1243,10 +1267,12 @@ export const saveClassesToFirestoreCloud = async (
       );
     });
 
-    // Atualiza cache de assinaturas para as turmas gravadas
+    // Atualiza cache de assinaturas para as turmas gravadas e invalida snapshot completo em memória
     dirtyClasses.forEach((cls) => {
       classSyncSignatureCache.set(cls.id, computeClassFirestoreSignature(cls));
     });
+    cachedCloudState = null;
+    lastCloudStateFetchTimeMs = 0;
 
     markCloudAlignedWithLocalEpoch(updatedAtMs);
     if (isFirestoreNetworkDisabled) {
@@ -1386,6 +1412,10 @@ export const wipeFirestoreSchoolDataOnly = async (
       epochUpdatedAtMs: nowMs,
       classesUpdatedAtMs: nowMs,
     });
+    cachedCloudState = null;
+    lastCloudStateFetchTimeMs = 0;
+    cachedAuthorizedUsers = null;
+    lastAuthorizedUsersFetchMs = 0;
 
     return true;
   } catch (error) {
@@ -1497,6 +1527,11 @@ export const saveConfigMetaToFirestoreCloud = async (payload: {
       );
     });
     lastConfigMetaSignature = candidateSig;
+    setLocalConfigUpdatedAtMs(nowMs);
+    cachedCloudState = null;
+    lastCloudStateFetchTimeMs = 0;
+    cachedAuthorizedUsers = null;
+    lastAuthorizedUsersFetchMs = 0;
 
     if (isFirestoreNetworkDisabled) {
       await resetFirestoreQuotaExceeded();
@@ -1536,7 +1571,10 @@ export const fetchAuthorizedUsersFromFirestore = async (
     return cachedAuthorizedUsers;
   }
   try {
-    const configSnap = await getDoc(doc(firestoreDb, 'school_meta_2027', 'config'));
+    const configSnap = await getDocServerFirst(
+      doc(firestoreDb, 'school_meta_2027', 'config'),
+      forceRefresh
+    );
     if (!configSnap.exists()) return null;
     const data = configSnap.data();
     if (Array.isArray(data?.authorizedUsers) && data.authorizedUsers.length > 0) {
@@ -1558,6 +1596,8 @@ const CLOUD_STATE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache em memóri
 
 export interface FetchCloudStateOptions {
   forceRefresh?: boolean;
+  forceRefreshClasses?: boolean;
+  forceRefreshConfig?: boolean;
   classIds?: string[];
   teacherEmail?: string;
   pageSize?: number;
@@ -1635,10 +1675,12 @@ export const fetchStateFromFirestoreCloud = async (
   }
   const opts: FetchCloudStateOptions =
     typeof options === 'boolean' ? { forceRefresh: options } : (options || {});
-  const serverFirst = Boolean(opts.forceRefresh);
+  const classesServerFirst = Boolean(opts.forceRefresh || opts.forceRefreshClasses);
+  const configServerFirst = Boolean(opts.forceRefresh || opts.forceRefreshConfig);
+  const stateServerFirst = classesServerFirst || configServerFirst;
   const now = Date.now();
   if (
-    !opts.forceRefresh &&
+    !stateServerFirst &&
     !opts.classIds &&
     !opts.teacherEmail &&
     !opts.changedClassIds &&
@@ -1650,12 +1692,12 @@ export const fetchStateFromFirestoreCloud = async (
     return cachedCloudState;
   }
   try {
-    // 1. Busca metadados pontuais (usa servidor direto quando forceRefresh=true para nunca ficar preso em cache obsoleto)
+    // 1. Busca metadados pontuais (usa servidor direto quando houver atualização remota detectada)
     const [configSnap, stateSnap] = await Promise.all([
       opts.skipConfig
         ? Promise.resolve(null)
-        : getDocServerFirst(doc(firestoreDb, 'school_meta_2027', 'config'), serverFirst),
-      getDocServerFirst(doc(firestoreDb, 'school_meta_2027', 'state'), serverFirst),
+        : getDocServerFirst(doc(firestoreDb, 'school_meta_2027', 'config'), configServerFirst),
+      getDocServerFirst(doc(firestoreDb, 'school_meta_2027', 'state'), stateServerFirst),
     ]);
 
     const configData: Record<string, any> =
@@ -1694,7 +1736,7 @@ export const fetchStateFromFirestoreCloud = async (
         if (deltaIds.length > 0) {
           const docSnaps = await Promise.all(
             deltaIds.map((cid) =>
-              getDocServerFirst(doc(firestoreDb, 'school_classes_2027', cid), serverFirst)
+              getDocServerFirst(doc(firestoreDb, 'school_classes_2027', cid), classesServerFirst)
             )
           );
           docSnaps.forEach((d) => {
@@ -1715,7 +1757,7 @@ export const fetchStateFromFirestoreCloud = async (
         const targetIds = opts.classIds.slice(0, 10);
         const docSnaps = await Promise.all(
           targetIds.map((cid) =>
-            getDocServerFirst(doc(firestoreDb, 'school_classes_2027', cid), serverFirst)
+            getDocServerFirst(doc(firestoreDb, 'school_classes_2027', cid), classesServerFirst)
           )
         );
         docSnaps.forEach((d) => {
@@ -1738,7 +1780,7 @@ export const fetchStateFromFirestoreCloud = async (
           where('teacherEmail', '==', opts.teacherEmail.trim().toLowerCase()),
           limit(pageLimit)
         );
-        const snap = await getDocsServerFirst(q, serverFirst);
+        const snap = await getDocsServerFirst(q, classesServerFirst);
         snap.forEach((d) => {
           const data = d.data() as ClassGroup;
           if (data && data.id && Array.isArray(data.students)) {
@@ -1760,7 +1802,7 @@ export const fetchStateFromFirestoreCloud = async (
           const q: Query<DocumentData> = cursor
             ? query(collection(firestoreDb, 'school_classes_2027'), startAfter(cursor), limit(pageLimit))
             : query(collection(firestoreDb, 'school_classes_2027'), limit(pageLimit));
-          const snap = await getDocsServerFirst(q, serverFirst);
+          const snap = await getDocsServerFirst(q, classesServerFirst);
           snap.forEach((d) => {
             const data = d.data() as ClassGroup;
             if (data && data.id && Array.isArray(data.students)) {
@@ -1874,7 +1916,7 @@ export const fetchClassesFromFirestorePaginated = async (options?: {
 };
 
 let activeRealtimeUnsubscribe: (() => void) | null = null;
-let activeDeltaSyncTrigger: ((forceStateCheck?: boolean) => Promise<void>) | null = null;
+let activeDeltaSyncTrigger: ((forceStateCheck?: boolean, forcePullAll?: boolean) => Promise<void>) | null = null;
 let lastResumeDeltaCheckMs = 0;
 
 /**
@@ -1888,10 +1930,33 @@ export const checkFirestoreDeltaOnResume = async (): Promise<void> => {
   if (now - lastResumeDeltaCheckMs < 10000) return;
   lastResumeDeltaCheckMs = now;
   try {
-    await activeDeltaSyncTrigger(true);
+    await activeDeltaSyncTrigger(true, false);
   } catch {
     // ignore transient offline checks
   }
+};
+
+/**
+ * Invalida caches locais em memória e força leitura direta do servidor Firestore
+ * para obter imediatamente o estado mais recente (usado no botão "Sincronizar Agora").
+ */
+export const forceRefreshFirestoreFromServer = async (): Promise<boolean> => {
+  if (isFirestoreQuotaExceeded()) return false;
+  cachedCloudState = null;
+  lastCloudStateFetchTimeMs = 0;
+  cachedAuthorizedUsers = null;
+  lastAuthorizedUsersFetchMs = 0;
+  lastResumeDeltaCheckMs = 0;
+
+  if (activeDeltaSyncTrigger) {
+    try {
+      await activeDeltaSyncTrigger(true, true);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 };
 
 /**
@@ -1936,7 +2001,7 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
   let isCancelled = false;
   let lastDeltaFetchMs = 0;
   let lastAppliedStateUpdatedMs = 0;
-  let lastAppliedConfigUpdatedMs = 0;
+  let lastAppliedConfigUpdatedMs = getLocalConfigUpdatedAtMs();
   let lastAppliedClassesUpdatedMs = getLocalEpochMetadata().classesUpdatedAtMs || 0;
   let trailingTimer: number | null = null;
   let inFlightDeltaPull = false;
@@ -1951,6 +2016,7 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
     }
     if (cloudData.configUpdatedAtMs) {
       lastAppliedConfigUpdatedMs = Math.max(lastAppliedConfigUpdatedMs, cloudData.configUpdatedAtMs);
+      setLocalConfigUpdatedAtMs(cloudData.configUpdatedAtMs);
     }
     if (cloudData.classesUpdatedAtMs) {
       lastAppliedClassesUpdatedMs = Math.max(lastAppliedClassesUpdatedMs, cloudData.classesUpdatedAtMs);
@@ -2045,9 +2111,16 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
       lastAppliedStateUpdatedMs = Math.max(lastAppliedStateUpdatedMs, remoteMetaUpdated);
       if (hasNewerConfig && remoteConfigUpdated > 0) {
         lastAppliedConfigUpdatedMs = Math.max(lastAppliedConfigUpdatedMs, remoteConfigUpdated);
+        setLocalConfigUpdatedAtMs(remoteConfigUpdated);
+        cachedAuthorizedUsers = null;
+        lastAuthorizedUsersFetchMs = 0;
       }
       if (hasNewerClasses && remoteClassesUpdated > 0) {
         lastAppliedClassesUpdatedMs = Math.max(lastAppliedClassesUpdatedMs, remoteClassesUpdated);
+      }
+      if (hasNewerClasses || hasNewerConfig) {
+        cachedCloudState = null;
+        lastCloudStateFetchTimeMs = 0;
       }
       deliverCloudPayload(fresh, false);
     } finally {
@@ -2055,10 +2128,30 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
     }
   };
 
-  activeDeltaSyncTrigger = async (forceStateCheck = false) => {
+  activeDeltaSyncTrigger = async (forceStateCheck = false, forcePullAll = false) => {
     if (isCancelled || isFirestoreQuotaExceeded()) return;
     const authUser = getAuth(app).currentUser;
     if (!authUser || !authUser.emailVerified) return;
+
+    if (forcePullAll) {
+      inFlightDeltaPull = true;
+      try {
+        const fresh = await fetchStateFromFirestoreCloud({
+          forceRefresh: true,
+          classIds: callbacks.classIds,
+          teacherEmail: callbacks.teacherEmail,
+          pageSize: 20,
+          loadAllPages: true,
+        });
+        if (fresh) {
+          deliverCloudPayload(fresh, false);
+        }
+      } finally {
+        inFlightDeltaPull = false;
+      }
+      return;
+    }
+
     const stateSnap = await getDocServerFirst(
       doc(firestoreDb, 'school_meta_2027', 'state'),
       forceStateCheck
@@ -2068,11 +2161,12 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
     }
   };
 
-  // 1. Carga inicial no boot: verifica o state no servidor (1 leitura) e só baixa do servidor se houver novidade
+  // 1. Carga inicial no boot: verifica o state no servidor (1 leitura) e só baixa do servidor o que realmente mudou
   void (async () => {
     try {
       const authUser = getAuth(app).currentUser;
-      let serverHasNewer = false;
+      let refreshClassesFromServer = false;
+      let refreshConfigFromServer = false;
       if (authUser && authUser.emailVerified) {
         try {
           const srvState = await getDocServerFirst(
@@ -2084,17 +2178,21 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
             const srvClassesTs = Number(sData.classesUpdatedAtMs || 0);
             const srvConfigTs = Number(sData.configUpdatedAtMs || 0);
             const srvMetaTs = Number(sData.updatedAtMs || srvClassesTs || 0);
-            serverHasNewer =
+            refreshClassesFromServer =
               srvClassesTs > lastAppliedClassesUpdatedMs ||
-              srvConfigTs > 0 ||
-              srvMetaTs > lastAppliedClassesUpdatedMs;
+              (srvConfigTs === 0 && srvMetaTs > lastAppliedClassesUpdatedMs);
+            refreshConfigFromServer =
+              srvConfigTs > lastAppliedConfigUpdatedMs ||
+              (srvConfigTs === 0 && srvMetaTs > lastAppliedConfigUpdatedMs);
           }
         } catch {
           // fallback para cache local se offline
         }
       }
       const cloudData = await fetchStateFromFirestoreCloud({
-        forceRefresh: serverHasNewer,
+        forceRefresh: refreshClassesFromServer && refreshConfigFromServer,
+        forceRefreshClasses: refreshClassesFromServer,
+        forceRefreshConfig: refreshConfigFromServer,
         classIds: callbacks.classIds,
         teacherEmail: callbacks.teacherEmail,
         pageSize: 20,

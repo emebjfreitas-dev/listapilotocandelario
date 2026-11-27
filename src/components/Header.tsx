@@ -34,6 +34,7 @@ interface HeaderProps {
   visibleClasses?: ClassGroup[];
   allClasses?: ClassGroup[];
   instantSheetSyncStatus?: 'idle' | 'syncing' | 'synced';
+  onForceSyncNow?: () => Promise<{ ok: boolean; message: string; reloading?: boolean } | void>;
   onRestoreAdminRole?: () => void;
   onChangeScreen?: (screen: ScreenType) => void;
   onSelectClassById?: (classId: string) => void;
@@ -51,6 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
   visibleClasses = [],
   allClasses = [],
   instantSheetSyncStatus = 'idle',
+  onForceSyncNow,
   onRestoreAdminRole,
   onChangeScreen,
   onSelectClassById,
@@ -120,7 +122,11 @@ export const Header: React.FC<HeaderProps> = ({
     triggerMenuHaptic('medium');
     setIsFlushingCloud(true);
     try {
-      await Promise.all([SyncQueueManager.flushNow(), flushPendingOfflineQueue()]);
+      if (onForceSyncNow) {
+        await onForceSyncNow();
+      } else {
+        await Promise.all([SyncQueueManager.flushNow(), flushPendingOfflineQueue()]);
+      }
     } catch (err) {
       console.warn('Aviso ao sincronizar nuvem Firebase:', err);
     } finally {
@@ -533,7 +539,7 @@ export const Header: React.FC<HeaderProps> = ({
                               weight={500}
                               className={isFlushingCloud ? 'animate-spin' : ''}
                             />
-                            <span>{isFlushingCloud ? 'Enviando' : 'Sincronizar'}</span>
+                            <span>{isFlushingCloud ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
                           </motion.button>
                         </div>
                       </div>
@@ -546,6 +552,42 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zona 3: Ações Rápidas e Perfil */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <motion.button
+              type="button"
+              whileTap={tapAnimation}
+              onClick={handleCloudFlushClick}
+              disabled={isFlushingCloud}
+              aria-label={isFlushingCloud ? 'Sincronizando agora' : 'Sincronizar Agora'}
+              title={
+                unifiedPendingCount > 0
+                  ? `Sincronizar Agora (${unifiedPendingCount} pendência(s) na fila, limpar cache e atualizar do servidor)`
+                  : 'Sincronizar Agora — Enviar fila, limpar cache do Service Worker e atualizar do servidor'
+              }
+              className={`relative h-9 px-2.5 sm:px-3 lg:px-2.5 xl:px-3 rounded-full flex items-center justify-center gap-1.5 text-[12.5px] font-medium transition-colors cursor-pointer shrink-0 border disabled:opacity-60 whitespace-nowrap ${
+                unifiedIsSyncing
+                  ? 'bg-[#0071E3]/10 border-[#0071E3]/25 text-[#0071E3]'
+                  : unifiedPendingCount > 0
+                  ? 'bg-[#B25000]/10 border-[#B25000]/25 text-[#B25000] hover:bg-[#B25000]/15'
+                  : 'bg-[#F5F5F7] border-black/[0.06] hover:bg-[#E8E8ED] text-[#1D1D1F]'
+              }`}
+            >
+              <SFSymbol
+                name="sync"
+                size={17}
+                weight={500}
+                className={unifiedIsSyncing ? 'animate-spin' : ''}
+              />
+              <span className="hidden sm:inline lg:hidden xl:inline">
+                {isFlushingCloud ? 'Sincronizando...' : 'Sincronizar Agora'}
+              </span>
+              {unifiedPendingCount > 0 && !unifiedIsSyncing && (
+                <span
+                  aria-hidden="true"
+                  className="w-2 h-2 rounded-full bg-[#B25000] shrink-0"
+                />
+              )}
+            </motion.button>
+
             <PWAInstallButton variant="header" />
 
             <motion.button

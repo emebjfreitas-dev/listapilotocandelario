@@ -1660,6 +1660,9 @@ export const pullSharedSchoolStateFromServer = async (
           cl.backupFolderUrl
         );
       }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('emeb-cloud-links-updated', { detail: cl }));
+      }
       result.cloudLinks = cl;
     }
 

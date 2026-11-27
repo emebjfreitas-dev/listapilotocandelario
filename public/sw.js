@@ -1,11 +1,14 @@
 /* Service Worker Oficial — EMEB Joaquim Candelário de Freitas (PWA Offline & Web Push) */
-const SW_VERSION = 'candelario-pwa-v11';
-const CACHE_NAME = 'candelario-offline-v11';
+const SW_VERSION = 'candelario-pwa-v12';
+const CACHE_NAME = 'candelario-offline-v12';
 
-const PRECACHE_ASSETS = [
+const MUTABLE_PRECACHE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+];
+
+const STATIC_PRECACHE_ASSETS = [
   './brasao-jundiai.png',
   './favicon.ico',
   './favicon.svg',
@@ -15,6 +18,11 @@ const PRECACHE_ASSETS = [
   './pwa-192x192.png',
   './pwa-512x512.png',
   './pwa-maskable-512x512.png',
+];
+
+const PRECACHE_ASSETS = [
+  ...MUTABLE_PRECACHE_ASSETS,
+  ...STATIC_PRECACHE_ASSETS,
 ];
 
 /* ==========================================================================
@@ -306,10 +314,22 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-          console.warn('Aviso ao pré-carregar cache PWA:', err);
-        });
+      .then(async (cache) => {
+        const mutableSet = new Set(MUTABLE_PRECACHE_ASSETS);
+        await Promise.allSettled(
+          PRECACHE_ASSETS.map(async (asset) => {
+            const req = mutableSet.has(asset)
+              ? new Request(asset, { cache: 'reload' })
+              : new Request(asset);
+            const res = await fetch(req);
+            if (res && res.ok) {
+              await cache.put(asset, res);
+            }
+          })
+        );
+      })
+      .catch((err) => {
+        console.warn('Aviso ao pré-carregar cache PWA:', err);
       })
       .then(() => self.skipWaiting())
   );
@@ -385,7 +405,14 @@ self.addEventListener('fetch', (event) => {
           const ct = (networkRes.headers.get('content-type') || '').toLowerCase();
           if (networkRes && networkRes.status === 200 && ct.includes('text/html')) {
             const clone = networkRes.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+            const isRootNav = url.pathname === '/' || url.pathname.endsWith('/index.html');
+            const rootClone = isRootNav ? networkRes.clone() : null;
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(req, clone);
+              if (rootClone) {
+                cache.put('./index.html', rootClone);
+              }
+            });
           }
           return networkRes;
         })
@@ -417,8 +444,8 @@ self.addEventListener('fetch', (event) => {
           if (isImmutableStaticAsset) {
             return cachedRes;
           }
-          // Demais arquivos (ex: manifest.json): Stale-While-Revalidate
-          fetch(req)
+          // Demais arquivos mutáveis (ex: manifest.json): Stale-While-Revalidate ignorando HTTP disk cache
+          fetch(new Request(req, { cache: 'no-cache' }))
             .then((networkRes) => {
               const ct = (networkRes.headers.get('content-type') || '').toLowerCase();
               if (networkRes && networkRes.status === 200 && !ct.includes('text/html')) {
@@ -547,6 +574,26 @@ self.addEventListener('message', (event) => {
 
   if (msg.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+
+  // Limpa todo o CacheStorage do Service Worker sob demanda (botão "Sincronizar Agora")
+  if (msg.type === 'CLEAR_SW_CACHE' || msg.type === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+        .then(() => {
+          if (event.ports && event.ports[0]) {
+            event.ports[0].postMessage({ cleared: true });
+          }
+        })
+        .catch(() => {
+          if (event.ports && event.ports[0]) {
+            event.ports[0].postMessage({ cleared: false });
+          }
+        })
+    );
     return;
   }
 

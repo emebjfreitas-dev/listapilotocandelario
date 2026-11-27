@@ -59,7 +59,7 @@ export async function registerPushServiceWorker(): Promise<ServiceWorkerRegistra
     const baseUrl =
       (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
     swRegistrationPromise = navigator.serviceWorker
-      .register(`${baseUrl}sw.js`, { scope: baseUrl })
+      .register(`${baseUrl}sw.js`, { scope: baseUrl, updateViaCache: 'none' })
       .then((reg) => reg)
       .catch(() => null);
   }

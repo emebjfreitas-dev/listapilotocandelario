@@ -46,12 +46,14 @@ import {
   clearServerAuthSessionCookie,
   pullOfficialCalendarFromServer,
   setLocalClassesUpdatedAtMs,
+  flushPendingOfflineQueue,
 } from './services/db';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import {
   subscribeToFirestoreRealtimeState,
   checkFirestoreDeltaOnResume,
+  forceRefreshFirestoreFromServer,
   subscribeToSyncStatus,
   SyncStatusSnapshot,
   saveClassesToFirestoreCloud,
@@ -94,6 +96,7 @@ import { SavingIndicator } from './components/SavingIndicator';
 import { SafeAreaView } from './components/ui/SafeAreaView';
 import { LazyErrorBoundary } from './components/ui/LazyErrorBoundary';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+import { clearServiceWorkerCachesAndUpdate } from './utils/serviceWorkerCache';
 import { Toaster, toast } from 'sonner';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 
@@ -1142,6 +1145,7 @@ export default function App() {
           if (cl.backupFolderUrl) {
             localStorage.setItem('emeb_candelario_drive_backup_folder_url_2027', cl.backupFolderUrl);
           }
+          window.dispatchEvent(new CustomEvent('emeb-cloud-links-updated', { detail: cl }));
         }
         if (Array.isArray(payload.discoveredNominalPdfs)) {
           localStorage.setItem(
@@ -2152,6 +2156,88 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
+  const handleForceSyncNow = useCallback(async (): Promise<{
+    ok: boolean;
+    message: string;
+    reloading?: boolean;
+  }> => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      toast.warning('Sem conexão com a internet', {
+        description:
+          'As alterações locais permanecem protegidas na fila e serão sincronizadas ao reconectar.',
+      });
+      return { ok: false, message: 'Offline' };
+    }
+
+    try {
+      // 1. Força processamento imediato de todas as tarefas pendentes no SyncQueueManager
+      const queueFlushed = await SyncQueueManager.flushNow();
+      await flushPendingOfflineQueue();
+
+      // 2. Limpa o cache do Service Worker e verifica atualização de versão no servidor
+      const swResult = await clearServiceWorkerCachesAndUpdate();
+
+      // 3. Obtém o estado mais recente diretamente do servidor (Backend ou Firestore Server)
+      if (isBackendApiAvailable()) {
+        const shared = await pullSharedSchoolStateFromServer({ forceRefresh: true });
+        await pullOfficialCalendarFromServer().catch(() => null);
+        if (shared) {
+          if (shared.authorizedUsers && shared.authorizedUsers.length > 0) {
+            applyAuthorizedUsersIfChanged(shared.authorizedUsers, true);
+          }
+          if (
+            shared.classes &&
+            shared.classes.length > 0 &&
+            shouldAllowRemoteClassesOverwrite({
+              remoteUpdatedAtMs: shared.classesUpdatedAtMs,
+              fromCache: false,
+            })
+          ) {
+            applyRemoteClassesSafely(shared.classes, true);
+          } else if (shared.discoveredDrivePhotos) {
+            applyRemoteClassesSafely(classesRef.current, true);
+          }
+          if (Array.isArray(shared.accessSessionLogs)) {
+            setAccessSessionLogs(shared.accessSessionLogs);
+          }
+          if (shared.attendanceWindowConfig) {
+            setAttendanceWindowConfig(shared.attendanceWindowConfig);
+          }
+          if (Array.isArray(shared.schoolNotices)) {
+            setSchoolNotices(shared.schoolNotices);
+          }
+        }
+      } else {
+        await forceRefreshFirestoreFromServer();
+      }
+
+      if (swResult.updateActivated) {
+        toast.success('Nova versão detectada!', {
+          description: 'Atualizando aplicativo com os dados mais recentes do servidor...',
+        });
+        return { ok: true, message: 'Atualizando versão', reloading: true };
+      }
+
+      if (!queueFlushed && SyncQueueManager.hasPendingTasks()) {
+        toast.warning('Sincronização parcial concluída', {
+          description:
+            'Cache do Service Worker limpo e dados atualizados, mas há tarefas locais aguardando reenvio.',
+        });
+        return { ok: false, message: 'Parcial' };
+      }
+
+      toast.success('Sincronização concluída!', {
+        description:
+          'Fila processada, cache do Service Worker limpo e dados atualizados do servidor.',
+      });
+      return { ok: true, message: 'Sincronizado' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao sincronizar com o servidor.';
+      toast.error('Falha ao sincronizar agora', { description: msg });
+      return { ok: false, message: msg };
+    }
+  }, [applyAuthorizedUsersIfChanged, applyRemoteClassesSafely]);
+
   // Encerramento automático por inatividade (60 minutos) para máxima segurança em terminais escolares compartilhados
   useEffect(() => {
     if (!isAuthVerified) return;
@@ -2250,6 +2336,7 @@ export default function App() {
         visibleClasses={visibleClasses}
         allClasses={classes}
         instantSheetSyncStatus={instantSheetSyncStatus}
+        onForceSyncNow={handleForceSyncNow}
         onSelectClassById={(classId) => {
           const found = classes.find((c) => c.id === classId);
           if (found) setSelectedClass(found);
@@ -2661,6 +2748,7 @@ export default function App() {
         currentScreen={currentScreen}
         userRole={userRole}
         teacherRoleType={activeTeacherRoleType}
+        onForceSyncNow={handleForceSyncNow}
         onLogout={handleLogout}
         onChangeScreen={(screen) => {
           if (userRole === 'peb2' && screen === 'frequencia_mensal') {

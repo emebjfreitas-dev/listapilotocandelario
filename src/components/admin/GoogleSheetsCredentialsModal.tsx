@@ -62,19 +62,30 @@ export const GoogleSheetsCredentialsModal: React.FC<GoogleSheetsCredentialsModal
   useEffect(() => {
     if (!isOpen) return;
 
-    const savedSheet = getSavedSpreadsheetInfo();
-    const savedPhotos = getSavedPhotosDriveFolderInfo();
-    const savedFichas = getSavedFichasPdfDriveFolderInfo();
+    const loadSavedLinks = () => {
+      const savedSheet = getSavedSpreadsheetInfo();
+      const savedPhotos = getSavedPhotosDriveFolderInfo();
+      const savedFichas = getSavedFichasPdfDriveFolderInfo();
 
-    setSheetInput(savedSheet.spreadsheetId || '');
-    setSheetTitle(savedSheet.title || OFFICIAL_SPREADSHEET_TITLE);
-    setPhotosFolderInput(savedPhotos.folderUrl || OFFICIAL_PHOTOS_FOLDER_URL);
-    setFichasFolderInput(savedFichas.folderUrl || OFFICIAL_FICHAS_PDF_FOLDER_URL);
+      setSheetInput(savedSheet.spreadsheetId || '');
+      setSheetTitle(savedSheet.title || OFFICIAL_SPREADSHEET_TITLE);
+      setPhotosFolderInput(savedPhotos.folderUrl || OFFICIAL_PHOTOS_FOLDER_URL);
+      setFichasFolderInput(savedFichas.folderUrl || OFFICIAL_FICHAS_PDF_FOLDER_URL);
+    };
 
+    loadSavedLinks();
     setAuthState(getDriveAuthState());
     const user = getCurrentGoogleUser();
     setCurrentUserEmail(user?.email || '');
     setTestResult(null);
+
+    const handleLinksUpdated = () => loadSavedLinks();
+    window.addEventListener('emeb-cloud-links-updated', handleLinksUpdated);
+    window.addEventListener('storage', handleLinksUpdated);
+    return () => {
+      window.removeEventListener('emeb-cloud-links-updated', handleLinksUpdated);
+      window.removeEventListener('storage', handleLinksUpdated);
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;

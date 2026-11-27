@@ -142,9 +142,14 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    const saved = getSavedBackupDriveFolderInfo();
-    setFolderInput(saved.folderUrl || saved.folderId || '');
-    setFolderName(saved.folderName || DEFAULT_BACKUP_DRIVE_FOLDER_NAME);
+    const loadSavedBackupLinks = () => {
+      const saved = getSavedBackupDriveFolderInfo();
+      setFolderInput(saved.folderUrl || saved.folderId || '');
+      setFolderName(saved.folderName || DEFAULT_BACKUP_DRIVE_FOLDER_NAME);
+      return saved;
+    };
+
+    const saved = loadSavedBackupLinks();
 
     const currentAuth = getDriveAuthState();
     setAuthState(currentAuth);
@@ -162,6 +167,19 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
     } else {
       setDriveFiles([]);
     }
+
+    const handleLinksUpdated = () => {
+      const updated = loadSavedBackupLinks();
+      if (updated.folderId && getDriveAuthState().hasValidToken) {
+        void refreshDriveFilesList(updated.folderId);
+      }
+    };
+    window.addEventListener('emeb-cloud-links-updated', handleLinksUpdated);
+    window.addEventListener('storage', handleLinksUpdated);
+    return () => {
+      window.removeEventListener('emeb-cloud-links-updated', handleLinksUpdated);
+      window.removeEventListener('storage', handleLinksUpdated);
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;

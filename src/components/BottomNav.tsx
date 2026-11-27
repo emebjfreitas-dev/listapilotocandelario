@@ -13,6 +13,7 @@ interface BottomNavProps {
   currentScreen: ScreenType;
   userRole?: UserRole;
   teacherRoleType?: AuthorizedUser['teacherRoleType'];
+  onForceSyncNow?: () => Promise<{ ok: boolean; message: string; reloading?: boolean } | void>;
   onChangeScreen: (screen: ScreenType) => void;
   onLogout?: () => void;
 }
@@ -21,6 +22,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   currentScreen,
   userRole = 'admin',
   teacherRoleType,
+  onForceSyncNow,
   onChangeScreen,
   onLogout,
 }) => {
@@ -58,7 +60,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     triggerMenuHaptic('medium');
     setIsFlushingCloud(true);
     try {
-      await Promise.all([SyncQueueManager.flushNow(), flushPendingOfflineQueue()]);
+      if (onForceSyncNow) {
+        await onForceSyncNow();
+      } else {
+        await Promise.all([SyncQueueManager.flushNow(), flushPendingOfflineQueue()]);
+      }
     } catch (err) {
       console.warn('Aviso ao sincronizar nuvem:', err);
     } finally {
@@ -409,7 +415,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                     weight={500}
                     className={isFlushingCloud ? 'animate-spin' : ''}
                   />
-                  <span>{isFlushingCloud ? 'Enviando' : 'Sincronizar'}</span>
+                  <span>{isFlushingCloud ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
                 </motion.button>
               </div>
 
