@@ -1,0 +1,522 @@
+Welcome to Cloud Shell! Type "help" to get started.
+To set your Cloud Platform project in this session use `gcloud config set project [PROJECT_ID]`.
+You can view your projects by running `gcloud projects list`.
+emebjfreitas@cloudshell:~$ cd ~/listapilotocandelario && git pull origin main && npm run build && npx firebase-tools deploy --only hosting --project listapiloto2027
+From https://github.com/emebjfreitas-dev/listapilotocandelario
+ * branch            main       -> FETCH_HEAD
+Updating 85bc1a1..4d9c83f
+error: Your local changes to the following files would be overwritten by merge:
+        server.js
+Please commit your changes or stash them before you merge.
+Aborting
+emebjfreitas@cloudshell:~/listapilotocandelario$ cd ~/listapilotocandelario && git pull origin main && npm run build && npx firebase-tools deploy --only hosting --project listapiloto2027
+From https://github.com/emebjfreitas-dev/listapilotocandelario
+ * branch            main       -> FETCH_HEAD
+Updating 85bc1a1..4d9c83f
+error: Your local changes to the following files would be overwritten by merge:
+        server.js
+Please commit your changes or stash them before you merge.
+Aborting
+emebjfreitas@cloudshell:~/listapilotocandelario$ cd ~/listapilotocandelario && git pull origin main && npm run build && npx firebase-tools deploy --only hosting --project listapiloto2027
+From https://github.com/emebjfreitas-dev/listapilotocandelario
+ * branch            main       -> FETCH_HEAD
+Updating 85bc1a1..4d9c83f
+error: Your local changes to the following files would be overwritten by merge:
+        server.js
+Please commit your changes or stash them before you merge.
+Aborting
+emebjfreitas@cloudshell:~/listapilotocandelario$ ^C
+emebjfreitas@cloudshell:~/listapilotocandelario$ cd ~/listapilotocandelario && git checkout -- server.js && git pull origin main && npm install && npm run build && npx firebase-tools deploy --only hosting --project listapiloto2027
+From https://github.com/emebjfreitas-dev/listapilotocandelario
+ * branch            main       -> FETCH_HEAD
+Updating 85bc1a1..4d9c83f
+Fast-forward
+ firebase-blueprint.json                               |   2 +
+ firestore.rules                                       |   6 +-
+ public/assets/aistudio/IMG_4816_76cbd384.png          | Bin 0 -> 516676 bytes
+ public/assets/aistudio/IMG_4817_6047956f.png          | Bin 0 -> 515826 bytes
+ public/sw.js                                          |  69 +++++++++--
+ server.js                                             | 220 ++++++++++++++++++----------------
+ server.ts                                             |  19 ++-
+ src/App.tsx                                           | 145 +++++++++++++++++++++-
+ src/components/BottomNav.tsx                          |  10 +-
+ src/components/Header.tsx                             |  46 ++++++-
+ src/components/admin/GoogleDriveBackupModal.tsx       |  24 +++-
+ src/components/admin/GoogleSheetsCredentialsModal.tsx |  29 +++--
+ src/main.tsx                                          |  52 +++++++-
+ src/services/db.ts                                    |  18 ++-
+ src/services/firebaseSync.ts                          | 469 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------
+ src/services/pushNotificationService.ts               |   2 +-
+ src/utils/productionAudit.test.ts                     |  89 +++++++++++++-
+ src/utils/serviceWorkerCache.ts                       | 117 ++++++++++++++++++
+ 18 files changed, 1103 insertions(+), 214 deletions(-)
+ create mode 100644 public/assets/aistudio/IMG_4816_76cbd384.png
+ create mode 100644 public/assets/aistudio/IMG_4817_6047956f.png
+ create mode 100644 src/utils/serviceWorkerCache.ts
+
+added 2 packages, and audited 302 packages in 4s
+
+40 packages are looking for funding
+  run `npm fund` for details
+
+5 high severity vulnerabilities
+
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+
+Some issues need review, and may require choosing
+a different dependency.
+
+Run `npm audit` for details.
+npm warn install-scripts 4 packages had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   @firebase/util@1.15.3 (postinstall: node ./postinstall.js)
+npm warn install-scripts   esbuild@0.25.12 (postinstall: node install.js)
+npm warn install-scripts   protobufjs@7.6.6 (postinstall: node scripts/postinstall)
+npm warn install-scripts   esbuild@0.28.2 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm notice run listapilotocandelario@0.0.0 build
+npm notice run vite build && npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+vite v8.3.5 building client environment for production...
+✓ 2958 modules transformed.
+computing gzip size...
+dist/assets/manifest-Ctjrdc7-.json                          2.77 kB │ gzip:   0.78 kB
+dist/index.html                                             4.52 kB │ gzip:   1.44 kB
+dist/assets/index-pVkZY32W.css                            129.13 kB │ gzip:  21.77 kB
+dist/assets/attendanceAbbreviations-CkZDEtR7.js             0.63 kB │ gzip:   0.23 kB
+dist/assets/rolldown-runtime-XKyaHtl9.js                    0.72 kB │ gzip:   0.42 kB
+dist/assets/photoCompressor-DWDk7Zh0.js                     1.72 kB │ gzip:   0.91 kB
+dist/assets/AnotacoesModal-Czz01gEk.js                      3.39 kB │ gzip:   1.43 kB
+dist/assets/StudentSiblingsCard-B-bvMV5I.js                 4.48 kB │ gzip:   1.59 kB
+dist/assets/siblingDetection-41FIpRtT.js                    6.99 kB │ gzip:   2.75 kB
+dist/assets/AlunosModal-vadKANAe.js                        10.54 kB │ gzip:   3.24 kB
+dist/assets/VisualizarPdfNominalModal-CcKd5HgS.js          11.68 kB │ gzip:   3.74 kB
+dist/assets/GoogleSheetsCredentialsModal-BTyzwqEe.js       12.12 kB │ gzip:   3.48 kB
+dist/assets/MinhasTurmasScreen-BA7rP0XH.js                 14.71 kB │ gzip:   3.88 kB
+dist/assets/UploadFotoModal-CL0U58_d.js                    15.08 kB │ gzip:   5.06 kB
+dist/assets/AtualizarDadosJsonModal-tYZs66xz.js            17.10 kB │ gzip:   4.70 kB
+dist/assets/PwaIconsHealthScanner-BPytYKTF.js              17.22 kB │ gzip:   5.00 kB
+dist/assets/GoogleDriveBackupModal-CbfmzvQD.js             18.15 kB │ gzip:   4.76 kB
+dist/assets/IndexedDbPhotoStorageModal-DLMwEVik.js         24.45 kB │ gzip:   6.21 kB
+dist/assets/ImportarDeficienciasHtmScreen-CL4ApUAv.js      29.37 kB │ gzip:   8.96 kB
+dist/assets/AdminArrastePdfsModal-COglt0j-.js              32.89 kB │ gzip:   9.82 kB
+dist/assets/AdminArrasteFotosModal-cf-A3FTk.js             35.38 kB │ gzip:  10.65 kB
+dist/assets/DiagnosticoBancoDadosScreen-BIb_rBj6.js        37.44 kB │ gzip:  10.12 kB
+dist/assets/RegistroFrequenciaMensalScreen-PWFxB7C1.js     39.58 kB │ gzip:   9.02 kB
+dist/assets/ListasNominaisScreen-DMcJXxlp.js               45.67 kB │ gzip:  11.87 kB
+dist/assets/DiasLetivosScreen-B8DS-bgG.js                  46.54 kB │ gzip:  10.91 kB
+dist/assets/GradeDadosCriancaModal-TwzHbbEl.js             46.61 kB │ gzip:  12.67 kB
+dist/assets/FaltasConsecutivasScreen-DEb_3VMN.js           64.87 kB │ gzip:  15.10 kB
+dist/assets/DetalhesTurmaScreen-BKnfByKT.js                85.11 kB │ gzip:  17.46 kB
+dist/assets/UsuariosAcessoScreen-BI8Wl9Nt.js              147.74 kB │ gzip:  31.12 kB
+dist/assets/vendor-react-CAdZzbPq.js                      252.13 kB │ gzip:  79.37 kB
+dist/assets/vendor-charts-CV0l7tKY.js                     371.99 kB │ gzip: 107.85 kB
+dist/assets/vendor-xlsx-CBmVG2Dq.js                       423.73 kB │ gzip: 141.23 kB
+dist/assets/es-BdXkzniW.js                                424.75 kB │ gzip: 177.37 kB
+dist/assets/db-BA5q_Jfj.js                                529.46 kB │ gzip:  97.49 kB
+dist/assets/index-LURdoKai.js                             538.96 kB │ gzip: 152.72 kB
+dist/assets/vendor-firebase-FGPvUYI9.js                   683.48 kB │ gzip: 202.11 kB
+dist/assets/heic2any-DR3dCt5a.js                        1,352.14 kB │ gzip: 344.72 kB
+
+✓ built in 9.27s
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'esbuild' server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+
+  server.js  205.0kb
+
+⚡ Done in 49ms
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'firebase' deploy --only hosting --project listapiloto2027
+
+=== Deploying to 'listapiloto2027'...
+
+i  deploying hosting
+i  hosting[listapilotocandelario]: beginning deploy...
+i  hosting[listapilotocandelario]: found 130 files in dist
+✔  hosting[listapilotocandelario]: file upload complete
+i  hosting[listapilotocandelario]: finalizing version...
+✔  hosting[listapilotocandelario]: version finalized
+i  hosting[listapilotocandelario]: releasing new version...
+✔  hosting[listapilotocandelario]: release complete
+
+✔  Deploy complete!
+
+Project Console: https://console.firebase.google.com/project/listapiloto2027/overview
+Hosting URL: https://listapilotocandelario.web.app
+emebjfreitas@cloudshell:~/listapilotocandelario$ cd ~/listapilotocandelario && git checkout -- server.js && git pull origin main && npm install && npm run build && npx firebase-tools deploy --only hosting,firestore:rules --project listapiloto2027
+remote: Enumerating objects: 7, done.
+remote: Counting objects: 100% (7/7), done.
+remote: Compressing objects: 100% (4/4), done.
+remote: Total 4 (delta 3), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (4/4), 552 bytes | 12.00 KiB/s, done.
+From https://github.com/emebjfreitas-dev/listapilotocandelario
+ * branch            main       -> FETCH_HEAD
+   4d9c83f..ae58112  main       -> origin/main
+Updating 4d9c83f..ae58112
+Fast-forward
+ firebase.json   | 3 +++
+ firestore.rules | 4 ++--
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+up to date, audited 302 packages in 3s
+
+40 packages are looking for funding
+  run `npm fund` for details
+
+5 high severity vulnerabilities
+
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+
+Some issues need review, and may require choosing
+a different dependency.
+
+Run `npm audit` for details.
+npm warn install-scripts 4 packages had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   @firebase/util@1.15.3 (postinstall: node ./postinstall.js)
+npm warn install-scripts   esbuild@0.25.12 (postinstall: node install.js)
+npm warn install-scripts   protobufjs@7.6.6 (postinstall: node scripts/postinstall)
+npm warn install-scripts   esbuild@0.28.2 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm notice run listapilotocandelario@0.0.0 build
+npm notice run vite build && npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+vite v8.3.5 building client environment for production...
+✓ 2958 modules transformed.
+computing gzip size...
+dist/assets/manifest-Ctjrdc7-.json                          2.77 kB │ gzip:   0.78 kB
+dist/index.html                                             4.52 kB │ gzip:   1.44 kB
+dist/assets/index-pVkZY32W.css                            129.13 kB │ gzip:  21.77 kB
+dist/assets/attendanceAbbreviations-CkZDEtR7.js             0.63 kB │ gzip:   0.23 kB
+dist/assets/rolldown-runtime-XKyaHtl9.js                    0.72 kB │ gzip:   0.42 kB
+dist/assets/photoCompressor-DWDk7Zh0.js                     1.72 kB │ gzip:   0.91 kB
+dist/assets/AnotacoesModal-Czz01gEk.js                      3.39 kB │ gzip:   1.43 kB
+dist/assets/StudentSiblingsCard-B-bvMV5I.js                 4.48 kB │ gzip:   1.59 kB
+dist/assets/siblingDetection-41FIpRtT.js                    6.99 kB │ gzip:   2.75 kB
+dist/assets/AlunosModal-vadKANAe.js                        10.54 kB │ gzip:   3.24 kB
+dist/assets/VisualizarPdfNominalModal-CcKd5HgS.js          11.68 kB │ gzip:   3.74 kB
+dist/assets/GoogleSheetsCredentialsModal-BTyzwqEe.js       12.12 kB │ gzip:   3.48 kB
+dist/assets/MinhasTurmasScreen-BA7rP0XH.js                 14.71 kB │ gzip:   3.88 kB
+dist/assets/UploadFotoModal-CL0U58_d.js                    15.08 kB │ gzip:   5.06 kB
+dist/assets/AtualizarDadosJsonModal-tYZs66xz.js            17.10 kB │ gzip:   4.70 kB
+dist/assets/PwaIconsHealthScanner-BPytYKTF.js              17.22 kB │ gzip:   5.00 kB
+dist/assets/GoogleDriveBackupModal-CbfmzvQD.js             18.15 kB │ gzip:   4.76 kB
+dist/assets/IndexedDbPhotoStorageModal-DLMwEVik.js         24.45 kB │ gzip:   6.21 kB
+dist/assets/ImportarDeficienciasHtmScreen-CL4ApUAv.js      29.37 kB │ gzip:   8.96 kB
+dist/assets/AdminArrastePdfsModal-COglt0j-.js              32.89 kB │ gzip:   9.82 kB
+dist/assets/AdminArrasteFotosModal-cf-A3FTk.js             35.38 kB │ gzip:  10.65 kB
+dist/assets/DiagnosticoBancoDadosScreen-BIb_rBj6.js        37.44 kB │ gzip:  10.12 kB
+dist/assets/RegistroFrequenciaMensalScreen-PWFxB7C1.js     39.58 kB │ gzip:   9.02 kB
+dist/assets/ListasNominaisScreen-DMcJXxlp.js               45.67 kB │ gzip:  11.87 kB
+dist/assets/DiasLetivosScreen-B8DS-bgG.js                  46.54 kB │ gzip:  10.91 kB
+dist/assets/GradeDadosCriancaModal-TwzHbbEl.js             46.61 kB │ gzip:  12.67 kB
+dist/assets/FaltasConsecutivasScreen-DEb_3VMN.js           64.87 kB │ gzip:  15.10 kB
+dist/assets/DetalhesTurmaScreen-BKnfByKT.js                85.11 kB │ gzip:  17.46 kB
+dist/assets/UsuariosAcessoScreen-BI8Wl9Nt.js              147.74 kB │ gzip:  31.12 kB
+dist/assets/vendor-react-CAdZzbPq.js                      252.13 kB │ gzip:  79.37 kB
+dist/assets/vendor-charts-CV0l7tKY.js                     371.99 kB │ gzip: 107.85 kB
+dist/assets/vendor-xlsx-CBmVG2Dq.js                       423.73 kB │ gzip: 141.23 kB
+dist/assets/es-BdXkzniW.js                                424.75 kB │ gzip: 177.37 kB
+dist/assets/db-BA5q_Jfj.js                                529.46 kB │ gzip:  97.49 kB
+dist/assets/index-LURdoKai.js                             538.96 kB │ gzip: 152.72 kB
+dist/assets/vendor-firebase-FGPvUYI9.js                   683.48 kB │ gzip: 202.11 kB
+dist/assets/heic2any-DR3dCt5a.js                        1,352.14 kB │ gzip: 344.72 kB
+
+✓ built in 3.59s
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'esbuild' server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+
+  server.js  205.0kb
+
+⚡ Done in 36ms
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'firebase' deploy --only hosting,firestore:rules --project listapiloto2027
+
+=== Deploying to 'listapiloto2027'...
+
+i  deploying firestore, hosting
+i  firestore: ensuring required API firestore.googleapis.com is enabled...
+✔  firestore: required API firestore.googleapis.com is enabled
+i  firestore: ensuring required API firestore.googleapis.com is enabled...
+i  firestore: Creating the new Firestore database (default)...
+
+Error: Request to https://firestore.googleapis.com/v1/projects/listapiloto2027/databases?databaseId=%28default%29 had HTTP Error: 403,
+ This API method requires billing to be enabled. Please enable billing on project listapiloto2027 by visiting https://console.develope
+rs.google.com/billing/enable?project=listapiloto2027 then retry. If you enabled billing for this project recently, wait a few minutes 
+for the action to propagate to our systems and retry.
+emebjfreitas@cloudshell:~/listapilotocandelario$ ^C
+emebjfreitas@cloudshell:~/listapilotocandelario$ git add firebase.json && git commit -m "Fix firestore named database in firebase.json" && git push origin main
+Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  git config --global user.email "you@example.com"
+  git config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: unable to auto-detect email address (got 'emebjfreitas@cs-403029039215-default.(none)')
+emebjfreitas@cloudshell:~/listapilotocandelario$ ^C
+emebjfreitas@cloudshell:~/listapilotocandelario$ git config --local user.email "emebjfreitas@jundiai.sp.gov.br"
+git config --local user.name "Emeb J. Freitas"
+git add firebase.json
+git commit -m "Fix firestore named database in firebase.json"
+git push origin main
+npm run build
+npx firebase-tools deploy --only hosting,firestore:rules --project listapiloto2027
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   package-lock.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .firebase/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Username for 'https://github.com': ^C
+npm notice run listapilotocandelario@0.0.0 build
+npm notice run vite build && npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+vite v8.3.5 building client environment for production...
+✓ 2958 modules transformed.
+computing gzip size...
+dist/assets/manifest-Ctjrdc7-.json                          2.77 kB │ gzip:   0.78 kB
+dist/index.html                                             4.52 kB │ gzip:   1.44 kB
+dist/assets/index-pVkZY32W.css                            129.13 kB │ gzip:  21.77 kB
+dist/assets/attendanceAbbreviations-CkZDEtR7.js             0.63 kB │ gzip:   0.23 kB
+dist/assets/rolldown-runtime-XKyaHtl9.js                    0.72 kB │ gzip:   0.42 kB
+dist/assets/photoCompressor-DWDk7Zh0.js                     1.72 kB │ gzip:   0.91 kB
+dist/assets/AnotacoesModal-Czz01gEk.js                      3.39 kB │ gzip:   1.43 kB
+dist/assets/StudentSiblingsCard-B-bvMV5I.js                 4.48 kB │ gzip:   1.59 kB
+dist/assets/siblingDetection-41FIpRtT.js                    6.99 kB │ gzip:   2.75 kB
+dist/assets/AlunosModal-vadKANAe.js                        10.54 kB │ gzip:   3.24 kB
+dist/assets/VisualizarPdfNominalModal-CcKd5HgS.js          11.68 kB │ gzip:   3.74 kB
+dist/assets/GoogleSheetsCredentialsModal-BTyzwqEe.js       12.12 kB │ gzip:   3.48 kB
+dist/assets/MinhasTurmasScreen-BA7rP0XH.js                 14.71 kB │ gzip:   3.88 kB
+dist/assets/UploadFotoModal-CL0U58_d.js                    15.08 kB │ gzip:   5.06 kB
+dist/assets/AtualizarDadosJsonModal-tYZs66xz.js            17.10 kB │ gzip:   4.70 kB
+dist/assets/PwaIconsHealthScanner-BPytYKTF.js              17.22 kB │ gzip:   5.00 kB
+dist/assets/GoogleDriveBackupModal-CbfmzvQD.js             18.15 kB │ gzip:   4.76 kB
+dist/assets/IndexedDbPhotoStorageModal-DLMwEVik.js         24.45 kB │ gzip:   6.21 kB
+dist/assets/ImportarDeficienciasHtmScreen-CL4ApUAv.js      29.37 kB │ gzip:   8.96 kB
+dist/assets/AdminArrastePdfsModal-COglt0j-.js              32.89 kB │ gzip:   9.82 kB
+dist/assets/AdminArrasteFotosModal-cf-A3FTk.js             35.38 kB │ gzip:  10.65 kB
+dist/assets/DiagnosticoBancoDadosScreen-BIb_rBj6.js        37.44 kB │ gzip:  10.12 kB
+dist/assets/RegistroFrequenciaMensalScreen-PWFxB7C1.js     39.58 kB │ gzip:   9.02 kB
+dist/assets/ListasNominaisScreen-DMcJXxlp.js               45.67 kB │ gzip:  11.87 kB
+dist/assets/DiasLetivosScreen-B8DS-bgG.js                  46.54 kB │ gzip:  10.91 kB
+dist/assets/GradeDadosCriancaModal-TwzHbbEl.js             46.61 kB │ gzip:  12.67 kB
+dist/assets/FaltasConsecutivasScreen-DEb_3VMN.js           64.87 kB │ gzip:  15.10 kB
+dist/assets/DetalhesTurmaScreen-BKnfByKT.js                85.11 kB │ gzip:  17.46 kB
+dist/assets/UsuariosAcessoScreen-BI8Wl9Nt.js              147.74 kB │ gzip:  31.12 kB
+dist/assets/vendor-react-CAdZzbPq.js                      252.13 kB │ gzip:  79.37 kB
+dist/assets/vendor-charts-CV0l7tKY.js                     371.99 kB │ gzip: 107.85 kB
+dist/assets/vendor-xlsx-CBmVG2Dq.js                       423.73 kB │ gzip: 141.23 kB
+dist/assets/es-BdXkzniW.js                                424.75 kB │ gzip: 177.37 kB
+dist/assets/db-BA5q_Jfj.js                                529.46 kB │ gzip:  97.49 kB
+dist/assets/index-LURdoKai.js                             538.96 kB │ gzip: 152.72 kB
+dist/assets/vendor-firebase-FGPvUYI9.js                   683.48 kB │ gzip: 202.11 kB
+dist/assets/heic2any-DR3dCt5a.js                        1,352.14 kB │ gzip: 344.72 kB
+
+✓ built in 3.75s
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'esbuild' server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+
+  server.js  205.0kb
+
+⚡ Done in 27ms
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'firebase' deploy --only hosting,firestore:rules --project listapiloto2027
+
+=== Deploying to 'listapiloto2027'...
+
+i  deploying firestore, hosting
+i  firestore: ensuring required API firestore.googleapis.com is enabled...
+i  firestore: ensuring required API firestore.googleapis.com is enabled...
+i  firestore: Creating the new Firestore database (default)...
+
+Error: Request to https://firestore.googleapis.com/v1/projects/listapiloto2027/databases?databaseId=%28default%29 had HTTP Error: 403,
+ This API method requires billing to be enabled. Please enable billing on project listapiloto2027 by visiting https://console.develope
+rs.google.com/billing/enable?project=listapiloto2027 then retry. If you enabled billing for this project recently, wait a few minutes 
+for the action to propagate to our systems and retry.
+emebjfreitas@cloudshell:~/listapilotocandelario$ git config --local user.email "emebjfreitas@jundiai.sp.gov.br"
+git config --local user.name "Emeb J. Freitas"
+git add firebase.json
+git commit -m "Fix firestore named database in firebase.json"
+git push origin main
+npm run build
+npx firebase-tools deploy --only hosting,firestore:rules --project listapiloto2027
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   package-lock.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .firebase/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Username for 'https://github.com': emebjfreitas-dev
+Password for 'https://emebjfreitas-dev@github.com': 
+npm notice run listapilotocandelario@0.0.0 build
+npm notice run vite build && npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+vite v8.3.5 building client environment for production...
+✓ 2958 modules transformed.
+computing gzip size...
+dist/assets/manifest-Ctjrdc7-.json                          2.77 kB │ gzip:   0.78 kB
+dist/index.html                                             4.52 kB │ gzip:   1.44 kB
+dist/assets/index-pVkZY32W.css                            129.13 kB │ gzip:  21.77 kB
+dist/assets/attendanceAbbreviations-CkZDEtR7.js             0.63 kB │ gzip:   0.23 kB
+dist/assets/rolldown-runtime-XKyaHtl9.js                    0.72 kB │ gzip:   0.42 kB
+dist/assets/photoCompressor-DWDk7Zh0.js                     1.72 kB │ gzip:   0.91 kB
+dist/assets/AnotacoesModal-Czz01gEk.js                      3.39 kB │ gzip:   1.43 kB
+dist/assets/StudentSiblingsCard-B-bvMV5I.js                 4.48 kB │ gzip:   1.59 kB
+dist/assets/siblingDetection-41FIpRtT.js                    6.99 kB │ gzip:   2.75 kB
+dist/assets/AlunosModal-vadKANAe.js                        10.54 kB │ gzip:   3.24 kB
+dist/assets/VisualizarPdfNominalModal-CcKd5HgS.js          11.68 kB │ gzip:   3.74 kB
+dist/assets/GoogleSheetsCredentialsModal-BTyzwqEe.js       12.12 kB │ gzip:   3.48 kB
+dist/assets/MinhasTurmasScreen-BA7rP0XH.js                 14.71 kB │ gzip:   3.88 kB
+dist/assets/UploadFotoModal-CL0U58_d.js                    15.08 kB │ gzip:   5.06 kB
+dist/assets/AtualizarDadosJsonModal-tYZs66xz.js            17.10 kB │ gzip:   4.70 kB
+dist/assets/PwaIconsHealthScanner-BPytYKTF.js              17.22 kB │ gzip:   5.00 kB
+dist/assets/GoogleDriveBackupModal-CbfmzvQD.js             18.15 kB │ gzip:   4.76 kB
+dist/assets/IndexedDbPhotoStorageModal-DLMwEVik.js         24.45 kB │ gzip:   6.21 kB
+dist/assets/ImportarDeficienciasHtmScreen-CL4ApUAv.js      29.37 kB │ gzip:   8.96 kB
+dist/assets/AdminArrastePdfsModal-COglt0j-.js              32.89 kB │ gzip:   9.82 kB
+dist/assets/AdminArrasteFotosModal-cf-A3FTk.js             35.38 kB │ gzip:  10.65 kB
+dist/assets/DiagnosticoBancoDadosScreen-BIb_rBj6.js        37.44 kB │ gzip:  10.12 kB
+dist/assets/RegistroFrequenciaMensalScreen-PWFxB7C1.js     39.58 kB │ gzip:   9.02 kB
+dist/assets/ListasNominaisScreen-DMcJXxlp.js               45.67 kB │ gzip:  11.87 kB
+dist/assets/DiasLetivosScreen-B8DS-bgG.js                  46.54 kB │ gzip:  10.91 kB
+dist/assets/GradeDadosCriancaModal-TwzHbbEl.js             46.61 kB │ gzip:  12.67 kB
+dist/assets/FaltasConsecutivasScreen-DEb_3VMN.js           64.87 kB │ gzip:  15.10 kB
+dist/assets/DetalhesTurmaScreen-BKnfByKT.js                85.11 kB │ gzip:  17.46 kB
+dist/assets/UsuariosAcessoScreen-BI8Wl9Nt.js              147.74 kB │ gzip:  31.12 kB
+dist/assets/vendor-react-CAdZzbPq.js                      252.13 kB │ gzip:  79.37 kB
+dist/assets/vendor-charts-CV0l7tKY.js                     371.99 kB │ gzip: 107.85 kB
+dist/assets/vendor-xlsx-CBmVG2Dq.js                       423.73 kB │ gzip: 141.23 kB
+dist/assets/es-BdXkzniW.js                                424.75 kB │ gzip: 177.37 kB
+dist/assets/db-BA5q_Jfj.js                                529.46 kB │ gzip:  97.49 kB
+dist/assets/index-LURdoKai.js                             538.96 kB │ gzip: 152.72 kB
+dist/assets/vendor-firebase-FGPvUYI9.js                   683.48 kB │ gzip: 202.11 kB
+dist/assets/heic2any-DR3dCt5a.js                        1,352.14 kB │ gzip: 344.72 kB
+
+✓ built in 3.82s
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'esbuild' server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+
+  server.js  205.0kb
+
+⚡ Done in 26ms
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'firebase' deploy --only hosting,firestore:rules --project listapiloto2027
+
+=== Deploying to 'listapiloto2027'...
+
+i  deploying firestore, hosting
+i  firestore: ensuring required API firestore.googleapis.com is enabled...
+i  firestore: ensuring required API firestore.googleapis.com is enabled...
+i  firestore: Creating the new Firestore database (default)...
+
+Error: Request to https://firestore.googleapis.com/v1/projects/listapiloto2027/databases?databaseId=%28default%29 had HTTP Error: 403,
+ This API method requires billing to be enabled. Please enable billing on project listapiloto2027 by visiting https://console.develope
+rs.google.com/billing/enable?project=listapiloto2027 then retry. If you enabled billing for this project recently, wait a few minutes 
+for the action to propagate to our systems and retry.
+
+Having trouble? Try firebase [command] --help
+emebjfreitas@cloudshell:~/listapilotocandelario$ git add firebase.json
+git commit -m "Use named database array in firebase.json for firestore rules"
+git push origin main
+npm run build
+npx firebase-tools deploy --only hosting,firestore:rules --project listapiloto2027
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   package-lock.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .firebase/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Username for 'https://github.com': emebjfreitas-dev
+Password for 'https://emebjfreitas-dev@github.com': 
+remote: Invalid username or token. Password authentication is not supported for Git operations.
+fatal: Authentication failed for 'https://github.com/emebjfreitas-dev/listapilotocandelario.git/'
+npm notice run listapilotocandelario@0.0.0 build
+npm notice run vite build && npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+vite v8.3.5 building client environment for production...
+✓ 2958 modules transformed.
+computing gzip size...
+dist/assets/manifest-Ctjrdc7-.json                          2.77 kB │ gzip:   0.78 kB
+dist/index.html                                             4.52 kB │ gzip:   1.44 kB
+dist/assets/index-pVkZY32W.css                            129.13 kB │ gzip:  21.77 kB
+dist/assets/attendanceAbbreviations-CkZDEtR7.js             0.63 kB │ gzip:   0.23 kB
+dist/assets/rolldown-runtime-XKyaHtl9.js                    0.72 kB │ gzip:   0.42 kB
+dist/assets/photoCompressor-DWDk7Zh0.js                     1.72 kB │ gzip:   0.91 kB
+dist/assets/AnotacoesModal-Czz01gEk.js                      3.39 kB │ gzip:   1.43 kB
+dist/assets/StudentSiblingsCard-B-bvMV5I.js                 4.48 kB │ gzip:   1.59 kB
+dist/assets/siblingDetection-41FIpRtT.js                    6.99 kB │ gzip:   2.75 kB
+dist/assets/AlunosModal-vadKANAe.js                        10.54 kB │ gzip:   3.24 kB
+dist/assets/VisualizarPdfNominalModal-CcKd5HgS.js          11.68 kB │ gzip:   3.74 kB
+dist/assets/GoogleSheetsCredentialsModal-BTyzwqEe.js       12.12 kB │ gzip:   3.48 kB
+dist/assets/MinhasTurmasScreen-BA7rP0XH.js                 14.71 kB │ gzip:   3.88 kB
+dist/assets/UploadFotoModal-CL0U58_d.js                    15.08 kB │ gzip:   5.06 kB
+dist/assets/AtualizarDadosJsonModal-tYZs66xz.js            17.10 kB │ gzip:   4.70 kB
+dist/assets/PwaIconsHealthScanner-BPytYKTF.js              17.22 kB │ gzip:   5.00 kB
+dist/assets/GoogleDriveBackupModal-CbfmzvQD.js             18.15 kB │ gzip:   4.76 kB
+dist/assets/IndexedDbPhotoStorageModal-DLMwEVik.js         24.45 kB │ gzip:   6.21 kB
+dist/assets/ImportarDeficienciasHtmScreen-CL4ApUAv.js      29.37 kB │ gzip:   8.96 kB
+dist/assets/AdminArrastePdfsModal-COglt0j-.js              32.89 kB │ gzip:   9.82 kB
+dist/assets/AdminArrasteFotosModal-cf-A3FTk.js             35.38 kB │ gzip:  10.65 kB
+dist/assets/DiagnosticoBancoDadosScreen-BIb_rBj6.js        37.44 kB │ gzip:  10.12 kB
+dist/assets/RegistroFrequenciaMensalScreen-PWFxB7C1.js     39.58 kB │ gzip:   9.02 kB
+dist/assets/ListasNominaisScreen-DMcJXxlp.js               45.67 kB │ gzip:  11.87 kB
+dist/assets/DiasLetivosScreen-B8DS-bgG.js                  46.54 kB │ gzip:  10.91 kB
+dist/assets/GradeDadosCriancaModal-TwzHbbEl.js             46.61 kB │ gzip:  12.67 kB
+dist/assets/FaltasConsecutivasScreen-DEb_3VMN.js           64.87 kB │ gzip:  15.10 kB
+dist/assets/DetalhesTurmaScreen-BKnfByKT.js                85.11 kB │ gzip:  17.46 kB
+dist/assets/UsuariosAcessoScreen-BI8Wl9Nt.js              147.74 kB │ gzip:  31.12 kB
+dist/assets/vendor-react-CAdZzbPq.js                      252.13 kB │ gzip:  79.37 kB
+dist/assets/vendor-charts-CV0l7tKY.js                     371.99 kB │ gzip: 107.85 kB
+dist/assets/vendor-xlsx-CBmVG2Dq.js                       423.73 kB │ gzip: 141.23 kB
+dist/assets/es-BdXkzniW.js                                424.75 kB │ gzip: 177.37 kB
+dist/assets/db-BA5q_Jfj.js                                529.46 kB │ gzip:  97.49 kB
+dist/assets/index-LURdoKai.js                             538.96 kB │ gzip: 152.72 kB
+dist/assets/vendor-firebase-FGPvUYI9.js                   683.48 kB │ gzip: 202.11 kB
+dist/assets/heic2any-DR3dCt5a.js                        1,352.14 kB │ gzip: 344.72 kB
+
+✓ built in 3.77s
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'esbuild' server.ts --bundle --platform=node --format=esm --packages=external --outfile=server.js
+
+  server.js  205.0kb
+
+⚡ Done in 28ms
+npm notice run listapilotocandelario@0.0.0 npx
+npm notice run 'firebase' deploy --only hosting,firestore:rules --project listapiloto2027
+
+=== Deploying to 'listapiloto2027'...
+
+i  deploying firestore, hosting
+i  firestore: ensuring required API firestore.googleapis.com is enabled...
+i  firestore: ensuring required API firestore.googleapis.com is enabled...
+i  firestore: Creating the new Firestore database (default)...
+
+Error: Request to https://firestore.googleapis.com/v1/projects/listapiloto2027/databases?databaseId=%28default%29 had HTTP Error: 403,
+ This API method requires billing to be enabled. Please enable billing on project listapiloto2027 by visiting https://console.develope
+rs.google.com/billing/enable?project=listapiloto2027 then retry. If you enabled billing for this project recently, wait a few minutes 
+for the action to propagate to our systems and retry.
+emebjfreitas@cloudshell:~/listapilotocandelario$ 
