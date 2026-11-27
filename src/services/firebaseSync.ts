@@ -137,7 +137,7 @@ try {
   // ignore
 }
 
-const FIRESTORE_QUOTA_STORAGE_KEY = 'emeb_candelario_firestore_quota_paused_until_v1';
+const FIRESTORE_QUOTA_STORAGE_KEY = 'emeb_candelario_firestore_quota_paused_until_v2';
 let memoryQuotaPausedUntilMs = 0;
 let isFirestoreNetworkDisabled = false;
 
@@ -1204,6 +1204,11 @@ export const saveClassesToFirestoreCloud = async (
   try {
     const auth = getAuth(app);
     if (!auth.currentUser) {
+      console.error('[Firestore] Gravação cancelada: usuário Firebase não autenticado.', {
+        projectId: rawFirebaseConfig.projectId,
+        databaseId: rawFirebaseConfig.firestoreDatabaseId,
+        collection: 'school_classes_2027',
+      });
       return false;
     }
     const currentEmail = (auth.currentUser.email || '').trim().toLowerCase();
@@ -1281,10 +1286,20 @@ export const saveClassesToFirestoreCloud = async (
       await resetFirestoreQuotaExceeded();
     }
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    console.error('[Firestore] Falha ao salvar school_classes_2027', {
+      code: error?.code || 'sem-codigo',
+      message: error?.message || String(error),
+      projectId: rawFirebaseConfig.projectId,
+      databaseId: rawFirebaseConfig.firestoreDatabaseId,
+      user: getAuth(app).currentUser?.email || null,
+      emailVerified: getAuth(app).currentUser?.emailVerified || false,
+    });
+
     if (isFirestoreQuotaExceededError(error)) {
       markFirestoreQuotaExceeded(error);
     }
+
     handleFirestoreError(error, OperationType.WRITE, 'school_classes_2027');
     return false;
   }
