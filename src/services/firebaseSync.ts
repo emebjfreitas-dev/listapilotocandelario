@@ -76,6 +76,7 @@ const setLocalConfigUpdatedAtMs = (tsMs: number): void => {
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+export const firebaseApp = app;
 
 const rawFirebaseConfig = firebaseConfig as Record<string, string | undefined>;
 let firestoreDbInstance: Firestore;
