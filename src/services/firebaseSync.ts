@@ -44,6 +44,7 @@ import {
   NameGenderEntry,
   saveStoredNameGenderEntries,
 } from '../utils/genderDictionary';
+import { getStoredClasses } from './db';
 
 export const CLEAN_DB_RESET_EPOCH_ID = 'clean_zero_data_2026_11_16_v1';
 export const DB_CLEAN_EPOCH_STORAGE_KEY = 'emeb_candelario_db_clean_epoch_v1';
@@ -1724,13 +1725,19 @@ export const fetchStateFromFirestoreCloud = async (
     let hasMoreClasses = false;
 
     if (isCleanEpoch && !opts.skipClasses) {
+      const storedClasses = getStoredClasses();
+      const localHasStudents = storedClasses.some(
+        (c) => Array.isArray(c.students) && c.students.length > 0
+      );
+      const effectiveChangedClassIds = localHasStudents ? opts.changedClassIds : undefined;
+
       // 2. Delta-only ou consulta filtrada/paginada de turmas (reduz leituras em até 97%)
-      if (opts.changedClassIds && opts.changedClassIds.length > 0 && opts.changedClassIds.length <= 10) {
+      if (effectiveChangedClassIds && effectiveChangedClassIds.length > 0 && effectiveChangedClassIds.length <= 10) {
         const allowedScope =
           opts.classIds && opts.classIds.length > 0 && !opts.classIds.includes('all')
             ? new Set(opts.classIds.map((id) => id.toLowerCase()))
             : null;
-        const deltaIds = opts.changedClassIds
+        const deltaIds = effectiveChangedClassIds
           .filter((id) => !allowedScope || allowedScope.has(id.toLowerCase()))
           .slice(0, 10);
         if (deltaIds.length > 0) {
@@ -1794,9 +1801,9 @@ export const fetchStateFromFirestoreCloud = async (
         lastClassDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
         hasMoreClasses = snap.docs.length === pageLimit;
       } else {
-        // Consulta paginada com limit(20); quando loadAllPages=true carrega as páginas restantes (max 3 = 40 turmas)
+        // Consulta paginada com limit(20); quando loadAllPages=true ou localHasStudents=false carrega as páginas restantes (max 3 = 40 turmas)
         const pageLimit = opts.pageSize || 20;
-        const maxPages = opts.loadAllPages ? 3 : 1;
+        const maxPages = opts.loadAllPages || !localHasStudents ? 3 : 1;
         let cursor: QueryDocumentSnapshot | null = null;
         for (let pageIdx = 0; pageIdx < maxPages; pageIdx++) {
           const q: Query<DocumentData> = cursor
