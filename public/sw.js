@@ -1,6 +1,6 @@
 /* Service Worker Oficial — EMEB Joaquim Candelário de Freitas (PWA Offline & Web Push) */
-const SW_VERSION = 'candelario-pwa-v10';
-const CACHE_NAME = 'candelario-offline-v10';
+const SW_VERSION = 'candelario-pwa-v11';
+const CACHE_NAME = 'candelario-offline-v11';
 
 const PRECACHE_ASSETS = [
   './',
@@ -380,7 +380,7 @@ self.addEventListener('fetch', (event) => {
   // 3. Requisições de navegação (páginas HTML)
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then((networkRes) => {
           const ct = (networkRes.headers.get('content-type') || '').toLowerCase();
           if (networkRes && networkRes.status === 200 && ct.includes('text/html')) {

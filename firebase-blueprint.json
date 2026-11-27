@@ -54,6 +54,8 @@
         "id": { "type": "string", "maxLength": 64 },
         "updatedAtMs": { "type": "number" },
         "classesUpdatedAtMs": { "type": "number" },
+        "configUpdatedAtMs": { "type": "number" },
+        "lastChangedClassIds": { "type": "array" },
         "epochUpdatedAtMs": { "type": "number" },
         "epochVersion": { "type": "number" },
         "updatedAtISO": { "type": "string", "maxLength": 40 },

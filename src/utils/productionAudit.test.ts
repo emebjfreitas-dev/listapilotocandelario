@@ -1008,6 +1008,26 @@ assert.equal(
   'Administrador estrito mantém monitoramento de alertas locais'
 );
 
+// 17. Validação de merge delta-only (preserva todas as 40 turmas mesmo em payloads parciais)
+const deltaOneClass: ClassGroup = {
+  ...INITIAL_CLASSES[10],
+  pedagogicalNotes: 'Nota atualizada remotamente via delta sync',
+  updatedAtMs: Date.now() + 5000,
+};
+const deltaMergedResult = mergeClassesWithConcurrencyControl(
+  [deltaOneClass],
+  INITIAL_CLASSES,
+  deltaOneClass.updatedAtMs || Date.now(),
+  Date.now() - 1000
+);
+assert.equal(deltaMergedResult.length, 40, 'Merge parcial/delta deve preservar todas as 40 turmas oficiais');
+assert.equal(deltaMergedResult[0].id, 'g04a', 'Ordem oficial pedagógica deve iniciar em GRUPO 04 A');
+assert.equal(
+  deltaMergedResult.find((c) => c.id === deltaOneClass.id)?.pedagogicalNotes,
+  'Nota atualizada remotamente via delta sync',
+  'Delta remoto mais recente deve atualizar a turma correspondente'
+);
+
 console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, RBAC de notificações, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting, otimização de cotas Firestore/Storage, armazenamento lossless Drive e cache IndexedDB passaram com sucesso!');
 
 

@@ -73,11 +73,15 @@ service cloud.firestore {
         data.keys().hasOnly([
           'updatedAtMs',
           'classesUpdatedAtMs',
+          'configUpdatedAtMs',
+          'lastChangedClassIds',
           'epochUpdatedAtMs',
           'epochVersion',
           'updatedAtISO',
           'cleanResetEpochId'
-        ]);
+        ]) &&
+        (!('configUpdatedAtMs' in data) || data.configUpdatedAtMs is number) &&
+        (!('lastChangedClassIds' in data) || (data.lastChangedClassIds is list && data.lastChangedClassIds.size() <= 40));
     }
 
     function isValidConfigMeta(data) {

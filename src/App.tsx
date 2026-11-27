@@ -51,6 +51,7 @@ import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import {
   subscribeToFirestoreRealtimeState,
+  checkFirestoreDeltaOnResume,
   subscribeToSyncStatus,
   SyncStatusSnapshot,
   saveClassesToFirestoreCloud,
@@ -1355,23 +1356,67 @@ export default function App() {
               saveStoredAccessSessionLogs(cfg.accessSessionLogs);
             }
           }
+          if (cfg.cloudLinks && typeof cfg.cloudLinks === 'object') {
+            try {
+              const cl = cfg.cloudLinks as Record<string, any>;
+              if (cl.spreadsheetId) localStorage.setItem('emeb_candelario_linked_spreadsheet_id_2027', cl.spreadsheetId);
+              if (cl.spreadsheetTitle) localStorage.setItem('emeb_candelario_linked_spreadsheet_title_2027', cl.spreadsheetTitle);
+              if (cl.photosFolderId) localStorage.setItem('emeb_candelario_drive_photos_folder_id_2027', cl.photosFolderId);
+              if (cl.photosFolderUrl) localStorage.setItem('emeb_candelario_drive_photos_folder_url_2027', cl.photosFolderUrl);
+              if (cl.fichasPdfFolderId) localStorage.setItem('emeb_candelario_drive_fichas_pdf_folder_id_2027', cl.fichasPdfFolderId);
+              if (cl.fichasPdfFolderUrl) localStorage.setItem('emeb_candelario_drive_fichas_pdf_folder_url_2027', cl.fichasPdfFolderUrl);
+              if (cl.backupFolderId) localStorage.setItem('emeb_candelario_drive_backup_folder_id_2027', cl.backupFolderId);
+              if (cl.backupFolderUrl) localStorage.setItem('emeb_candelario_drive_backup_folder_url_2027', cl.backupFolderUrl);
+              window.dispatchEvent(new CustomEvent('emeb-cloud-links-updated', { detail: cl }));
+            } catch {
+              // ignore storage errors
+            }
+          }
+          if (Array.isArray(cfg.discoveredNominalPdfs) && cfg.discoveredNominalPdfs.length > 0) {
+            try {
+              localStorage.setItem(
+                'emeb_candelario_discovered_nominal_pdfs_2027_v1',
+                JSON.stringify(cfg.discoveredNominalPdfs)
+              );
+            } catch {
+              // ignore
+            }
+          }
+          if (Array.isArray(cfg.discoveredDrivePhotos) && cfg.discoveredDrivePhotos.length > 0) {
+            try {
+              localStorage.setItem(
+                'emeb_candelario_discovered_drive_photos_2027_v1',
+                JSON.stringify(cfg.discoveredDrivePhotos)
+              );
+            } catch {
+              // ignore
+            }
+          }
         },
       });
     }
 
-    const handleWindowFocus = () => {
-      if (!isBackendApiAvailable() || document.visibilityState !== 'visible') return;
+    const handleResumeSync = () => {
+      if (document.visibilityState !== 'visible') return;
       const nowMs = Date.now();
-      if (nowMs - lastFocusSyncAtRef.current < 15000) return;
+      if (nowMs - lastFocusSyncAtRef.current < 10000) return;
       lastFocusSyncAtRef.current = nowMs;
-      void syncFromBackendServer();
+      if (isBackendApiAvailable()) {
+        void syncFromBackendServer();
+      } else {
+        void checkFirestoreDeltaOnResume();
+      }
     };
-    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('focus', handleResumeSync);
+    window.addEventListener('online', handleResumeSync);
+    document.addEventListener('visibilitychange', handleResumeSync);
 
     return () => {
       active = false;
       if (pollId !== null) window.clearInterval(pollId);
-      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('focus', handleResumeSync);
+      window.removeEventListener('online', handleResumeSync);
+      document.removeEventListener('visibilitychange', handleResumeSync);
       if (unsubRealtimeBus) unsubRealtimeBus();
       if (unsubFirestore) unsubFirestore();
     };

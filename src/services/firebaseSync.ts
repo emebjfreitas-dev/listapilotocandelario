@@ -13,6 +13,7 @@ import {
   getDoc,
   getDocs,
   getDocFromServer,
+  getDocsFromServer,
   runTransaction,
   onSnapshot,
   query,
@@ -23,6 +24,8 @@ import {
   Query,
   QuerySnapshot,
   DocumentData,
+  DocumentReference,
+  DocumentSnapshot,
   disableNetwork,
   enableNetwork,
   setLogLevel,
@@ -1216,6 +1219,7 @@ export const saveClassesToFirestoreCloud = async (
 
     const localMeta = touchLocalEpochState(updatedAtMs, CLEAN_DB_RESET_EPOCH_ID);
     const metaRef = doc(firestoreDb, 'school_meta_2027', 'state');
+    const changedIds = dirtyClasses.map((c) => c.id).slice(0, 40);
 
     await commitViaUnaryTransaction((tx) => {
       dirtyClasses.forEach((cls) => {
@@ -1229,6 +1233,7 @@ export const saveClassesToFirestoreCloud = async (
         stripUndefinedDeep({
           updatedAtMs,
           classesUpdatedAtMs: updatedAtMs,
+          lastChangedClassIds: changedIds,
           epochUpdatedAtMs: updatedAtMs,
           epochVersion: localMeta.epochVersion,
           updatedAtISO: new Date(updatedAtMs).toISOString(),
@@ -1476,10 +1481,20 @@ export const saveConfigMetaToFirestoreCloud = async (payload: {
       return true;
     }
 
-    cleanPayload.updatedAtMs = Date.now();
+    const nowMs = Date.now();
+    cleanPayload.updatedAtMs = nowMs;
     const cleanedData = stripUndefinedDeep(cleanPayload);
+    const stateRef = doc(firestoreDb, 'school_meta_2027', 'state');
     await commitViaUnaryTransaction((tx) => {
       tx.set(ref, cleanedData, { merge: true });
+      tx.set(
+        stateRef,
+        stripUndefinedDeep({
+          updatedAtMs: nowMs,
+          configUpdatedAtMs: nowMs,
+        }),
+        { merge: true }
+      );
     });
     lastConfigMetaSignature = candidateSig;
 
@@ -1546,13 +1561,61 @@ export interface FetchCloudStateOptions {
   classIds?: string[];
   teacherEmail?: string;
   pageSize?: number;
+  loadAllPages?: boolean;
+  changedClassIds?: string[];
+  skipClasses?: boolean;
+  skipConfig?: boolean;
 }
+
+const getDocServerFirst = async (
+  ref: DocumentReference<DocumentData>,
+  serverFirst: boolean
+): Promise<DocumentSnapshot<DocumentData>> => {
+  if (!serverFirst) return getDoc(ref);
+  try {
+    return await getDocFromServer(ref);
+  } catch (err: any) {
+    const code = err?.code;
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      code === 'unavailable' ||
+      msg.includes('client is offline') ||
+      msg.includes('Failed to get document because the client is offline')
+    ) {
+      return getDoc(ref);
+    }
+    throw err;
+  }
+};
+
+const getDocsServerFirst = async (
+  q: Query<DocumentData>,
+  serverFirst: boolean
+): Promise<QuerySnapshot<DocumentData>> => {
+  if (!serverFirst) return getDocs(q);
+  try {
+    return await getDocsFromServer(q);
+  } catch (err: any) {
+    const code = err?.code;
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      code === 'unavailable' ||
+      msg.includes('client is offline') ||
+      msg.includes('Failed to get document because the client is offline')
+    ) {
+      return getDocs(q);
+    }
+    throw err;
+  }
+};
 
 export const fetchStateFromFirestoreCloud = async (
   options: boolean | FetchCloudStateOptions = false
 ): Promise<{
   classes?: ClassGroup[];
   classesUpdatedAtMs?: number;
+  configUpdatedAtMs?: number;
+  stateUpdatedAtMs?: number;
   authorizedUsers?: AuthorizedUser[];
   accessSessionLogs?: UserAccessSessionLog[];
   attendanceWindowConfig?: AttendanceWindowConfig;
@@ -1572,24 +1635,31 @@ export const fetchStateFromFirestoreCloud = async (
   }
   const opts: FetchCloudStateOptions =
     typeof options === 'boolean' ? { forceRefresh: options } : (options || {});
+  const serverFirst = Boolean(opts.forceRefresh);
   const now = Date.now();
   if (
     !opts.forceRefresh &&
     !opts.classIds &&
     !opts.teacherEmail &&
+    !opts.changedClassIds &&
+    !opts.skipClasses &&
+    !opts.skipConfig &&
     cachedCloudState &&
     now - lastCloudStateFetchTimeMs < CLOUD_STATE_CACHE_TTL_MS
   ) {
     return cachedCloudState;
   }
   try {
-    // 1. Busca metadados pontuais via getDoc (aproveita 100% o persistentLocalCache do IndexedDB com 0 leituras se já em cache)
+    // 1. Busca metadados pontuais (usa servidor direto quando forceRefresh=true para nunca ficar preso em cache obsoleto)
     const [configSnap, stateSnap] = await Promise.all([
-      getDoc(doc(firestoreDb, 'school_meta_2027', 'config')),
-      getDoc(doc(firestoreDb, 'school_meta_2027', 'state')),
+      opts.skipConfig
+        ? Promise.resolve(null)
+        : getDocServerFirst(doc(firestoreDb, 'school_meta_2027', 'config'), serverFirst),
+      getDocServerFirst(doc(firestoreDb, 'school_meta_2027', 'state'), serverFirst),
     ]);
 
-    const configData: Record<string, any> = configSnap.exists() ? (configSnap.data() || {}) : {};
+    const configData: Record<string, any> =
+      configSnap && configSnap.exists() ? (configSnap.data() || {}) : {};
     const stateData: Record<string, any> = stateSnap.exists() ? (stateSnap.data() || {}) : {};
 
     const localMeta = getLocalEpochMetadata();
@@ -1611,13 +1681,42 @@ export const fetchStateFromFirestoreCloud = async (
     let lastClassDoc: QueryDocumentSnapshot | null = null;
     let hasMoreClasses = false;
 
-    if (isCleanEpoch) {
-      // 2. Consulta filtrada e paginada de turmas (impede download em massa desnecessário)
-      if (opts.classIds && opts.classIds.length > 0 && !opts.classIds.includes('all')) {
+    if (isCleanEpoch && !opts.skipClasses) {
+      // 2. Delta-only ou consulta filtrada/paginada de turmas (reduz leituras em até 97%)
+      if (opts.changedClassIds && opts.changedClassIds.length > 0 && opts.changedClassIds.length <= 10) {
+        const allowedScope =
+          opts.classIds && opts.classIds.length > 0 && !opts.classIds.includes('all')
+            ? new Set(opts.classIds.map((id) => id.toLowerCase()))
+            : null;
+        const deltaIds = opts.changedClassIds
+          .filter((id) => !allowedScope || allowedScope.has(id.toLowerCase()))
+          .slice(0, 10);
+        if (deltaIds.length > 0) {
+          const docSnaps = await Promise.all(
+            deltaIds.map((cid) =>
+              getDocServerFirst(doc(firestoreDb, 'school_classes_2027', cid), serverFirst)
+            )
+          );
+          docSnaps.forEach((d) => {
+            if (d.exists()) {
+              const data = d.data() as ClassGroup;
+              if (data && data.id && Array.isArray(data.students)) {
+                classes.push(data);
+                classSyncSignatureCache.set(data.id, computeClassFirestoreSignature(data));
+                if ((data.updatedAtMs || 0) > maxClassUpdatedAt) {
+                  maxClassUpdatedAt = data.updatedAtMs || 0;
+                }
+              }
+            }
+          });
+        }
+      } else if (opts.classIds && opts.classIds.length > 0 && !opts.classIds.includes('all')) {
         // Docente regente: busca apenas as turmas atribuídas por doc direto (economiza até 95% de leituras)
         const targetIds = opts.classIds.slice(0, 10);
         const docSnaps = await Promise.all(
-          targetIds.map((cid) => getDoc(doc(firestoreDb, 'school_classes_2027', cid)))
+          targetIds.map((cid) =>
+            getDocServerFirst(doc(firestoreDb, 'school_classes_2027', cid), serverFirst)
+          )
         );
         docSnaps.forEach((d) => {
           if (d.exists()) {
@@ -1639,7 +1738,7 @@ export const fetchStateFromFirestoreCloud = async (
           where('teacherEmail', '==', opts.teacherEmail.trim().toLowerCase()),
           limit(pageLimit)
         );
-        const snap = await getDocs(q);
+        const snap = await getDocsServerFirst(q, serverFirst);
         snap.forEach((d) => {
           const data = d.data() as ClassGroup;
           if (data && data.id && Array.isArray(data.students)) {
@@ -1653,25 +1752,30 @@ export const fetchStateFromFirestoreCloud = async (
         lastClassDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
         hasMoreClasses = snap.docs.length === pageLimit;
       } else {
-        // Consulta geral com limit(20) obrigatório para evitar estouro de cota
+        // Consulta paginada com limit(20); quando loadAllPages=true carrega as páginas restantes (max 3 = 40 turmas)
         const pageLimit = opts.pageSize || 20;
-        const q = query(
-          collection(firestoreDb, 'school_classes_2027'),
-          limit(pageLimit)
-        );
-        const snap = await getDocs(q);
-        snap.forEach((d) => {
-          const data = d.data() as ClassGroup;
-          if (data && data.id && Array.isArray(data.students)) {
-            classes.push(data);
-            classSyncSignatureCache.set(data.id, computeClassFirestoreSignature(data));
-            if ((data.updatedAtMs || 0) > maxClassUpdatedAt) {
-              maxClassUpdatedAt = data.updatedAtMs || 0;
+        const maxPages = opts.loadAllPages ? 3 : 1;
+        let cursor: QueryDocumentSnapshot | null = null;
+        for (let pageIdx = 0; pageIdx < maxPages; pageIdx++) {
+          const q: Query<DocumentData> = cursor
+            ? query(collection(firestoreDb, 'school_classes_2027'), startAfter(cursor), limit(pageLimit))
+            : query(collection(firestoreDb, 'school_classes_2027'), limit(pageLimit));
+          const snap = await getDocsServerFirst(q, serverFirst);
+          snap.forEach((d) => {
+            const data = d.data() as ClassGroup;
+            if (data && data.id && Array.isArray(data.students)) {
+              classes.push(data);
+              classSyncSignatureCache.set(data.id, computeClassFirestoreSignature(data));
+              if ((data.updatedAtMs || 0) > maxClassUpdatedAt) {
+                maxClassUpdatedAt = data.updatedAtMs || 0;
+              }
             }
-          }
-        });
-        lastClassDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
-        hasMoreClasses = snap.docs.length === pageLimit;
+          });
+          lastClassDoc = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
+          hasMoreClasses = snap.docs.length === pageLimit;
+          if (!hasMoreClasses || !lastClassDoc) break;
+          cursor = lastClassDoc;
+        }
       }
     }
 
@@ -1691,6 +1795,8 @@ export const fetchStateFromFirestoreCloud = async (
     const result = {
       classes: classes.length > 0 ? classes : undefined,
       classesUpdatedAtMs,
+      configUpdatedAtMs: Number(stateData.configUpdatedAtMs || configData.updatedAtMs || 0),
+      stateUpdatedAtMs: Number(stateData.updatedAtMs || 0),
       authorizedUsers: configData.authorizedUsers,
       accessSessionLogs: isCleanEpoch ? configData.accessSessionLogs : [],
       attendanceWindowConfig: configData.attendanceWindowConfig,
@@ -1706,7 +1812,7 @@ export const fetchStateFromFirestoreCloud = async (
       hasMoreClasses,
     };
 
-    if (!opts.classIds && !opts.teacherEmail) {
+    if (!opts.classIds && !opts.teacherEmail && !opts.changedClassIds && !opts.skipClasses && !opts.skipConfig) {
       cachedCloudState = result;
       lastCloudStateFetchTimeMs = now;
     }
@@ -1768,11 +1874,31 @@ export const fetchClassesFromFirestorePaginated = async (options?: {
 };
 
 let activeRealtimeUnsubscribe: (() => void) | null = null;
+let activeDeltaSyncTrigger: ((forceStateCheck?: boolean) => Promise<void>) | null = null;
+let lastResumeDeltaCheckMs = 0;
+
+/**
+ * Executa verificação pontual de 1 única leitura no servidor (`school_meta_2027/state`)
+ * ao retornar ao aplicativo (focus / visibilitychange / reconexão) na hospedagem estática.
+ * Se nada mudou, consome apenas 1 leitura; se houver delta novo, baixa somente o que mudou.
+ */
+export const checkFirestoreDeltaOnResume = async (): Promise<void> => {
+  if (isFirestoreQuotaExceeded() || !activeDeltaSyncTrigger) return;
+  const now = Date.now();
+  if (now - lastResumeDeltaCheckMs < 10000) return;
+  lastResumeDeltaCheckMs = now;
+  try {
+    await activeDeltaSyncTrigger(true);
+  } catch {
+    // ignore transient offline checks
+  }
+};
 
 /**
  * Otimização de tempo real: substitui o onSnapshot da coleção inteira 'school_classes_2027'
- * por uma carga inicial única paginada e ouvinte leve EXCLUSIVAMENTE no documento 'school_meta_2027/state'.
- * Isso reduz as leituras em mais de 95% para os 100 usuários simultâneos.
+ * por carga inicial completa + ouvinte leve EXCLUSIVAMENTE no documento 'school_meta_2027/state'.
+ * Quando ocorrem alterações em outro dispositivo, baixa somente o delta exato (config e/ou turmas alteradas)
+ * diretamente do servidor, garantindo atualização perfeita com consumo mínimo de cota (~1-2 leituras).
  */
 export const subscribeToFirestoreRealtimeState = (callbacks: {
   classIds?: string[];
@@ -1808,13 +1934,30 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
 
   const unsubs: Array<() => void> = [];
   let isCancelled = false;
-  let lastRemoteClassesFetchMs = 0;
-  let lastSeenStateUpdatedMs = 0;
+  let lastDeltaFetchMs = 0;
+  let lastAppliedStateUpdatedMs = 0;
+  let lastAppliedConfigUpdatedMs = 0;
+  let lastAppliedClassesUpdatedMs = getLocalEpochMetadata().classesUpdatedAtMs || 0;
+  let trailingTimer: number | null = null;
+  let inFlightDeltaPull = false;
 
-  const deliverCloudPayload = (cloudData: Awaited<ReturnType<typeof fetchStateFromFirestoreCloud>>, fromCache: boolean) => {
+  const deliverCloudPayload = (
+    cloudData: Awaited<ReturnType<typeof fetchStateFromFirestoreCloud>>,
+    fromCache: boolean
+  ) => {
     if (isCancelled || !cloudData) return;
+    if (cloudData.stateUpdatedAtMs) {
+      lastAppliedStateUpdatedMs = Math.max(lastAppliedStateUpdatedMs, cloudData.stateUpdatedAtMs);
+    }
+    if (cloudData.configUpdatedAtMs) {
+      lastAppliedConfigUpdatedMs = Math.max(lastAppliedConfigUpdatedMs, cloudData.configUpdatedAtMs);
+    }
+    if (cloudData.classesUpdatedAtMs) {
+      lastAppliedClassesUpdatedMs = Math.max(lastAppliedClassesUpdatedMs, cloudData.classesUpdatedAtMs);
+    }
     if (
       cloudData.classes &&
+      cloudData.classes.length > 0 &&
       callbacks.onClassesUpdate &&
       shouldAllowRemoteClassesOverwrite({
         remoteUpdatedAtMs: cloudData.classesUpdatedAtMs,
@@ -1846,14 +1989,122 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
     }
   };
 
-  // 1. Carga inicial via leitura única filtrada/paginada com persistentLocalCache (0 leituras na cota se já em cache)
-  void fetchStateFromFirestoreCloud({
-    classIds: callbacks.classIds,
-    teacherEmail: callbacks.teacherEmail,
-    pageSize: 20,
-  }).then((cloudData) => {
-    deliverCloudPayload(cloudData, false);
-  });
+  const applyDeltaFromStateData = async (stateData: Record<string, any>) => {
+    if (isCancelled || inFlightDeltaPull) return;
+    const remoteClassesUpdated = Number(stateData.classesUpdatedAtMs || 0);
+    const remoteConfigUpdated = Number(stateData.configUpdatedAtMs || 0);
+    const remoteMetaUpdated = Number(stateData.updatedAtMs || remoteClassesUpdated || 0);
+    const localUpdated = Math.max(
+      getLocalEpochMetadata().classesUpdatedAtMs || 0,
+      lastAppliedClassesUpdatedMs
+    );
+
+    const hasNewerClasses = remoteClassesUpdated > localUpdated;
+    const hasNewerConfig =
+      remoteConfigUpdated > lastAppliedConfigUpdatedMs ||
+      (remoteConfigUpdated === 0 && remoteMetaUpdated > lastAppliedStateUpdatedMs);
+
+    if (!hasNewerClasses && !hasNewerConfig) {
+      lastAppliedStateUpdatedMs = Math.max(lastAppliedStateUpdatedMs, remoteMetaUpdated);
+      return;
+    }
+
+    const now = Date.now();
+    const cooldownMs = 4000;
+    const waitRemaining = cooldownMs - (now - lastDeltaFetchMs);
+    if (waitRemaining > 0) {
+      if (trailingTimer === null && typeof window !== 'undefined') {
+        trailingTimer = window.setTimeout(() => {
+          trailingTimer = null;
+          void applyDeltaFromStateData(stateData);
+        }, waitRemaining + 100);
+      }
+      return;
+    }
+
+    lastDeltaFetchMs = now;
+    inFlightDeltaPull = true;
+    try {
+      const changedIds = Array.isArray(stateData.lastChangedClassIds)
+        ? (stateData.lastChangedClassIds as unknown[]).filter(
+            (id): id is string => typeof id === 'string' && id.trim().length > 0
+          )
+        : undefined;
+
+      const fresh = await fetchStateFromFirestoreCloud({
+        forceRefresh: true,
+        classIds: callbacks.classIds,
+        teacherEmail: callbacks.teacherEmail,
+        pageSize: 20,
+        loadAllPages: hasNewerClasses && (!changedIds || changedIds.length > 10),
+        changedClassIds: hasNewerClasses ? changedIds : undefined,
+        skipClasses: !hasNewerClasses,
+        skipConfig: !hasNewerConfig,
+      });
+
+      lastAppliedStateUpdatedMs = Math.max(lastAppliedStateUpdatedMs, remoteMetaUpdated);
+      if (hasNewerConfig && remoteConfigUpdated > 0) {
+        lastAppliedConfigUpdatedMs = Math.max(lastAppliedConfigUpdatedMs, remoteConfigUpdated);
+      }
+      if (hasNewerClasses && remoteClassesUpdated > 0) {
+        lastAppliedClassesUpdatedMs = Math.max(lastAppliedClassesUpdatedMs, remoteClassesUpdated);
+      }
+      deliverCloudPayload(fresh, false);
+    } finally {
+      inFlightDeltaPull = false;
+    }
+  };
+
+  activeDeltaSyncTrigger = async (forceStateCheck = false) => {
+    if (isCancelled || isFirestoreQuotaExceeded()) return;
+    const authUser = getAuth(app).currentUser;
+    if (!authUser || !authUser.emailVerified) return;
+    const stateSnap = await getDocServerFirst(
+      doc(firestoreDb, 'school_meta_2027', 'state'),
+      forceStateCheck
+    );
+    if (stateSnap.exists()) {
+      await applyDeltaFromStateData(stateSnap.data() || {});
+    }
+  };
+
+  // 1. Carga inicial no boot: verifica o state no servidor (1 leitura) e só baixa do servidor se houver novidade
+  void (async () => {
+    try {
+      const authUser = getAuth(app).currentUser;
+      let serverHasNewer = false;
+      if (authUser && authUser.emailVerified) {
+        try {
+          const srvState = await getDocServerFirst(
+            doc(firestoreDb, 'school_meta_2027', 'state'),
+            true
+          );
+          if (srvState.exists()) {
+            const sData = srvState.data() || {};
+            const srvClassesTs = Number(sData.classesUpdatedAtMs || 0);
+            const srvConfigTs = Number(sData.configUpdatedAtMs || 0);
+            const srvMetaTs = Number(sData.updatedAtMs || srvClassesTs || 0);
+            serverHasNewer =
+              srvClassesTs > lastAppliedClassesUpdatedMs ||
+              srvConfigTs > 0 ||
+              srvMetaTs > lastAppliedClassesUpdatedMs;
+          }
+        } catch {
+          // fallback para cache local se offline
+        }
+      }
+      const cloudData = await fetchStateFromFirestoreCloud({
+        forceRefresh: serverHasNewer,
+        classIds: callbacks.classIds,
+        teacherEmail: callbacks.teacherEmail,
+        pageSize: 20,
+        loadAllPages: true,
+      });
+      deliverCloudPayload(cloudData, false);
+    } catch {
+      // ignore boot fetch error
+    }
+  })();
 
   // 2. Ouvinte leve EXCLUSIVAMENTE no documento de metadados ('school_meta_2027/state')
   // Só ativa se usuário autenticado no Firebase Auth; elimina o onSnapshot na coleção inteira 'school_classes_2027'
@@ -1864,28 +2115,7 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
         doc(firestoreDb, 'school_meta_2027', 'state'),
         (stateSnap) => {
           if (isCancelled || !stateSnap.exists() || stateSnap.metadata.fromCache) return;
-          const data = stateSnap.data() || {};
-          const remoteUpdated = Number(data.classesUpdatedAtMs || 0);
-          const remoteMetaUpdated = Number(data.updatedAtMs || remoteUpdated || 0);
-          const localUpdated = getLocalEpochMetadata().classesUpdatedAtMs;
-          const now = Date.now();
-
-          const hasNewerClasses = remoteUpdated > localUpdated;
-          const hasNewerMeta = remoteMetaUpdated > lastSeenStateUpdatedMs && lastSeenStateUpdatedMs > 0;
-          lastSeenStateUpdatedMs = Math.max(lastSeenStateUpdatedMs, remoteMetaUpdated);
-
-          // Throttle inteligente: só busca delta se comprovadamente mais recente E intervalo mínimo de 30s
-          if ((hasNewerClasses || hasNewerMeta) && now - lastRemoteClassesFetchMs > 30000) {
-            lastRemoteClassesFetchMs = now;
-            void fetchStateFromFirestoreCloud({
-              forceRefresh: true,
-              classIds: callbacks.classIds,
-              teacherEmail: callbacks.teacherEmail,
-              pageSize: 20,
-            }).then((fresh) => {
-              deliverCloudPayload(fresh, false);
-            });
-          }
+          void applyDeltaFromStateData(stateSnap.data() || {});
         },
         (error) => {
           handleFirestoreError(error, OperationType.GET, 'school_meta_2027/state');
@@ -1899,6 +2129,13 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
 
   const compositeUnsub = () => {
     isCancelled = true;
+    if (trailingTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(trailingTimer);
+      trailingTimer = null;
+    }
+    if (activeDeltaSyncTrigger) {
+      activeDeltaSyncTrigger = null;
+    }
     unsubs.forEach((u) => {
       try {
         u();

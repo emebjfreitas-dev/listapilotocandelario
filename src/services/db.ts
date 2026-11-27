@@ -1258,9 +1258,15 @@ export const mergeClassesWithConcurrencyControl = (
   localUpdatedAtMs: number
 ): ClassGroup[] => {
   const localMap = new Map(localClasses.map((c) => [c.id.toLowerCase(), c]));
-  const merged = remoteClasses.map((remCls) => {
-    const locCls = localMap.get(remCls.id.toLowerCase());
-    if (!locCls) return remCls;
+  const remoteMap = new Map(remoteClasses.map((c) => [c.id.toLowerCase(), c]));
+  const allIds = Array.from(new Set([...localMap.keys(), ...remoteMap.keys()]));
+
+  const merged = allIds.map((idKey) => {
+    const remCls = remoteMap.get(idKey);
+    const locCls = localMap.get(idKey);
+    if (!remCls && locCls) return locCls;
+    if (remCls && !locCls) return remCls;
+    if (!remCls || !locCls) return (remCls || locCls)!;
 
     const remTime = remCls.updatedAtMs || remoteUpdatedAtMs || 0;
     const locTime = locCls.updatedAtMs || localUpdatedAtMs || 0;
@@ -1317,7 +1323,8 @@ export const mergeClassesWithConcurrencyControl = (
       students: mergedStudents,
     };
   });
-  return sortClassesInOfficialOrder(merged);
+
+  return sortClassesInOfficialOrder(enrichClassesWithOfficialMatrix(merged));
 };
 
 export const pushClassesToServer = async (
