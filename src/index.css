@@ -792,3 +792,6 @@ svg.lucide {
 }
 
 *:focus{outline:none!important;box-shadow:none!important}
+
+/* Remove contornos decorativos dos componentes */
+.border,.border-gray-100,.border-gray-200,.border-gray-300,.border-slate-100,.border-slate-200,.border-slate-300{border-color:transparent!important}.ring-1,.ring-2{--tw-ring-color:transparent!important}
