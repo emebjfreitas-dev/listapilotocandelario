@@ -1,17 +1,59 @@
-import rawStudentsJson from '../../public/assets/aistudio/lista_piloto_f00eab1e.json';
+import rawStudentsJson from '../../public/lista_piloto_2027.json';
 import { OFFICIAL_SCHOOL_MATRIX_2027 } from './officialMatrix2027';
 import { Student } from '../types';
 import { resolveStudentGender } from '../utils/genderDictionary';
 
 export interface RawSedStudent {
+  'TIPO DE ENSINO'?: string;
+  'SÉRIE'?: string;
+  'Nº CHAMADA'?: string | number;
+  ESTUDANTE?: string;
+  RA?: string;
+  'DIG. RA'?: string;
+  'UF RA'?: string;
+  'DATA DE NASCIMENTO'?: string;
+  'TIPO ALOCAÇÃO'?: string;
+  'SITUAÇÃO'?: string;
+  'DATA MOVIMENTAÇÃO'?: string;
+  'CATEGORIA PROFISSIONAL CENSO'?: string;
+  'DEFICIÊNCIA'?: string;
+  'PÓS DATA CENSO'?: string;
   TURMA: string;
-  ESTUDANTE: string;
-  RA: string;
-  SITUAÇÃO: string;
-  'DATA MATRÍCULA': string;
-  ESCOLA: string;
-  'TIPO SANGUÍNEO': string;
-  CPF: string;
+  PERÍODO?: string;
+  'DATA DE MATRÍCULA (SED)'?: string;
+  'PROCEDÊNCIA ESCOLAR'?: string;
+  'IRMÃOS'?: string;
+  IDADE?: string;
+  ARQUIVO?: string;
+  'FILIAÇÃO 1'?: string;
+  'FILIAÇÃO 2'?: string;
+  'NOME SOCIAL'?: string;
+  GÊNERO?: string;
+  'TIPO SANGUÍNEO'?: string;
+  'RAÇA/COR'?: string;
+  NACIONALIDADE?: string;
+  'PAÍS DE ORIGEM'?: string;
+  'MUNICÍPIO DE NASCIMENTO'?: string;
+  CPF?: string;
+  RG?: string;
+  'DATA EMISSÃO RG'?: string;
+  'CARTÃO SUS'?: string;
+  NIS?: string;
+  CEP?: string;
+  LOGRADOURO?: string;
+  'N. RESIDENCIA'?: string;
+  COMPLEMENTO?: string;
+  BAIRRO?: string;
+  CIDADE?: string;
+  UF?: string;
+  TELEFONES?: string;
+  'E-MAIL GOOGLE'?: string;
+  'E-MAIL MICROSOFT'?: string;
+  'EMAIL MUNICIPAL'?: string;
+  'ROTA DE ÔNIBUS'?: string;
+  'SUCESSÃO ESCOLAR'?: string;
+  ESCOLA?: string;
+  'DATA MATRÍCULA'?: string;
 }
 
 /**
@@ -19,16 +61,30 @@ export interface RawSedStudent {
  */
 export function resolveCanonicalClassId(turmaStr: string): string {
   const t = (turmaStr || '').trim().toUpperCase();
-  const isManha = t.includes('MANHA') || t.includes('MANHÃ');
-  const shift = isManha ? 'MANHÃ' : 'TARDE';
 
-  // 1. Busca exata por sedClassName
+  // 1. Abreviações canônicas diretas do JSON oficial 2027 (ex: G4A -> g04a, 1A -> 1a)
+  if (t.startsWith('G4') && t.length >= 3) {
+    return 'g04' + t.slice(2).toLowerCase();
+  }
+  if (t.startsWith('G5') && t.length >= 3) {
+    return 'g05' + t.slice(2).toLowerCase();
+  }
+  if (/^[1-5][A-G]$/.test(t)) {
+    return t.toLowerCase();
+  }
+
+  // 2. Busca exata por turmaAbrev, id ou sedClassName
   const exact = OFFICIAL_SCHOOL_MATRIX_2027.find(
-    (c) => c.sedClassName.toUpperCase() === t
+    (c) =>
+      c.turmaAbrev.toUpperCase() === t ||
+      c.id.toUpperCase() === t ||
+      c.sedClassName.toUpperCase() === t
   );
   if (exact) return exact.id;
 
-  // 2. Pré-escola G4 (1ª Etapa)
+  const isManha = t.includes('MANHA') || t.includes('MANHÃ');
+
+  // 3. Pré-escola G4 (1ª Etapa)
   if (t.includes('1ª ETAPA') || t.includes('PRÉ-ESCOLA 4') || t.includes('G4')) {
     if (t.includes('4A') || t.includes(' A ')) return 'g04a';
     if (t.includes('4B') || t.includes(' B ')) return isManha ? 'g04b' : 'g04d';
@@ -38,7 +94,7 @@ export function resolveCanonicalClassId(turmaStr: string): string {
     return isManha ? 'g04a' : 'g04d';
   }
 
-  // 3. Pré-escola G5 (2ª Etapa)
+  // 4. Pré-escola G5 (2ª Etapa)
   if (t.includes('2ª ETAPA') || t.includes('PRÉ-ESCOLA 5') || t.includes('G5')) {
     if (t.includes('5A') || t.includes(' A ')) return 'g05a';
     if (t.includes('5B') || t.includes(' B ')) return 'g05b';
@@ -48,7 +104,7 @@ export function resolveCanonicalClassId(turmaStr: string): string {
     return isManha ? 'g05a' : 'g05d';
   }
 
-  // 4. 1º Ano
+  // 5. 1º Ano
   if (t.includes('1° ANO') || t.includes('1º ANO')) {
     if (t.includes('1A') || t.includes(' A ')) return isManha ? '1a' : '1d';
     if (t.includes('1B') || t.includes(' B ')) return isManha ? '1b' : '1e';
@@ -59,7 +115,7 @@ export function resolveCanonicalClassId(turmaStr: string): string {
     return isManha ? '1a' : '1d';
   }
 
-  // 5. 2º Ano
+  // 6. 2º Ano
   if (t.includes('2° ANO') || t.includes('2º ANO')) {
     if (t.includes('2A') || t.includes(' A ')) return isManha ? '2a' : '2d';
     if (t.includes('2B') || t.includes(' B ') || t.includes('BM')) return isManha ? '2b' : '2e';
@@ -70,7 +126,7 @@ export function resolveCanonicalClassId(turmaStr: string): string {
     return isManha ? '2a' : '2d';
   }
 
-  // 6. 3º Ano
+  // 7. 3º Ano
   if (t.includes('3° ANO') || t.includes('3º ANO')) {
     if (t.includes('3A') || t.includes(' A ')) return isManha ? '3a' : '3d';
     if (t.includes('3B') || t.includes(' B ')) return isManha ? '3b' : '3e';
@@ -82,7 +138,7 @@ export function resolveCanonicalClassId(turmaStr: string): string {
     return isManha ? '3a' : '3d';
   }
 
-  // 7. 4º Ano
+  // 8. 4º Ano
   if (t.includes('4° ANO') || t.includes('4º ANO')) {
     if (t.includes('4A') || t.includes(' A ')) return isManha ? '4a' : '4d';
     if (t.includes('4B') || t.includes(' B ')) return isManha ? '4b' : '4e';
@@ -94,7 +150,7 @@ export function resolveCanonicalClassId(turmaStr: string): string {
     return isManha ? '4a' : '4d';
   }
 
-  // 8. 5º Ano
+  // 9. 5º Ano
   if (t.includes('5° ANO') || t.includes('5º ANO')) {
     if (t.includes('5A') || t.includes(' A ')) return isManha ? '5a' : '5d';
     if (t.includes('5B') || t.includes(' B ')) return isManha ? '5b' : '5e';
@@ -108,7 +164,7 @@ export function resolveCanonicalClassId(turmaStr: string): string {
 }
 
 /**
- * Mapeia todos os 1.237 alunos oficiais fornecidos pela SED agrupados por ID canônico de turma
+ * Mapeia todos os 1.050 alunos oficiais fornecidos pela matriz 2027 agrupados por ID canônico de turma
  */
 export function buildOfficialSedStudentsMap(): Record<string, Student[]> {
   const rawList: RawSedStudent[] = rawStudentsJson as RawSedStudent[];
@@ -128,10 +184,13 @@ export function buildOfficialSedStudentsMap(): Record<string, Student[]> {
     const classId = matrixRow.id;
     const rawItems = grouped[classId] || [];
 
-    // Ordenação alfabética oficial
-    const sorted = [...rawItems].sort((a, b) =>
-      (a.ESTUDANTE || '').localeCompare(b.ESTUDANTE || '', 'pt-BR')
-    );
+    // Ordenação por número de chamada oficial ou alfabética
+    const sorted = [...rawItems].sort((a, b) => {
+      const numA = Number(a['Nº CHAMADA']) || 999;
+      const numB = Number(b['Nº CHAMADA']) || 999;
+      if (numA !== numB) return numA - numB;
+      return (a.ESTUDANTE || '').localeCompare(b.ESTUDANTE || '', 'pt-BR');
+    });
 
     const isInfantil =
       matrixRow.turmaAbrev.startsWith('G4') || matrixRow.turmaAbrev.startsWith('G5');
@@ -140,39 +199,80 @@ export function buildOfficialSedStudentsMap(): Record<string, Student[]> {
       const studentName = (item.ESTUDANTE || '').trim().toUpperCase();
       const rawRa = (item.RA || '').trim();
       let cleanRaOnly = rawRa.replace(/\D/g, '');
-      let digRa = '';
-      if (rawRa.includes('-')) {
+      let digRa = (item['DIG. RA'] || '').trim();
+      if (!digRa && rawRa.includes('-')) {
         const [basePart, digPart] = rawRa.split('-');
         cleanRaOnly = (basePart || '').replace(/\D/g, '');
         digRa = (digPart || '').trim();
       }
-      const isAtivo = (item.SITUAÇÃO || '').toUpperCase() === 'ATIVO';
+      const rawSituacao = (item['SITUAÇÃO'] || 'ATIVO').trim().toUpperCase();
+      const isAtivo = rawSituacao === '' || rawSituacao === 'ATIVO';
       const nameParts = studentName.split(/\s+/).filter(Boolean);
       const initials =
         nameParts.length >= 2
           ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`
           : studentName.slice(0, 2);
 
+      const parsedNumber = Number(item['Nº CHAMADA']) || index + 1;
+      const filiacao1 = (item['FILIAÇÃO 1'] || '').trim();
+      const filiacao2 = (item['FILIAÇÃO 2'] || '').trim();
+      const guardianName = filiacao1 || filiacao2 || '';
+      const telefones = (item.TELEFONES || '').trim();
+
       return {
-        id: `sed-${classId}-${cleanRaOnly || index + 1}`,
-        number: index + 1,
-        numeroChamada: index + 1,
+        id: `sed-${classId}-${cleanRaOnly || parsedNumber}`,
+        number: parsedNumber,
+        numeroChamada: parsedNumber,
         name: studentName,
         estudante: studentName,
         ra: cleanRaOnly,
         digRa,
-        ufRa: 'SP',
-        dataNascimento: '',
-        cpf: item.CPF || '',
-        tipoSanguineo: item['TIPO SANGUÍNEO'] || '',
-        dataMatriculaSed: item['DATA MATRÍCULA'] || '03/02/2026',
-        procedenciaEscolar: item.ESCOLA || '',
-        situacao: (item.SITUAÇÃO || 'ATIVO').toUpperCase(),
-        status: isAtivo ? ('present' as const) : ('absent' as const),
+        ufRa: (item['UF RA'] || 'SP').trim(),
+        dataNascimento: (item['DATA DE NASCIMENTO'] || '').trim(),
+        tipoAlocacao: (item['TIPO ALOCAÇÃO'] || '').trim(),
+        situacao: isAtivo ? 'ATIVO' : rawSituacao,
+        dataMovimentacao: (item['DATA MOVIMENTAÇÃO'] || '').trim(),
+        categoriaProfissionalCenso: (item['CATEGORIA PROFISSIONAL CENSO'] || '').trim(),
+        deficiencia: (item['DEFICIÊNCIA'] || '').trim(),
+        posDataCenso: (item['PÓS DATA CENSO'] || '').trim(),
         turma: matrixRow.turmaAbrev,
-        periodo: matrixRow.periodo,
-        tipoEnsino: isInfantil ? 'EDUCACAO INFANTIL' : 'ENSINO FUNDAMENTAL',
-        serie: matrixRow.name,
+        periodo: (item.PERÍODO || matrixRow.periodo).trim(),
+        tipoEnsino: (item['TIPO DE ENSINO'] || (isInfantil ? 'EDUCACAO INFANTIL' : 'ENSINO FUNDAMENTAL')).trim(),
+        serie: (item['SÉRIE'] || matrixRow.name).trim(),
+        dataMatriculaSed: (item['DATA DE MATRÍCULA (SED)'] || item['DATA MATRÍCULA'] || '10/02/2027').trim(),
+        procedenciaEscolar: (item['PROCEDÊNCIA ESCOLAR'] || item.ESCOLA || '').trim(),
+        irmaos: (item.IRMÃOS || '').trim(),
+        idade: (item.IDADE || '').trim(),
+        arquivo: (item.ARQUIVO || '').trim(),
+        filiacao1,
+        filiacao2,
+        nomeSocial: (item['NOME SOCIAL'] || '').trim(),
+        genero: (item.GÊNERO || resolveStudentGender({ name: studentName, estudante: studentName })).trim(),
+        tipoSanguineo: (item['TIPO SANGUÍNEO'] || '').trim(),
+        racaCor: (item['RAÇA/COR'] || '').trim(),
+        nacionalidade: (item.NACIONALIDADE || 'BRASILEIRA').trim(),
+        paisOrigem: (item['PAÍS DE ORIGEM'] || '').trim(),
+        municipioNascimento: (item['MUNICÍPIO DE NASCIMENTO'] || '').trim(),
+        cpf: (item.CPF || '').trim(),
+        rg: (item.RG || '').trim(),
+        dataEmissaoRg: (item['DATA EMISSÃO RG'] || '').trim(),
+        cartaoSus: (item['CARTÃO SUS'] || '').trim(),
+        nis: (item.NIS || '').trim(),
+        cep: (item.CEP || '').trim(),
+        logradouro: (item.LOGRADOURO || '').trim(),
+        numeroResidencia: (item['N. RESIDENCIA'] || '').trim(),
+        complemento: (item.COMPLEMENTO || '').trim(),
+        bairro: (item.BAIRRO || '').trim(),
+        cidade: (item.CIDADE || 'JUNDIAI').trim(),
+        uf: (item.UF || 'SP').trim(),
+        telefones,
+        emailGoogle: (item['E-MAIL GOOGLE'] || '').trim(),
+        emailMicrosoft: (item['E-MAIL MICROSOFT'] || '').trim(),
+        emailMunicipal: (item['EMAIL MUNICIPAL'] || '').trim(),
+        sucessaoEscolar: (item['SUCESSÃO ESCOLAR'] || '').trim(),
+        guardianName,
+        guardianPhone: telefones,
+        status: isAtivo ? ('present' as const) : ('absent' as const),
         classesHeld: 20,
         classesAttended: isAtivo ? 19 : 0,
         absences: isAtivo ? 1 : 20,
@@ -180,7 +280,6 @@ export function buildOfficialSedStudentsMap(): Record<string, Student[]> {
         attendanceRate: isAtivo ? 95 : 0,
         consecutiveAbsences: 0,
         active: isAtivo,
-        genero: resolveStudentGender({ name: studentName, estudante: studentName }),
         initials,
         schoolDaysCount: 20,
         hasPhoto: false,
@@ -193,3 +292,4 @@ export function buildOfficialSedStudentsMap(): Record<string, Student[]> {
 }
 
 export const OFFICIAL_SED_STUDENTS_MAP = buildOfficialSedStudentsMap();
+

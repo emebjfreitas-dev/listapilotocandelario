@@ -102,6 +102,7 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.appdata',
+  'https://www.googleapis.com/auth/drive.readonly',
 ];
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -5038,6 +5039,9 @@ const DRIVE_BACKUP_FOLDER_URL_KEY = 'emeb_candelario_drive_backup_folder_url_202
 const DRIVE_BACKUP_FOLDER_NAME_KEY = 'emeb_candelario_drive_backup_folder_name_2027';
 const DRIVE_BACKUP_HISTORY_KEY = 'emeb_candelario_drive_backup_history_2027';
 
+const DRIVE_JSON_LAST_SYNC_META_KEY = 'emeb_candelario_drive_json_last_sync_meta_2027';
+export const DRIVE_JSON_AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+
 export const DEFAULT_BACKUP_DRIVE_FOLDER_NAME = 'Backups Lista Piloto Candelário 2027';
 
 export interface DriveJsonBackupFile {
@@ -5045,7 +5049,19 @@ export interface DriveJsonBackupFile {
   name: string;
   webViewLink: string;
   createdTime?: string;
+  modifiedTime?: string;
+  md5Checksum?: string;
   sizeBytes?: number;
+}
+
+export interface DriveJsonLastSyncMeta {
+  fileId: string;
+  fileName: string;
+  folderId: string;
+  modifiedTime?: string;
+  md5Checksum?: string;
+  syncedAtISO: string;
+  totalStudents?: number;
 }
 
 export interface DriveBackupHistoryItem {
@@ -5299,7 +5315,7 @@ export const listJsonBackupsInDriveFolder = async (
     `'${folderId}' in parents and (mimeType = 'application/json' or name contains '.json') and trashed = false`
   );
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=createdTime%20desc&pageSize=15&fields=files(id,name,webViewLink,createdTime,size)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+    `https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime%20desc&pageSize=20&fields=files(id,name,webViewLink,createdTime,modifiedTime,md5Checksum,size)&supportsAllDrives=true&includeItemsFromAllDrives=true`,
     {
       headers: { Authorization: `Bearer ${token}` },
     }
@@ -5317,15 +5333,126 @@ export const listJsonBackupsInDriveFolder = async (
       name: string;
       webViewLink?: string;
       createdTime?: string;
+      modifiedTime?: string;
+      md5Checksum?: string;
       size?: string;
     }) => ({
       id: f.id,
       name: f.name,
       webViewLink: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`,
       createdTime: f.createdTime,
+      modifiedTime: f.modifiedTime,
+      md5Checksum: f.md5Checksum,
       sizeBytes: f.size ? Number(f.size) : undefined,
     })
   );
+};
+
+export const getLastDriveJsonSyncMeta = (): DriveJsonLastSyncMeta | null => {
+  try {
+    const raw = localStorage.getItem(DRIVE_JSON_LAST_SYNC_META_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as DriveJsonLastSyncMeta) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveLastDriveJsonSyncMeta = (meta: DriveJsonLastSyncMeta): void => {
+  try {
+    localStorage.setItem(DRIVE_JSON_LAST_SYNC_META_KEY, JSON.stringify(meta));
+  } catch {
+    // ignore storage quota errors
+  }
+};
+
+export const downloadDriveJsonFileById = async (fileId: string): Promise<any> => {
+  const token = await getAccessToken();
+  if (!token) {
+    throw new Error('Sessão Google Drive não autorizada ou expirada.');
+  }
+  const cleanId = extractDriveFileOrFolderId(fileId);
+  if (!cleanId) {
+    throw new Error('ID de arquivo do Google Drive inválido.');
+  }
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(cleanId)}?alt=media&supportsAllDrives=true`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    }
+  );
+  if (!res.ok) {
+    markDriveTokenExpiredOrForbidden(res.status);
+    const errText = await res.text().catch(() => '');
+    throw new Error(
+      `Falha ao baixar JSON do Google Drive (HTTP ${res.status})${errText ? `: ${errText.slice(0, 140)}` : ''}`
+    );
+  }
+  return res.json();
+};
+
+export interface DriveJsonSyncCheckResult {
+  status: 'updated' | 'unchanged' | 'no_token' | 'no_folder' | 'no_file' | 'error';
+  file?: DriveJsonBackupFile;
+  rawJson?: any;
+  folderId?: string;
+  error?: string;
+}
+
+export const checkAndFetchLatestDriveJsonFile = async (options?: {
+  folderIdOrUrl?: string;
+  forceRefresh?: boolean;
+}): Promise<DriveJsonSyncCheckResult> => {
+  const token = await getAccessToken();
+  if (!token) {
+    return { status: 'no_token' };
+  }
+
+  const savedFolder = getSavedBackupDriveFolderInfo();
+  const folderId = extractDriveFileOrFolderId(options?.folderIdOrUrl || savedFolder.folderId);
+  if (!folderId) {
+    return { status: 'no_folder' };
+  }
+
+  try {
+    const files = await listJsonBackupsInDriveFolder(folderId);
+    if (!files || files.length === 0) {
+      return { status: 'no_file', folderId };
+    }
+
+    // Prioriza arquivo oficial "lista_piloto_2027.json" se existir na pasta; senão usa o .json mais recente
+    const preferred =
+      files.find((f) => f.name.trim().toLowerCase() === 'lista_piloto_2027.json') ||
+      files.find((f) => f.name.toLowerCase().includes('lista_piloto')) ||
+      files[0];
+
+    const lastMeta = getLastDriveJsonSyncMeta();
+    const isSameVersion =
+      Boolean(lastMeta) &&
+      lastMeta!.fileId === preferred.id &&
+      (Boolean(preferred.md5Checksum && lastMeta!.md5Checksum === preferred.md5Checksum) ||
+        Boolean(preferred.modifiedTime && lastMeta!.modifiedTime === preferred.modifiedTime));
+
+    if (isSameVersion && !options?.forceRefresh) {
+      return { status: 'unchanged', file: preferred, folderId };
+    }
+
+    const rawJson = await downloadDriveJsonFileById(preferred.id);
+    return {
+      status: 'updated',
+      file: preferred,
+      rawJson,
+      folderId,
+    };
+  } catch (err: any) {
+    return {
+      status: 'error',
+      folderId,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 };
 
 export const uploadJsonBackupToGoogleDrive = async (params: {

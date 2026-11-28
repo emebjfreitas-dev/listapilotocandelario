@@ -16,7 +16,8 @@ import {
   OFFICIAL_MATRIX_REVISION,
   OFFICIAL_SCHOOL_MATRIX_2027,
 } from './officialMatrix2027.ts';
-export { type OfficialMatrixRow, OFFICIAL_MATRIX_REVISION, OFFICIAL_SCHOOL_MATRIX_2027 };
+import { OFFICIAL_SED_STUDENTS_MAP } from './officialSedStudents.ts';
+export { type OfficialMatrixRow, OFFICIAL_MATRIX_REVISION, OFFICIAL_SCHOOL_MATRIX_2027, OFFICIAL_SED_STUDENTS_MAP };
 
 const APP_BASE_URL =
   (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
@@ -1057,42 +1058,55 @@ export const OFFICIAL_2027_CLASSES_CONFIG = OFFICIAL_SCHOOL_MATRIX_2027.map((row
   totalStudents: row.sedExpectedStudents,
 }));
 
-export const INITIAL_CLASSES: ClassGroup[] = OFFICIAL_SCHOOL_MATRIX_2027.map((cfg) => ({
-  id: cfg.id,
-  name: cfg.name,
-  turmaAbrev: cfg.turmaAbrev,
-  grade: cfg.grade,
-  shift: cfg.shift,
-  room: cfg.room,
-  teacherName: cfg.teacherName,
-  teacherEmail: cfg.teacherEmail,
-  pronoun: cfg.pronoun,
-  teacherPronoun: cfg.pronoun,
-  teacherFirstName: cfg.teacherFirstName,
-  sedClassName: cfg.sedClassName,
-  turmaSedName: cfg.sedClassName,
-  sedExpectedStudents: cfg.sedExpectedStudents,
-  classeSedCode: cfg.classeSedCode,
-  artTeacher: cfg.artTeacher,
-  peTeacher: cfg.peTeacher,
-  englishTeacher: cfg.englishTeacher,
-  totalStudents: 0,
-  presenceRate: 0,
-  statusText: 'Aguardando importação de estudantes',
-  isPending: false,
-  students: [],
-  monthlyAbsences: 0,
-  classesHeld: 20,
-  classesPlanned: 20,
-  monthlySchoolDays: getDefaultMonthlySchoolDaysMap(),
-  weeklyPerformance: [],
-  pedagogicalNotes: '',
-  isVaga: Boolean(cfg.isVaga),
-  periodo: cfg.periodo,
-  matrixRevision: OFFICIAL_MATRIX_REVISION,
-}));
+export const INITIAL_CLASSES: ClassGroup[] = OFFICIAL_SCHOOL_MATRIX_2027.map((cfg) => {
+  const officialStudents = OFFICIAL_SED_STUDENTS_MAP[cfg.id] || [];
+  const studentCount = officialStudents.length;
+  const activeStudents = officialStudents.filter((s) => s.active !== false);
+  const avgAttendance =
+    activeStudents.length > 0
+      ? Math.round(
+          activeStudents.reduce((acc, s) => acc + (s.attendanceRate ?? 95), 0) /
+            activeStudents.length
+        )
+      : cfg.presenceRate;
 
-export const TOTAL_STUDENTS_COUNT = 0;
+  return {
+    id: cfg.id,
+    name: cfg.name,
+    turmaAbrev: cfg.turmaAbrev,
+    grade: cfg.grade,
+    shift: cfg.shift,
+    room: cfg.room,
+    teacherName: cfg.teacherName,
+    teacherEmail: cfg.teacherEmail,
+    pronoun: cfg.pronoun,
+    teacherPronoun: cfg.pronoun,
+    teacherFirstName: cfg.teacherFirstName,
+    sedClassName: cfg.sedClassName,
+    turmaSedName: cfg.sedClassName,
+    sedExpectedStudents: cfg.sedExpectedStudents,
+    classeSedCode: cfg.classeSedCode,
+    artTeacher: cfg.artTeacher,
+    peTeacher: cfg.peTeacher,
+    englishTeacher: cfg.englishTeacher,
+    totalStudents: studentCount,
+    presenceRate: studentCount > 0 ? avgAttendance : cfg.presenceRate,
+    statusText: studentCount > 0 ? 'Pronto para Lançamento' : 'Aguardando importação de estudantes',
+    isPending: cfg.isPending,
+    students: officialStudents,
+    monthlyAbsences: officialStudents.reduce((acc, s) => acc + (s.totalAbsencesMonth ?? 0), 0),
+    classesHeld: 20,
+    classesPlanned: 20,
+    monthlySchoolDays: getDefaultMonthlySchoolDaysMap(),
+    weeklyPerformance: [],
+    pedagogicalNotes: '',
+    isVaga: Boolean(cfg.isVaga),
+    periodo: cfg.periodo,
+    matrixRevision: OFFICIAL_MATRIX_REVISION,
+  };
+});
+
+export const TOTAL_STUDENTS_COUNT = INITIAL_CLASSES.reduce((acc, c) => acc + c.totalStudents, 0);
 
 export const DEFAULT_SHEET_CONFIG: GoogleSheetConfig = {
   sheetUrl: 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit',

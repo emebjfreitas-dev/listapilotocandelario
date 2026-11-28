@@ -1873,8 +1873,11 @@ const enrichClassesWithOfficialMatrix = (loadedClasses: ClassGroup[]): ClassGrou
       loadedMap.get(normalizeClassLookupKey(off.name));
     if (!loaded) return off;
 
-    // Preserva integralmente os estudantes carregados/importados (inclusive lista vazia [])
-    const baseStudents = Array.isArray(loaded.students) ? loaded.students : off.students;
+    // Se a turma carregada possui estudantes, preserva; se estiver vazia ([]), hidrata com a lista oficial 2027
+    const baseStudents =
+      Array.isArray(loaded.students) && loaded.students.length > 0
+        ? loaded.students
+        : off.students;
     const seenStudentKeysInClass = new Set<string>();
     const deduplicatedBaseStudents: Student[] = [];
     baseStudents.forEach((st) => {
@@ -2737,6 +2740,114 @@ export const importSchoolDataFromJson = async (
   } catch (err: any) {
     return { ok: false, error: err?.message || 'Falha ao salvar dados importados.' };
   }
+};
+
+/**
+ * Mescla atualizações periódicas do JSON salvo no Google Drive com o estado atual do app,
+ * preservando integralmente frequências, atestados, alertas de busca ativa, fotos e PDFs já lançados.
+ */
+export const mergeDriveJsonPayloadWithCurrentClasses = (
+  rawJson: any,
+  currentClasses: ClassGroup[]
+): {
+  ok: boolean;
+  error?: string;
+  classes?: ClassGroup[];
+  totalStudents?: number;
+} => {
+  const validation = validateAndSanitizeJsonPayload(rawJson);
+  if (!validation.isValid || !validation.classes) {
+    return { ok: false, error: validation.error || 'JSON inválido recebido do Google Drive.' };
+  }
+
+  const normalizeKey = (val?: string) =>
+    String(val || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const existingStudentsByRa = new Map<string, Student>();
+  const existingStudentsByName = new Map<string, Student>();
+  const existingClassById = new Map<string, ClassGroup>();
+
+  (currentClasses || []).forEach((cls) => {
+    if (!cls || !cls.id) return;
+    existingClassById.set(cls.id, cls);
+    (cls.students || []).forEach((st) => {
+      const ra = String(st.ra || '').replace(/\D/g, '').trim();
+      if (ra) existingStudentsByRa.set(ra, st);
+      const normName = normalizeKey(st.name || st.estudante);
+      if (normName) existingStudentsByName.set(`${cls.id}|${normName}`, st);
+    });
+  });
+
+  const mergedClasses: ClassGroup[] = validation.classes.map((incomingCls) => {
+    const prevCls = existingClassById.get(incomingCls.id);
+    const mergedStudents: Student[] = (incomingCls.students || []).map((st) => {
+      const ra = String(st.ra || '').replace(/\D/g, '').trim();
+      const normName = normalizeKey(st.name || st.estudante);
+      const prevSt =
+        (ra ? existingStudentsByRa.get(ra) : undefined) ||
+        (normName ? existingStudentsByName.get(`${incomingCls.id}|${normName}`) : undefined);
+
+      if (!prevSt) return st;
+
+      return {
+        ...st,
+        id: prevSt.id || st.id,
+        status: prevSt.status || st.status,
+        totalAbsencesMonth:
+          typeof prevSt.totalAbsencesMonth === 'number'
+            ? prevSt.totalAbsencesMonth
+            : st.totalAbsencesMonth,
+        justifiedAbsences:
+          typeof prevSt.justifiedAbsences === 'number'
+            ? prevSt.justifiedAbsences
+            : st.justifiedAbsences,
+        diasLetivosRecorte:
+          typeof prevSt.diasLetivosRecorte === 'number'
+            ? prevSt.diasLetivosRecorte
+            : st.diasLetivosRecorte,
+        monthlyAttendanceByMonth:
+          prevSt.monthlyAttendanceByMonth || st.monthlyAttendanceByMonth,
+        consecutiveAbsenceAlert:
+          prevSt.consecutiveAbsenceAlert || st.consecutiveAbsenceAlert,
+        notes: prevSt.notes || st.notes,
+        alert: prevSt.alert || st.alert,
+        photo: prevSt.photo || st.photo,
+        photoDriveId: prevSt.photoDriveId || st.photoDriveId,
+        photoDriveUrl: prevSt.photoDriveUrl || st.photoDriveUrl,
+        photoManualLink: prevSt.photoManualLink ?? st.photoManualLink,
+        photoSha256: prevSt.photoSha256 || st.photoSha256,
+        photoMd5: prevSt.photoMd5 || st.photoMd5,
+        fichaPdfDriveId: prevSt.fichaPdfDriveId || st.fichaPdfDriveId,
+        fichaPdfDriveUrl: prevSt.fichaPdfDriveUrl || st.fichaPdfDriveUrl,
+        fichaPdfSubfolder: prevSt.fichaPdfSubfolder || st.fichaPdfSubfolder,
+        fichaPdfManualLink: prevSt.fichaPdfManualLink ?? st.fichaPdfManualLink,
+        fichaPdfSha256: prevSt.fichaPdfSha256 || st.fichaPdfSha256,
+        fichaPdfMd5: prevSt.fichaPdfMd5 || st.fichaPdfMd5,
+      };
+    });
+
+    return {
+      ...(prevCls || incomingCls),
+      ...incomingCls,
+      monthlySchoolDays: prevCls?.monthlySchoolDays || incomingCls.monthlySchoolDays,
+      pedagogicalNotes: prevCls?.pedagogicalNotes || incomingCls.pedagogicalNotes,
+      students: mergedStudents,
+      totalStudents: mergedStudents.length,
+    };
+  });
+
+  const enriched = enrichClassesWithOfficialMatrix(mergedClasses);
+  const totalStudents = enriched.reduce((acc, c) => acc + c.students.length, 0);
+  return {
+    ok: true,
+    classes: enriched,
+    totalStudents,
+  };
 };
 
 /**

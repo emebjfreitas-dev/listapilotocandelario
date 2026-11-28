@@ -47,6 +47,7 @@ import {
   pullOfficialCalendarFromServer,
   setLocalClassesUpdatedAtMs,
   flushPendingOfflineQueue,
+  mergeDriveJsonPayloadWithCurrentClasses,
 } from './services/db';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
@@ -86,6 +87,9 @@ import {
   syncPhotosFromDriveFolder,
   attachPhotosFromDiscoveredCache,
   logoutGoogle,
+  checkAndFetchLatestDriveJsonFile,
+  saveLastDriveJsonSyncMeta,
+  DRIVE_JSON_AUTO_SYNC_INTERVAL_MS,
 } from './services/googleSheetsApi';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -1425,6 +1429,108 @@ export default function App() {
       if (unsubFirestore) unsubFirestore();
     };
   }, [isAuthVerified, applyRemoteClassesSafely, applyAuthorizedUsersIfChanged]);
+
+  // Recarregamento periódico automático (a cada 5 minutos) do arquivo JSON salvo na pasta do Google Drive
+  useEffect(() => {
+    if (!isAuthVerified) return;
+    let active = true;
+    let lastCheckedAtMs = 0;
+    let inFlight = false;
+
+    const runDriveJsonFolderCheck = async (options?: {
+      force?: boolean;
+      notifyUnchanged?: boolean;
+      folderIdOrUrl?: string;
+    }) => {
+      if (!active || inFlight) return;
+      if (!options?.force && document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (!options?.force && now - lastCheckedAtMs < 120000) return;
+
+      inFlight = true;
+      lastCheckedAtMs = now;
+      try {
+        const result = await checkAndFetchLatestDriveJsonFile({
+          folderIdOrUrl: options?.folderIdOrUrl,
+          forceRefresh: options?.force,
+        });
+
+        if (!active) return;
+
+        if (result.status === 'updated' && result.rawJson && result.file) {
+          const merged = mergeDriveJsonPayloadWithCurrentClasses(
+            result.rawJson,
+            classesRef.current
+          );
+          if (merged.ok && merged.classes) {
+            setClasses(merged.classes);
+            saveStoredClasses(merged.classes);
+            saveLastDriveJsonSyncMeta({
+              fileId: result.file.id,
+              fileName: result.file.name,
+              folderId: result.folderId || '',
+              modifiedTime: result.file.modifiedTime,
+              md5Checksum: result.file.md5Checksum,
+              syncedAtISO: new Date().toISOString(),
+              totalStudents: merged.totalStudents,
+            });
+            window.dispatchEvent(new CustomEvent('emeb-drive-json-synced', { detail: result.file }));
+            toast.success('Lista de estudantes atualizada do Google Drive', {
+              description: `${result.file.name} (${merged.totalStudents || 0} estudantes sincronizados preservando frequências).`,
+            });
+          }
+        } else if (options?.notifyUnchanged) {
+          if (result.status === 'unchanged') {
+            toast.info('O arquivo JSON da pasta já está na versão mais recente.');
+          } else if (result.status === 'no_file') {
+            toast.warning('Nenhum arquivo .json encontrado na pasta configurada do Google Drive.');
+          } else if (result.status === 'error') {
+            toast.error('Falha ao ler JSON da pasta do Google Drive', {
+              description: result.error,
+            });
+          }
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const initialTimer = window.setTimeout(() => {
+      void runDriveJsonFolderCheck({ force: false });
+    }, 3500);
+
+    const intervalId = window.setInterval(() => {
+      void runDriveJsonFolderCheck({ force: false });
+    }, DRIVE_JSON_AUTO_SYNC_INTERVAL_MS);
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void runDriveJsonFolderCheck({ force: false });
+      }
+    };
+
+    const handleManualTrigger = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail || {};
+      void runDriveJsonFolderCheck({
+        force: true,
+        notifyUnchanged: Boolean(detail.notifyUnchanged),
+        folderIdOrUrl: detail.folderIdOrUrl,
+      });
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('emeb-trigger-drive-json-sync', handleManualTrigger);
+
+    return () => {
+      active = false;
+      window.clearTimeout(initialTimer);
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('emeb-trigger-drive-json-sync', handleManualTrigger);
+    };
+  }, [isAuthVerified]);
 
   // Listen to localStorage changes from other browser tabs without ping-pong re-saves
   useEffect(() => {

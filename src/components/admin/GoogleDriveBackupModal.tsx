@@ -16,6 +16,8 @@ import {
   listJsonBackupsInDriveFolder,
   uploadJsonBackupToGoogleDrive,
   getStoredDriveBackupHistory,
+  getLastDriveJsonSyncMeta,
+  DriveJsonLastSyncMeta,
   DriveFolderCheckResult,
   DriveJsonBackupFile,
   DriveBackupHistoryItem,
@@ -100,6 +102,9 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
 
   const [driveFiles, setDriveFiles] = useState<DriveJsonBackupFile[]>([]);
   const [localHistory, setLocalHistory] = useState<DriveBackupHistoryItem[]>([]);
+  const [lastAutoSyncMeta, setLastAutoSyncMeta] = useState<DriveJsonLastSyncMeta | null>(() =>
+    getLastDriveJsonSyncMeta()
+  );
 
   const totalStudents = useMemo(
     () => classes.reduce((acc, c) => acc + (c.students?.length || 0), 0),
@@ -161,6 +166,7 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
     setLastUploadedItem(null);
     setUploadError(null);
     setLocalHistory(getStoredDriveBackupHistory());
+    setLastAutoSyncMeta(getLastDriveJsonSyncMeta());
 
     if (saved.folderId && currentAuth.hasValidToken) {
       void refreshDriveFilesList(saved.folderId);
@@ -174,10 +180,15 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
         void refreshDriveFilesList(updated.folderId);
       }
     };
+    const handleDriveJsonSynced = () => {
+      setLastAutoSyncMeta(getLastDriveJsonSyncMeta());
+    };
     window.addEventListener('emeb-cloud-links-updated', handleLinksUpdated);
+    window.addEventListener('emeb-drive-json-synced', handleDriveJsonSynced);
     window.addEventListener('storage', handleLinksUpdated);
     return () => {
       window.removeEventListener('emeb-cloud-links-updated', handleLinksUpdated);
+      window.removeEventListener('emeb-drive-json-synced', handleDriveJsonSynced);
       window.removeEventListener('storage', handleLinksUpdated);
     };
   }, [isOpen]);
@@ -597,6 +608,49 @@ export const GoogleDriveBackupModal: React.FC<GoogleDriveBackupModalProps> = ({
 
             {/* Histórico de Backups no Drive / Sessão */}
             <div className="space-y-2.5 pt-1">
+              <div className="p-3.5 rounded-2xl bg-[#eef3f9] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                <div className="min-w-0 space-y-0.5">
+                  <p className="font-semibold text-slate-950">
+                    Recarregamento automático da pasta (a cada 5 minutos)
+                  </p>
+                  <p className="text-[11px] text-slate-700 leading-relaxed">
+                    {lastAutoSyncMeta ? (
+                      <>
+                        Última leitura:{' '}
+                        <span className="font-medium text-slate-950">
+                          {lastAutoSyncMeta.fileName}
+                        </span>{' '}
+                        em {formatDateTimeBR(lastAutoSyncMeta.syncedAtISO)} (
+                        {lastAutoSyncMeta.totalStudents ?? '—'} estudantes).
+                      </>
+                    ) : (
+                      'Quando o Google Drive estiver conectado e a pasta configurada, o app verifica atualizações do JSON automaticamente na abertura e a cada 5 minutos.'
+                    )}
+                  </p>
+                </div>
+
+                {extractedFolderId && authState.hasValidToken && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveBackupDriveFolderUrl(folderInput, extractedFolderId, folderName);
+                      window.dispatchEvent(
+                        new CustomEvent('emeb-trigger-drive-json-sync', {
+                          detail: {
+                            notifyUnchanged: true,
+                            folderIdOrUrl: extractedFolderId,
+                          },
+                        })
+                      );
+                    }}
+                    className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#14428c] hover:bg-[#0f3370] text-white font-medium text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0 shadow-xs"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                    <span>Sincronizar JSON da Pasta Agora</span>
+                  </button>
+                )}
+              </div>
+
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-[#14428c]" />

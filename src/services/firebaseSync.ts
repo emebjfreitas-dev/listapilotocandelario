@@ -95,12 +95,32 @@ try {
     ignoreUndefinedProperties: true,
     experimentalAutoDetectLongPolling: true,
   };
-  firestoreDbInstance = rawFirebaseConfig.firestoreDatabaseId
-    ? initializeFirestore(app, settings, rawFirebaseConfig.firestoreDatabaseId)
-    : initializeFirestore(app, settings);
+  const targetNamedDb =
+    rawFirebaseConfig.firestoreDatabaseId &&
+    rawFirebaseConfig.firestoreDatabaseId !== '(default)' &&
+    rawFirebaseConfig.firestoreDatabaseId.trim() !== ''
+      ? rawFirebaseConfig.firestoreDatabaseId.trim()
+      : undefined;
+
+  try {
+    firestoreDbInstance = targetNamedDb
+      ? initializeFirestore(app, settings, targetNamedDb)
+      : initializeFirestore(app, settings);
+  } catch {
+    firestoreDbInstance = targetNamedDb
+      ? getFirestore(app, targetNamedDb)
+      : getFirestore(app);
+  }
 } catch {
-  firestoreDbInstance = rawFirebaseConfig.firestoreDatabaseId
-    ? getFirestore(app, rawFirebaseConfig.firestoreDatabaseId)
+  const targetNamedDb =
+    rawFirebaseConfig.firestoreDatabaseId &&
+    rawFirebaseConfig.firestoreDatabaseId !== '(default)' &&
+    rawFirebaseConfig.firestoreDatabaseId.trim() !== ''
+      ? rawFirebaseConfig.firestoreDatabaseId.trim()
+      : undefined;
+
+  firestoreDbInstance = targetNamedDb
+    ? getFirestore(app, targetNamedDb)
     : getFirestore(app);
 }
 export const firestoreDb = firestoreDbInstance;
@@ -150,6 +170,17 @@ export const isFirestoreQuotaExceededError = (error: unknown): boolean => {
     msg.includes('resource-exhausted') ||
     msg.includes('Quota limit exceeded') ||
     msg.includes('Quota exceeded')
+  );
+};
+
+export const isFirestoreDatabaseMissingError = (error: unknown): boolean => {
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code;
+  return (
+    code === 'not-found' ||
+    msg.includes('does not exist for project') ||
+    msg.includes('NOT_FOUND')
   );
 };
 
@@ -244,11 +275,12 @@ if (typeof window !== 'undefined') {
     if (
       text.includes('resource-exhausted') ||
       text.includes('Quota limit exceeded') ||
-      text.includes('Quota exceeded')
+      text.includes('Quota exceeded') ||
+      text.includes('does not exist for project')
     ) {
       markFirestoreQuotaExceeded(text);
       console.warn(
-        'Aviso do Firestore: Cota diária gratuita atingida. Operando em cache local e planilha.',
+        'Aviso do Firestore: Banco remoto indisponível ou cota diária atingida. Operando em cache local e Google Drive.',
         text
       );
       return;
@@ -296,7 +328,13 @@ export function handleFirestoreError(
   if (isFirestoreQuotaExceededError(error)) {
     markFirestoreQuotaExceeded(error);
     console.warn(
-      'Firestore Quota Exceeded (pausando gravações remotas; operando com segurança em cache local e planilha):',
+      'Firestore Quota Exceeded (pausando gravações remotas; operando com segurança em cache local e Drive):',
+      errInfo.error
+    );
+  } else if (isFirestoreDatabaseMissingError(error)) {
+    markFirestoreQuotaExceeded(error);
+    console.warn(
+      'Firestore database indisponível no projeto (operando com segurança em cache local e Google Drive):',
       errInfo.error
     );
   } else if (isFirestoreInternalAssertionError(error)) {
@@ -788,7 +826,12 @@ export async function monitorFirestoreIntegrityOnBoot(options?: {
             cursor = snapshot.docs[snapshot.docs.length - 1];
           }
         } catch (error) {
-          console.error('[EPOCH] Falha ao verificar estudantes remotos:', error);
+          if (isFirestoreQuotaExceededError(error) || isFirestoreDatabaseMissingError(error)) {
+            markFirestoreQuotaExceeded(error);
+            console.warn('[EPOCH] Firestore indisponível ou sem cota no boot; operando localmente:', error);
+          } else {
+            console.warn('[EPOCH] Falha ao verificar estudantes remotos:', error);
+          }
 
           return setIntegrityReport({
             status: 'offline_local_preserved',
@@ -829,7 +872,10 @@ export async function monitorFirestoreIntegrityOnBoot(options?: {
           });
         }
 
-        if (options?.baseClasses && options.baseClasses.length > 0) {
+        const hasBaseStudents = Boolean(
+          options?.baseClasses?.some((c) => Array.isArray(c.students) && c.students.length > 0)
+        );
+        if (options?.baseClasses && options.baseClasses.length > 0 && !hasBaseStudents) {
           const wipeSuccess = await wipeFirestoreSchoolDataOnly(
             options.baseClasses,
             CLEAN_DB_RESET_EPOCH_ID
@@ -1254,7 +1300,7 @@ export const saveClassesToFirestoreCloud = async (
   try {
     const auth = getAuth(app);
     if (!auth.currentUser) {
-      console.error('[Firestore] Gravação cancelada: usuário Firebase não autenticado.', {
+      console.warn('[Firestore] Gravação ignorada: usuário Firebase ainda não autenticado.', {
         projectId: rawFirebaseConfig.projectId,
         databaseId: rawFirebaseConfig.firestoreDatabaseId,
         collection: 'school_classes_2027',
@@ -1337,16 +1383,7 @@ export const saveClassesToFirestoreCloud = async (
     }
     return true;
   } catch (error: any) {
-    console.error('[Firestore] Falha ao salvar school_classes_2027', {
-      code: error?.code || 'sem-codigo',
-      message: error?.message || String(error),
-      projectId: rawFirebaseConfig.projectId,
-      databaseId: rawFirebaseConfig.firestoreDatabaseId,
-      user: getAuth(app).currentUser?.email || null,
-      emailVerified: getAuth(app).currentUser?.emailVerified || false,
-    });
-
-    if (isFirestoreQuotaExceededError(error)) {
+    if (isFirestoreQuotaExceededError(error) || isFirestoreDatabaseMissingError(error)) {
       markFirestoreQuotaExceeded(error);
     }
 

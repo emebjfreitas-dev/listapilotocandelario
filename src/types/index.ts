@@ -141,6 +141,15 @@ export interface Student extends StudentSedData {
   notes?: string;
   guardianName?: string;
   guardianPhone?: string;
+  active?: boolean;
+  attendanceRate?: number;
+  classesHeld?: number;
+  classesAttended?: number;
+  absences?: number;
+  consecutiveAbsences?: number;
+  schoolDaysCount?: number;
+  hasPhoto?: boolean;
+  hasScannedPdf?: boolean;
 }
 
 export type SyncStateStatus = 'synced' | 'syncing' | 'pending' | 'error';

@@ -374,8 +374,8 @@ export const calculateStudentEnrolledDaysInMonth = (
     };
   }
 
-  // Caso tenha dataMovimentacao em outro formato ou dia intermediário (ex: BXTR dia 14 ou 27)
-  if (exitDate && exitDate.day < 28) {
+  // Caso tenha dataMovimentacao em outro formato ou dia intermediário no mês de referência
+  if (exitDate && exitDate.month === targetMonthNumber && exitDate.day < 28) {
     const proportionalDays = Math.max(
       1,
       Math.min(maxDays, Math.round((exitDate.day / 30) * maxDays))
@@ -389,8 +389,8 @@ export const calculateStudentEnrolledDaysInMonth = (
     }
   }
 
-  // Caso tenha entrado no meio do mês (ex: dia 23)
-  if (entryDate && entryDate.day > 5 && !(entryDate.day === 3 && entryDate.month === 2)) {
+  // Caso tenha entrado no meio do mês de referência (ex: entrou em 23/10)
+  if (entryDate && entryDate.month === targetMonthNumber && entryDate.day > 5) {
     const remainingDays = Math.max(
       1,
       Math.min(maxDays, Math.round(((31 - entryDate.day) / 30) * maxDays))
