@@ -614,12 +614,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {/* Faixa Unificada de KPIs com Ícones SF Symbols e Hierarquia Apple HIG */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 min-w-0 items-stretch">
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] min-w-0 flex flex-col justify-between h-full">
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] min-w-0 flex flex-col justify-between h-full">
             <div className="flex items-start justify-between gap-2">
               <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                 Estudantes Ativos
               </span>
-              <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 border border-black/[0.06]">
+              <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 shadow-2xs">
                 <SFSymbol name="groups" filled size={15} weight={500} />
               </span>
             </div>
@@ -639,13 +639,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 triggerMenuHaptic('light');
                 onNavigateToScreen('detalhes');
               }}
-              className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.04] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
+              className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
             >
               <div className="flex items-start justify-between gap-2 w-full">
                 <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                   Minha Turma
                 </span>
-                <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 border border-black/[0.06]">
+                <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 shadow-2xs">
                   <SFSymbol name="school" filled size={15} weight={500} />
                 </span>
               </div>
@@ -664,13 +664,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 triggerMenuHaptic('light');
                 onNavigateToScreen('turmas');
               }}
-              className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.04] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
+              className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
             >
               <div className="flex items-start justify-between gap-2 w-full">
                 <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                   Turmas
                 </span>
-                <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 border border-black/[0.06]">
+                <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 shadow-2xs">
                   <SFSymbol name="school" filled size={15} weight={500} />
                 </span>
               </div>
@@ -683,12 +683,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </motion.button>
           )}
 
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] min-w-0 flex flex-col justify-between h-full">
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] min-w-0 flex flex-col justify-between h-full">
             <div className="flex items-start justify-between gap-2">
               <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                 Presença Média
               </span>
-              <span className="w-7 h-7 rounded-full bg-[#EAF7EE] text-[#1B873F] flex items-center justify-center shrink-0 border border-[#1B873F]/20">
+              <span className="w-7 h-7 rounded-full bg-[#EAF7EE] text-[#1B873F] flex items-center justify-center shrink-0">
                 <SFSymbol name="verified" filled size={15} weight={500} />
               </span>
             </div>
@@ -705,13 +705,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               triggerMenuHaptic('light');
               onNavigateToScreen('faltas_consecutivas');
             }}
-            className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.04] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
+            className="text-left p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] hover:bg-[#E8E8ED] transition-colors cursor-pointer min-w-0 flex flex-col justify-between h-full"
           >
             <div className="flex items-start justify-between gap-2 w-full">
               <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                 Busca Ativa (ECA)
               </span>
-              <span className="w-7 h-7 rounded-full bg-[#FFEBEB] text-[#D70015] flex items-center justify-center shrink-0 border border-[#D70015]/20">
+              <span className="w-7 h-7 rounded-full bg-[#FFEBEB] text-[#D70015] flex items-center justify-center shrink-0">
                 <SFSymbol name="gpp_maybe" filled size={15} weight={500} />
               </span>
             </div>
@@ -724,12 +724,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </span>
           </motion.button>
 
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] border border-black/[0.04] col-span-2 sm:col-span-1 min-w-0 flex flex-col justify-between h-full">
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#F5F5F7] col-span-2 sm:col-span-1 min-w-0 flex flex-col justify-between h-full">
             <div className="flex items-start justify-between gap-2">
               <span className="text-xs sm:text-[13px] font-semibold text-[#86868B] leading-snug">
                 Referência
               </span>
-              <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 border border-black/[0.06]">
+              <span className="w-7 h-7 rounded-full bg-white text-[#0071E3] flex items-center justify-center shrink-0 shadow-2xs">
                 <SFSymbol name="calendar_month" filled size={15} weight={500} />
               </span>
             </div>
@@ -741,7 +741,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium leading-tight ${
                   windowEval.isAllowedToLaunch
                     ? 'bg-[#EAF7EE] text-[#1B873F]'
-                    : 'bg-white text-[#424245] border border-black/[0.06]'
+                    : 'bg-white text-[#424245]'
                 }`}
               >
                 {windowEval.isAllowedToLaunch ? 'Janela aberta' : 'Consulta disponível'}
@@ -765,7 +765,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               onChange={(e) => setGlobalSearchQuery(e.target.value)}
               placeholder="Pesquisar turma, docente, estudante ou RA instantaneamente..."
               aria-label="Pesquisa global de turmas e estudantes"
-              className="w-full min-h-[46px] pl-11 pr-10 rounded-2xl bg-[#F5F5F7] border border-black/[0.08] focus:bg-white focus:border-[#0071E3] focus:outline-hidden text-sm sm:text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] transition-colors duration-150"
+              className="w-full min-h-[46px] pl-11 pr-10 rounded-2xl bg-[#F5F5F7] focus:bg-white text-sm sm:text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] transition-colors duration-150 outline-hidden"
             />
             {globalSearchQuery && (
               <button
@@ -934,11 +934,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {missingFichasSummary.totalMissing > 0 && (
         <section
           aria-label="Aviso de Fichas Informativas Pendentes"
-          className="bg-white rounded-3xl p-5 sm:p-6 border border-black/[0.06] shadow-sm space-y-4 min-w-0"
+          className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm space-y-4 min-w-0"
         >
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
             <div className="flex items-start gap-3.5 min-w-0 flex-1">
-              <div className="w-10 h-10 rounded-2xl bg-[#FFF5E5] text-[#B25000] border border-[#B25000]/15 flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-10 h-10 rounded-2xl bg-[#FFF5E5] text-[#B25000] flex items-center justify-center shrink-0 mt-0.5">
                 <SFSymbol name="description" filled size={20} weight={500} />
               </div>
               <div className="min-w-0 space-y-1">
@@ -970,7 +970,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   triggerMenuHaptic('light');
                   void handleCopyFamilyFichaRequest();
                 }}
-                className="min-h-[38px] px-4 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.06] text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors active:scale-95"
+                className="min-h-[38px] px-4 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors active:scale-95"
               >
                 {copiedFamilyFichaPrompt ? (
                   <>
@@ -1027,7 +1027,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                         ? onOpenStudentPdf(st, missingFichasSummary.classesWithMissing[0].classGroup.name)
                         : onOpenClassPendingFichas?.(missingFichasSummary.classesWithMissing[0].classGroup)
                     }
-                    className="px-2.5 py-1 rounded-full bg-white hover:bg-[#FFF5E5] border border-black/[0.06] text-xs font-medium text-[#1D1D1F] tabular-nums cursor-pointer transition-colors"
+                    className="px-2.5 py-1 rounded-full bg-white hover:bg-[#FFF5E5] text-xs font-medium text-[#1D1D1F] tabular-nums cursor-pointer transition-colors shadow-2xs"
                   >
                     {st.number.toString().padStart(2, '0')} · {st.name}
                   </button>
@@ -1064,7 +1064,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       onNavigateToScreen('detalhes');
                     }
                   }}
-                  className="min-h-[34px] px-3.5 py-1 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] border border-black/[0.06] text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1.5 tabular-nums cursor-pointer transition-colors"
+                  className="min-h-[34px] px-3.5 py-1 rounded-full bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1.5 tabular-nums cursor-pointer transition-colors"
                 >
                   <span>{cls.name}</span>
                   <span className="px-1.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#B25000] text-white">
@@ -1119,7 +1119,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               type="button"
               whileTap={tapAnimation}
               onClick={item.onClick}
-              className="w-full h-full min-w-0 min-h-[84px] text-left bg-white hover:bg-[#FAFAFC] border border-black/[0.06] rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer flex items-center justify-between gap-3.5 group transition-all duration-150 active:scale-[0.98]"
+              className="w-full h-full min-w-0 min-h-[84px] text-left bg-white hover:bg-[#FAFAFC] rounded-2xl p-4 sm:p-5 shadow-xs cursor-pointer flex items-center justify-between gap-3.5 group transition-all duration-150 active:scale-[0.98]"
             >
               <div className="flex items-center gap-3.5 min-w-0 flex-1">
                 <div
@@ -1148,7 +1148,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* 3. SELETOR DIRETO DE TURMAS (Apenas para quem gerencia múltiplas turmas) */}
       {userRole !== 'usuario' && (
-      <section ref={classesSectionRef} className="bg-white rounded-3xl p-5 sm:p-6 border border-black/[0.06] shadow-sm space-y-5 min-w-0 scroll-mt-24">
+      <section ref={classesSectionRef} className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 min-w-0 scroll-mt-24">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 min-w-0">
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] break-words">
@@ -1160,7 +1160,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
 
           {visibleBaseClasses.length > 1 && (
-            <div className="grid grid-cols-3 sm:inline-flex w-full sm:w-auto max-w-full min-w-0 p-1 bg-[#F5F5F7] rounded-full border border-black/[0.06] gap-1">
+            <div className="grid grid-cols-3 sm:inline-flex w-full sm:w-auto max-w-full min-w-0 p-1 bg-[#F5F5F7] rounded-full gap-1">
               <button
                 type="button"
                 onClick={() => {
@@ -1232,7 +1232,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               value={turmaSearchInput}
               onChange={(e) => setTurmaSearchInput(e.target.value)}
               placeholder="Buscar turma ou docente (ex: G4 A, 1º B, 5º A)..."
-              className="w-full min-h-[44px] pl-11 pr-4 rounded-xl bg-[#F5F5F7] border border-black/[0.08] focus:bg-white text-sm sm:text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] transition-colors duration-150"
+              className="w-full min-h-[44px] pl-11 pr-4 rounded-xl bg-[#F5F5F7] focus:bg-white text-sm sm:text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] transition-colors duration-150 outline-hidden"
             />
           </div>
         )}
@@ -1246,12 +1246,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               (cls.shift || '').toUpperCase().includes('MANHÃ') || cls.periodo === 'MANHÃ';
             const presenceBadgeStyle =
               cls.students.length === 0
-                ? 'bg-[#F5F5F7] text-[#86868B] border border-black/[0.08]'
+                ? 'bg-[#F5F5F7] text-[#86868B]'
                 : cls.presenceRate < 75
-                ? 'bg-[#FFEBEB] text-[#D70015] border border-[#D70015]/20 font-semibold'
+                ? 'bg-[#FFEBEB] text-[#D70015] font-semibold'
                 : cls.presenceRate < 85
-                ? 'bg-[#FFF5E5] text-[#B25000] border border-[#B25000]/20 font-semibold'
-                : 'bg-[#EAF7EE] text-[#1B873F] border border-[#1B873F]/20 font-semibold';
+                ? 'bg-[#FFF5E5] text-[#B25000] font-semibold'
+                : 'bg-[#EAF7EE] text-[#1B873F] font-semibold';
 
             return (
               <motion.button
@@ -1275,7 +1275,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   if (onSelectClassForDetails) onSelectClassForDetails(cls);
                   else onNavigateToScreen('detalhes');
                 }}
-                className="w-full min-w-0 min-h-[122px] text-left bg-[#F5F5F7] hover:bg-[#EFEFF2] border border-black/[0.04] rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-2.5 cursor-pointer group transition-colors"
+                className="w-full min-w-0 min-h-[122px] text-left bg-[#F5F5F7] hover:bg-[#EFEFF2] rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-2.5 cursor-pointer group transition-colors"
               >
                 <div className="flex items-start justify-between gap-2 w-full min-w-0">
                   <div className="min-w-0 flex-1">
@@ -1329,7 +1329,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
 
         {filteredClasses.length === 0 && (
-          <div className="p-8 text-center bg-[#F5F5F7] rounded-2xl border border-black/[0.05] space-y-1">
+          <div className="p-8 text-center bg-[#F5F5F7] rounded-2xl space-y-1">
             <p className="text-sm font-semibold text-[#1D1D1F]">
               Nenhuma turma encontrada com esse termo.
             </p>
@@ -1344,7 +1344,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* 4. PRAZOS E BUSCA ATIVA */}
       <section
         id="central-comunicados"
-        className="bg-white rounded-3xl p-5 sm:p-6 border border-black/[0.06] shadow-sm space-y-5 min-w-0"
+        className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 min-w-0"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 min-w-0">
           <div className="min-w-0">
@@ -1356,7 +1356,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:inline-flex w-full sm:w-auto max-w-full min-w-0 p-1 bg-[#F5F5F7] rounded-full border border-black/[0.06] text-xs sm:text-[13px] font-semibold gap-1">
+          <div className="grid grid-cols-2 sm:inline-flex w-full sm:w-auto max-w-full min-w-0 p-1 bg-[#F5F5F7] rounded-full text-xs sm:text-[13px] font-semibold gap-1">
             <button
               type="button"
               onClick={() => {
@@ -1425,7 +1425,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* 5. GRÁFICO COMPARATIVO POR TURMA (Exibido apenas para múltiplas turmas) */}
       {userRole !== 'usuario' && visibleBaseClasses.length > 1 && (
-      <section className="bg-white rounded-3xl p-5 sm:p-7 border border-black/[0.06] shadow-sm space-y-5 min-w-0">
+      <section className="bg-white rounded-3xl p-5 sm:p-7 shadow-sm space-y-5 min-w-0">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight flex items-center gap-2.5 min-w-0">
@@ -1605,7 +1605,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                           ? 'text-[#B25000]'
                           : 'text-[#1B873F]';
                       return (
-                        <div className="bg-white/95 backdrop-blur-xl border border-black/[0.08] text-[#1D1D1F] px-4 py-3 rounded-2xl text-xs sm:text-[13px] shadow-[0_12px_32px_rgba(0,0,0,0.12)] space-y-1.5 min-w-[200px]">
+                        <div className="bg-white/95 backdrop-blur-xl text-[#1D1D1F] px-4 py-3 rounded-2xl text-xs sm:text-[13px] shadow-[0_12px_32px_rgba(0,0,0,0.12)] space-y-1.5 min-w-[200px]">
                           <div className="flex items-center justify-between gap-3">
                             <span className="font-semibold text-[#1D1D1F]">{data.name}</span>
                             <span className={`font-mono font-bold tabular-nums ${statusColor}`}>
