@@ -37,6 +37,7 @@ import {
 } from './db';
 import {
   commitViaUnaryTransaction,
+  FIRESTORE_DISABLED_SQL_MODE,
   firestoreDb,
   handleFirestoreError,
   isFirestoreQuotaExceeded,
@@ -545,18 +546,20 @@ export async function registerDeviceForFcm(params: {
     }
   }
 
-  // 4. Persistir no Firestore se sessão Firebase Auth estiver ativa
-  try {
-    const auth = getAuth(app);
-    if (auth.currentUser && !isFirestoreQuotaExceeded()) {
-      const tokenRef = doc(firestoreDb, 'school_fcm_tokens_2027', subId);
-      const tokenPayload = stripUndefinedDeep(subscription);
-      await commitViaUnaryTransaction((tx) => {
-        tx.set(tokenRef, tokenPayload, { merge: true });
-      });
+  // 4. Persistir no Firestore apenas se o modo Firestore não estiver desativado
+  if (!FIRESTORE_DISABLED_SQL_MODE) {
+    try {
+      const auth = getAuth(app);
+      if (auth.currentUser && !isFirestoreQuotaExceeded()) {
+        const tokenRef = doc(firestoreDb, 'school_fcm_tokens_2027', subId);
+        const tokenPayload = stripUndefinedDeep(subscription);
+        await commitViaUnaryTransaction((tx) => {
+          tx.set(tokenRef, tokenPayload, { merge: true });
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `school_fcm_tokens_2027/${subId}`);
     }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `school_fcm_tokens_2027/${subId}`);
   }
 
   return {
@@ -631,23 +634,25 @@ export async function unregisterDeviceFromFcm(userEmail: string): Promise<void> 
     }
   }
 
-  try {
-    const auth = getAuth(app);
-    if (auth.currentUser && !isFirestoreQuotaExceeded()) {
-      const tokenRef = doc(firestoreDb, 'school_fcm_tokens_2027', subId);
-      const tokenPayload = {
-        id: subId,
-        userEmail: cleanEmail,
-        channel: 'sw_realtime',
-        active: false,
-        updatedAtMs: Date.now(),
-      };
-      await commitViaUnaryTransaction((tx) => {
-        tx.set(tokenRef, tokenPayload, { merge: true });
-      });
+  if (!FIRESTORE_DISABLED_SQL_MODE) {
+    try {
+      const auth = getAuth(app);
+      if (auth.currentUser && !isFirestoreQuotaExceeded()) {
+        const tokenRef = doc(firestoreDb, 'school_fcm_tokens_2027', subId);
+        const tokenPayload = {
+          id: subId,
+          userEmail: cleanEmail,
+          channel: 'sw_realtime',
+          active: false,
+          updatedAtMs: Date.now(),
+        };
+        await commitViaUnaryTransaction((tx) => {
+          tx.set(tokenRef, tokenPayload, { merge: true });
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `school_fcm_tokens_2027/${subId}`);
     }
-  } catch (err) {
-    handleFirestoreError(err, OperationType.UPDATE, `school_fcm_tokens_2027/${subId}`);
   }
 }
 
@@ -770,9 +775,9 @@ export function subscribeToFcmNotifications(params: {
     window.addEventListener('emeb-realtime-fcm-alert', handleRealtimeFcmEvent);
   }
 
-  // 3. Firestore alerts (`school_fcm_alerts_2027`) via leitura única paginada com limit(10) apenas em hospedagem estática (elimina onSnapshot desnecessário)
+  // 3. Firestore alerts (`school_fcm_alerts_2027`) apenas se Firestore estiver ativo
   const checkFirestoreAlertsOnce = async () => {
-    if (isBackendApiAvailable() || isFirestoreQuotaExceeded()) return;
+    if (FIRESTORE_DISABLED_SQL_MODE || isBackendApiAvailable() || isFirestoreQuotaExceeded()) return;
     try {
       const q = query(
         collection(firestoreDb, 'school_fcm_alerts_2027'),
@@ -792,7 +797,7 @@ export function subscribeToFcmNotifications(params: {
     }
   };
 
-  if (!isBackendApiAvailable()) {
+  if (!FIRESTORE_DISABLED_SQL_MODE && !isBackendApiAvailable()) {
     try {
       const auth = getAuth(app);
       if (auth.currentUser) {
@@ -1354,8 +1359,8 @@ export async function dispatchWindowClosingFcmAlert(params: {
     }
   }
 
-  // 2. Publicar no Firestore `school_fcm_alerts_2027` apenas como espelho (não bloqueante se backend ativo)
-  if (!isFirestoreQuotaExceeded()) {
+  // 2. Publicar no Firestore `school_fcm_alerts_2027` apenas se Firestore estiver ativo
+  if (!FIRESTORE_DISABLED_SQL_MODE && !isFirestoreQuotaExceeded()) {
     const mirrorAlert = async () => {
       try {
         const auth = getAuth(app);

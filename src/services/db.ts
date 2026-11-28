@@ -39,6 +39,7 @@ import {
   touchLocalEpochState,
   shouldAllowRemoteClassesOverwrite,
   isFirestoreQuotaExceeded,
+  FIRESTORE_DISABLED_SQL_MODE,
 } from './firebaseSync';
 import {
   uploadStudentPhotoToStorage,
@@ -1521,11 +1522,12 @@ export const pullSharedSchoolStateFromServer = async (
         )
     );
     const shouldQueryFirestoreFallback =
-      !isBackendApiAvailable() ||
-      (!apiData && !isFirestoreQuotaExceeded()) ||
-      (!apiHasStudents &&
-        Number(apiData?.classesUpdatedAtMs || 0) === 0 &&
-        !isFirestoreQuotaExceeded());
+      !FIRESTORE_DISABLED_SQL_MODE &&
+      (!isBackendApiAvailable() ||
+        (!apiData && !isFirestoreQuotaExceeded()) ||
+        (!apiHasStudents &&
+          Number(apiData?.classesUpdatedAtMs || 0) === 0 &&
+          !isFirestoreQuotaExceeded()));
 
     let firestoreData: any = null;
     if (shouldQueryFirestoreFallback) {

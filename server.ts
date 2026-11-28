@@ -10,6 +10,13 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { INITIAL_AUTHORIZED_USERS } from './src/data/authorizedUsersData.ts';
 import {
+  initSqliteStore,
+  readSharedStateFromSqlite,
+  writeSharedStateToSqlite,
+  getSqliteDatabaseStats,
+  queryStudentsFromSqlite,
+} from './src/db/sqliteStore.ts';
+import {
   ensureSafePayloadObject,
   validateAuthSessionRequest,
   validateDriveTokenPayload,
@@ -287,6 +294,7 @@ const resolveWritableDataDir = (): string => {
   return os.tmpdir();
 };
 const DATA_DIR = resolveWritableDataDir();
+const SQLITE_DB_PATH = initSqliteStore(DATA_DIR);
 const STATE_FILE_NAME = 'emeb_candelario_shared_school_state_2027_v2.json';
 const SECRETS_FILE_NAME = 'emeb_candelario_server_secrets_v1.json';
 const STATE_FILE_PATH = path.join(DATA_DIR, STATE_FILE_NAME);
@@ -490,19 +498,10 @@ const flushSharedStateToDiskAsync = async (): Promise<void> => {
   stateFlushInProgress = (async () => {
     while (pendingStateFlushDirty && cachedSharedState) {
       pendingStateFlushDirty = false;
-      const snapshotJson = JSON.stringify(cachedSharedState);
-      const tmpPath = `${STATE_FILE_PATH}.tmp`;
-      const bakPath = `${STATE_FILE_PATH}.bak`;
       try {
-        await fs.promises.writeFile(tmpPath, snapshotJson, 'utf-8');
-        await fs.promises.rename(tmpPath, STATE_FILE_PATH);
-        try {
-          await fs.promises.copyFile(STATE_FILE_PATH, bakPath);
-        } catch {
-          // ignore backup copy failure
-        }
+        writeSharedStateToSqlite(cachedSharedState);
       } catch (err) {
-        console.warn('Erro ao gravar shared_school_state_2027.json:', err);
+        console.warn('Erro ao gravar estado no SQLite:', err);
       }
     }
   })().finally(() => {
@@ -550,17 +549,28 @@ const buildDefaultSharedState = (): SharedSchoolState => {
 const readSharedState = (): SharedSchoolState => {
   if (cachedSharedState) return cachedSharedState;
   try {
-    const fileToRead = fs.existsSync(STATE_FILE_PATH)
-      ? STATE_FILE_PATH
-      : fs.existsSync(TMP_STATE_FILE_PATH)
-      ? TMP_STATE_FILE_PATH
-      : fs.existsSync(LEGACY_STATE_FILE_PATH)
-      ? LEGACY_STATE_FILE_PATH
-      : null;
-    if (fileToRead) {
-      const raw = fs.readFileSync(fileToRead, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
+    let parsed: Record<string, any> | null = readSharedStateFromSqlite<SharedSchoolState>();
+    let migratedFromLegacyJson = false;
+
+    if (!parsed) {
+      const fileToRead = fs.existsSync(STATE_FILE_PATH)
+        ? STATE_FILE_PATH
+        : fs.existsSync(TMP_STATE_FILE_PATH)
+        ? TMP_STATE_FILE_PATH
+        : fs.existsSync(LEGACY_STATE_FILE_PATH)
+        ? LEGACY_STATE_FILE_PATH
+        : null;
+      if (fileToRead) {
+        const raw = fs.readFileSync(fileToRead, 'utf-8');
+        const jsonParsed = JSON.parse(raw);
+        if (jsonParsed && typeof jsonParsed === 'object') {
+          parsed = jsonParsed;
+          migratedFromLegacyJson = true;
+        }
+      }
+    }
+
+    if (parsed && typeof parsed === 'object') {
         // Migra eventuais segredos antigos gravados no JSON geral para o arquivo restrito 0600
         let migratedSecrets = false;
         const secretPatch: Partial<ServerSecretsState> = {};
@@ -693,18 +703,22 @@ const readSharedState = (): SharedSchoolState => {
 
         const resolvedState = parsed as SharedSchoolState;
         cachedSharedState = resolvedState;
-        if (needsCleanEpochPersist) {
+        if (needsCleanEpochPersist || migratedFromLegacyJson) {
           pendingStateFlushDirty = true;
           void flushSharedStateToDiskAsync();
         }
         return resolvedState;
-      }
     }
   } catch (err) {
-    console.warn('Erro ao ler shared_school_state_2027.json:', err);
+    console.warn('Erro ao ler estado no SQLite:', err);
   }
   const fallbackState = buildDefaultSharedState();
   cachedSharedState = fallbackState;
+  try {
+    writeSharedStateToSqlite(fallbackState);
+  } catch {
+    // ignore boot seed write errors
+  }
   return fallbackState;
 };
 
@@ -1345,7 +1359,71 @@ async function startServer() {
   // API pública zero-PII de health-check para detecção de backend antes do login
   app.get('/api/health', (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ ok: true, service: 'emeb-candelario-2027' });
+    res.json({
+      ok: true,
+      service: 'emeb-candelario-2027',
+      dbEngine: 'sqlite',
+      sqliteReady: Boolean(SQLITE_DB_PATH),
+      firestoreEnabled: false,
+      quotaLimit: 'unlimited',
+    });
+  });
+
+  // API SQLite: estatísticas estruturais do banco SQL (sem PII)
+  app.get('/api/sql/stats', requireInstitutionalAuth, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(getSqliteDatabaseStats());
+  });
+
+  // API SQLite: consulta relacional paginada/filtrada de estudantes (respeita RBAC)
+  app.get('/api/sql/students', requireInstitutionalAuth, (req, res) => {
+    const user = extractRequestUser(req);
+    const requestedClassId = typeof req.query.classId === 'string' ? req.query.classId.trim() : '';
+    const search = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 100;
+
+    if (!user.isAdmin) {
+      const current = readSharedState();
+      const matchedUser = (current.authorizedUsers || []).find(
+        (u: any) => u && typeof u.email === 'string' && u.email.trim().toLowerCase() === user.email
+      );
+      const allowedIds = new Set<string>();
+      if (matchedUser?.assignedClassId && matchedUser.assignedClassId !== 'all') {
+        allowedIds.add(String(matchedUser.assignedClassId).toLowerCase());
+      }
+      if (Array.isArray(matchedUser?.assignedClassIds)) {
+        matchedUser.assignedClassIds.forEach((id: string) => {
+          if (id && id !== 'all') allowedIds.add(String(id).toLowerCase());
+        });
+      }
+      (current.classes || []).forEach((c: any) => {
+        if (!c?.id) return;
+        const primary = String(c.teacherEmail || '').trim().toLowerCase();
+        const extra =
+          Array.isArray(c.authorizedTeacherEmails) &&
+          c.authorizedTeacherEmails.some((e: string) => String(e).trim().toLowerCase() === user.email);
+        if (primary === user.email || extra) {
+          allowedIds.add(String(c.id).toLowerCase());
+        }
+      });
+
+      const allMatching = queryStudentsFromSqlite({
+        classId: requestedClassId || undefined,
+        search: search || undefined,
+        limit: Number.isFinite(limit) ? limit : 100,
+      }).filter((row) => allowedIds.has(row.classId.toLowerCase()));
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ ok: true, engine: 'sqlite', count: allMatching.length, students: allMatching });
+      return;
+    }
+
+    const students = queryStudentsFromSqlite({
+      classId: requestedClassId || undefined,
+      search: search || undefined,
+      limit: Number.isFinite(limit) ? limit : 100,
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true, engine: 'sqlite', count: students.length, students });
   });
 
   // API: Emite cookie HttpOnly assinado com HMAC a partir de um Firebase ID Token RS256 validado

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { INITIAL_CLASSES } from '../data/mockData';
 import {
@@ -1095,6 +1096,65 @@ assert.ok(
   'Helper clearServiceWorkerCachesAndUpdate deve estar presente'
 );
 
-console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, RBAC de notificações, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting, otimização de cotas Firestore/Storage, armazenamento lossless Drive, cache do navegador/PWA, Sincronizar Agora e IndexedDB passaram com sucesso!');
+// 19. Validação real do Banco de Dados SQLite (node:sqlite) sem Firebase Firestore
+const {
+  initSqliteStore,
+  readSharedStateFromSqlite,
+  writeSharedStateToSqlite,
+  getSqliteDatabaseStats,
+  queryStudentsFromSqlite,
+} = await import('../db/sqliteStore');
+const { FIRESTORE_DISABLED_SQL_MODE, isFirestoreQuotaExceeded } = await import(
+  '../services/firebaseSync'
+);
+assert.equal(FIRESTORE_DISABLED_SQL_MODE, true, 'Modo SQLite deve manter Firestore desativado');
+assert.equal(isFirestoreQuotaExceeded(), false, 'Modo SQLite nunca deve reportar cota excedida');
+
+const tmpSqliteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'emeb-sql-test-'));
+const dbPath = initSqliteStore(tmpSqliteDir);
+assert.ok(fs.existsSync(dbPath), 'Arquivo SQLite deve ser criado no diretório de dados');
+
+writeSharedStateToSqlite({
+  cleanResetEpochId: 'test_epoch_sql_v1',
+  updatedAtMs: 123456,
+  classesUpdatedAtMs: 123456,
+  classes: INITIAL_CLASSES.slice(0, 2),
+  authorizedUsers: [
+    {
+      id: 'usr-sql-1',
+      email: 'emebjfreitas@jundiai.sp.gov.br',
+      name: 'Direção EMEB',
+      role: 'admin',
+      active: true,
+    },
+  ],
+  holidays: [
+    { id: 'hol-sql-1', date: '01/01/2027', name: 'Ano Novo', type: 'nacional', isOfficial: true },
+  ],
+  schoolNotices: [{ id: 'not-sql-1', title: 'Teste SQL', createdAtMs: 123456 }],
+});
+
+const restoredSqlState = readSharedStateFromSqlite<any>();
+assert.equal(restoredSqlState?.classes?.length, 2, 'SQLite deve restaurar as turmas gravadas');
+assert.equal(restoredSqlState?.authorizedUsers?.length, 1, 'SQLite deve restaurar usuários');
+assert.equal(restoredSqlState?.holidays?.length, 1, 'SQLite deve restaurar feriados');
+assert.equal(restoredSqlState?.schoolNotices?.length, 1, 'SQLite deve restaurar avisos');
+
+const sqlStats = getSqliteDatabaseStats();
+assert.equal(sqlStats.engine, 'sqlite');
+assert.equal(sqlStats.quotaLimit, 'unlimited');
+assert.equal(sqlStats.firestoreEnabled, false);
+assert.ok(sqlStats.studentsCount > 0, 'SQLite deve indexar os estudantes na tabela school_students');
+
+const queriedFirstClass = queryStudentsFromSqlite({ classId: INITIAL_CLASSES[0].id, limit: 5 });
+assert.ok(queriedFirstClass.length > 0, 'Consulta SQL parametrizada por class_id deve retornar estudantes');
+
+try {
+  fs.rmSync(tmpSqliteDir, { recursive: true, force: true });
+} catch {
+  // ignore temp cleanup errors
+}
+
+console.log('✓ Todos os testes de integridade, LGPD, RBAC por turma, RBAC de notificações, expiração, HTM, validação de servidor, regras MEC, exportação Word/Excel/PDF, Firebase Hosting, otimização de cotas Firestore/Storage, armazenamento lossless Drive, cache do navegador/PWA, Sincronizar Agora, IndexedDB e Banco SQLite passaram com sucesso!');
 
 

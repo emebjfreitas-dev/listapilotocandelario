@@ -4,9 +4,9 @@ import express from "express";
 import http from "http";
 import crypto from "crypto";
 import * as webpush from "web-push";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs2 from "fs";
+import os2 from "os";
+import path2 from "path";
 import { fileURLToPath } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 
@@ -1139,6 +1139,467 @@ var INITIAL_AUTHORIZED_USERS = Array.from(
   };
 });
 
+// src/db/sqliteStore.ts
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+var dbInstance = null;
+var resolvedDbPath = "";
+var safeJsonParse = (raw, fallback) => {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+};
+var createSchema = (db) => {
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA foreign_keys = ON;
+    PRAGMA busy_timeout = 5000;
+
+    CREATE TABLE IF NOT EXISTS school_classes (
+      id TEXT PRIMARY KEY,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      name TEXT NOT NULL,
+      shift TEXT,
+      teacher_name TEXT,
+      teacher_email TEXT,
+      total_students INTEGER NOT NULL DEFAULT 0,
+      presence_rate REAL NOT NULL DEFAULT 0,
+      monthly_absences INTEGER NOT NULL DEFAULT 0,
+      updated_at_ms INTEGER NOT NULL DEFAULT 0,
+      payload_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS school_students (
+      id TEXT PRIMARY KEY,
+      class_id TEXT NOT NULL,
+      ra TEXT,
+      name TEXT NOT NULL,
+      number INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      total_absences_month INTEGER NOT NULL DEFAULT 0,
+      consecutive_absences INTEGER NOT NULL DEFAULT 0,
+      updated_at_ms INTEGER NOT NULL DEFAULT 0,
+      payload_json TEXT NOT NULL,
+      FOREIGN KEY (class_id) REFERENCES school_classes(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_school_students_class_id
+      ON school_students(class_id, number);
+    CREATE INDEX IF NOT EXISTS idx_school_students_ra
+      ON school_students(ra);
+    CREATE INDEX IF NOT EXISTS idx_school_students_name
+      ON school_students(name);
+
+    CREATE TABLE IF NOT EXISTS school_users (
+      email TEXT PRIMARY KEY,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      id TEXT,
+      name TEXT,
+      role TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      updated_at_ms INTEGER NOT NULL DEFAULT 0,
+      payload_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS school_holidays (
+      id TEXT PRIMARY KEY,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      date TEXT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      is_official INTEGER NOT NULL DEFAULT 1,
+      payload_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS school_logs (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at_ms INTEGER NOT NULL DEFAULT 0,
+      payload_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_school_logs_kind_ts
+      ON school_logs(kind, sort_order, created_at_ms DESC);
+
+    CREATE TABLE IF NOT EXISTS school_meta (
+      key TEXT PRIMARY KEY,
+      value_json TEXT NOT NULL,
+      updated_at_ms INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+};
+var initSqliteStore = (dataDir) => {
+  if (dbInstance) return resolvedDbPath;
+  const candidatePaths = [
+    process.env.EMEB_SQLITE_PATH?.trim(),
+    path.join(dataDir, "candelario_2027.sqlite"),
+    path.join(os.tmpdir(), "candelario_2027.sqlite")
+  ].filter((p) => Boolean(p));
+  let lastErr = null;
+  for (const candidate of candidatePaths) {
+    try {
+      const dir = path.dirname(candidate);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const db = new DatabaseSync(candidate);
+      createSchema(db);
+      dbInstance = db;
+      resolvedDbPath = candidate;
+      return resolvedDbPath;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw new Error(
+    `Falha ao inicializar banco de dados SQLite: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`
+  );
+};
+var ensureDb = () => {
+  if (!dbInstance) {
+    initSqliteStore(path.join(process.cwd(), ".emeb_data"));
+  }
+  return dbInstance;
+};
+var readSharedStateFromSqlite = () => {
+  const db = ensureDb();
+  const metaRows = db.prepare("SELECT key, value_json FROM school_meta").all();
+  const userRows = db.prepare("SELECT payload_json FROM school_users ORDER BY sort_order ASC").all();
+  const classRows = db.prepare("SELECT id, payload_json FROM school_classes ORDER BY sort_order ASC").all();
+  if (metaRows.length === 0 && userRows.length === 0 && classRows.length === 0) {
+    return null;
+  }
+  const state = {};
+  for (const row of metaRows) {
+    if (row.key === "core_meta") {
+      const core = safeJsonParse(row.value_json, {});
+      Object.assign(state, core);
+    } else {
+      state[row.key] = safeJsonParse(row.value_json, void 0);
+    }
+  }
+  if (userRows.length > 0) {
+    state.authorizedUsers = userRows.map((r) => safeJsonParse(r.payload_json, null)).filter(Boolean);
+  }
+  const holidayRows = db.prepare("SELECT payload_json FROM school_holidays ORDER BY sort_order ASC").all();
+  if (holidayRows.length > 0) {
+    state.holidays = holidayRows.map((r) => safeJsonParse(r.payload_json, null)).filter(Boolean);
+  }
+  if (classRows.length > 0) {
+    const studentRows = db.prepare("SELECT class_id, payload_json FROM school_students ORDER BY number ASC, rowid ASC").all();
+    const studentsByClass = /* @__PURE__ */ new Map();
+    for (const stRow of studentRows) {
+      const parsedStudent = safeJsonParse(stRow.payload_json, null);
+      if (!parsedStudent) continue;
+      const list = studentsByClass.get(stRow.class_id);
+      if (list) {
+        list.push(parsedStudent);
+      } else {
+        studentsByClass.set(stRow.class_id, [parsedStudent]);
+      }
+    }
+    state.classes = classRows.map((cRow) => {
+      const parsedClass = safeJsonParse(cRow.payload_json, null);
+      if (!parsedClass) return null;
+      const sqlStudents = studentsByClass.get(cRow.id);
+      return {
+        ...parsedClass,
+        students: sqlStudents ?? (Array.isArray(parsedClass.students) ? parsedClass.students : [])
+      };
+    }).filter(Boolean);
+  }
+  const logRows = db.prepare("SELECT kind, payload_json FROM school_logs ORDER BY sort_order ASC, created_at_ms DESC").all();
+  const logBuckets = {
+    access_session: [],
+    school_notice: [],
+    calendar_audit: [],
+    security_audit: [],
+    fcm_alert: []
+  };
+  for (const row of logRows) {
+    const parsed = safeJsonParse(row.payload_json, null);
+    if (!parsed) continue;
+    if (!logBuckets[row.kind]) logBuckets[row.kind] = [];
+    logBuckets[row.kind].push(parsed);
+  }
+  if (logBuckets.access_session.length > 0) state.accessSessionLogs = logBuckets.access_session;
+  if (logBuckets.school_notice.length > 0) state.schoolNotices = logBuckets.school_notice;
+  if (logBuckets.calendar_audit.length > 0) state.calendarAuditLogs = logBuckets.calendar_audit;
+  if (logBuckets.security_audit.length > 0) state.securityAuditLogs = logBuckets.security_audit;
+  if (logBuckets.fcm_alert.length > 0) state.fcmAlerts = logBuckets.fcm_alert;
+  if (typeof state.updatedAtMs !== "number") {
+    state.updatedAtMs = Date.now();
+  }
+  return state;
+};
+var writeSharedStateToSqlite = (state) => {
+  const db = ensureDb();
+  const nowMs = Date.now();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const upsertMeta = db.prepare(`
+      INSERT INTO school_meta (key, value_json, updated_at_ms)
+      VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        value_json = excluded.value_json,
+        updated_at_ms = excluded.updated_at_ms
+    `);
+    const deleteMeta = db.prepare("DELETE FROM school_meta WHERE key = ?");
+    const coreMeta = {
+      cleanResetEpochId: state.cleanResetEpochId,
+      classesUpdatedAtMs: state.classesUpdatedAtMs || 0,
+      updatedAtMs: state.updatedAtMs || nowMs,
+      lastAutoFcmWindowKey: state.lastAutoFcmWindowKey
+    };
+    upsertMeta.run("core_meta", JSON.stringify(coreMeta), nowMs);
+    const jsonMetaKeys = [
+      "attendanceWindowConfig",
+      "discoveredNominalPdfs",
+      "discoveredDrivePhotos",
+      "genderDictionary",
+      "officialCalendarConfig",
+      "lgpdConfig",
+      "fcmTokens",
+      "fcmConfig",
+      "cloudLinks"
+    ];
+    for (const key of jsonMetaKeys) {
+      if (state[key] !== void 0) {
+        upsertMeta.run(key, JSON.stringify(state[key]), nowMs);
+      } else {
+        deleteMeta.run(key);
+      }
+    }
+    if (Array.isArray(state.authorizedUsers)) {
+      db.exec("DELETE FROM school_users");
+      const insertUser = db.prepare(`
+        INSERT INTO school_users (email, sort_order, id, name, role, active, updated_at_ms, payload_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      state.authorizedUsers.forEach((u, idx) => {
+        if (!u || typeof u.email !== "string") return;
+        const email = u.email.trim().toLowerCase();
+        if (!email) return;
+        insertUser.run(
+          email,
+          idx,
+          String(u.id || `usr-${idx + 1}`),
+          String(u.name || ""),
+          String(u.role || "usuario"),
+          u.active === false ? 0 : 1,
+          Number(u.updatedAtMs || 0),
+          JSON.stringify({ ...u, email })
+        );
+      });
+    }
+    if (Array.isArray(state.holidays)) {
+      db.exec("DELETE FROM school_holidays");
+      const insertHoliday = db.prepare(`
+        INSERT INTO school_holidays (id, sort_order, date, name, type, is_official, payload_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      const seenHolIds = /* @__PURE__ */ new Set();
+      state.holidays.forEach((h, idx) => {
+        if (!h || !h.date) return;
+        let hid = String(h.id || `hol-${idx + 1}`);
+        if (seenHolIds.has(hid)) hid = `${hid}-${idx + 1}`;
+        seenHolIds.add(hid);
+        insertHoliday.run(
+          hid,
+          idx,
+          String(h.date),
+          String(h.name || ""),
+          String(h.type || "nacional"),
+          h.isOfficial === false ? 0 : 1,
+          JSON.stringify({ ...h, id: hid })
+        );
+      });
+    }
+    if (Array.isArray(state.classes)) {
+      db.exec("DELETE FROM school_students");
+      db.exec("DELETE FROM school_classes");
+      const insertClass = db.prepare(`
+        INSERT INTO school_classes (
+          id, sort_order, name, shift, teacher_name, teacher_email,
+          total_students, presence_rate, monthly_absences, updated_at_ms, payload_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertStudent = db.prepare(`
+        INSERT INTO school_students (
+          id, class_id, ra, name, number, active,
+          total_absences_month, consecutive_absences, updated_at_ms, payload_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const seenClassIds = /* @__PURE__ */ new Set();
+      const seenStudentIds = /* @__PURE__ */ new Set();
+      state.classes.forEach((cls, clsIdx) => {
+        if (!cls || typeof cls !== "object") return;
+        let classId = String(cls.id || `cls-${clsIdx + 1}`);
+        if (seenClassIds.has(classId)) classId = `${classId}-${clsIdx + 1}`;
+        seenClassIds.add(classId);
+        const studentsList = Array.isArray(cls.students) ? cls.students : [];
+        const classSkeleton = {
+          ...cls,
+          id: classId,
+          totalStudents: studentsList.length,
+          students: []
+        };
+        insertClass.run(
+          classId,
+          clsIdx,
+          String(cls.name || classId),
+          String(cls.shift || cls.periodo || ""),
+          String(cls.teacherName || ""),
+          String(cls.teacherEmail || ""),
+          studentsList.length,
+          Number(cls.presenceRate || 0),
+          Number(cls.monthlyAbsences || 0),
+          Number(cls.updatedAtMs || nowMs),
+          JSON.stringify(classSkeleton)
+        );
+        studentsList.forEach((st, stIdx) => {
+          if (!st || typeof st !== "object") return;
+          const stName = String(st.name || "").trim();
+          if (!stName) return;
+          let stId = String(st.id || `${classId}-s${st.number || stIdx + 1}`);
+          if (seenStudentIds.has(stId)) stId = `${stId}-${clsIdx}-${stIdx}`;
+          seenStudentIds.add(stId);
+          const isActive = st.active !== false && st.status !== "TRANSFERIDO" && st.status !== "REMANEJADO" ? 1 : 0;
+          insertStudent.run(
+            stId,
+            classId,
+            st.ra ? String(st.ra).trim() : null,
+            stName,
+            Number(st.number || stIdx + 1),
+            isActive,
+            Number(st.totalAbsencesMonth || 0),
+            Number(st.consecutiveAbsences || 0),
+            Number(st.updatedAtMs || cls.updatedAtMs || 0),
+            JSON.stringify({ ...st, id: stId })
+          );
+        });
+      });
+    }
+    db.exec("DELETE FROM school_logs");
+    const insertLog = db.prepare(`
+      INSERT INTO school_logs (id, kind, sort_order, created_at_ms, payload_json)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const seenLogIds = /* @__PURE__ */ new Set();
+    const writeLogBucket = (kind, items, maxItems) => {
+      if (!Array.isArray(items)) return;
+      items.slice(0, maxItems).forEach((item, idx) => {
+        if (!item || typeof item !== "object") return;
+        let logId = String(item.id || `${kind}-${idx}-${Date.now()}`);
+        const scopedId = `${kind}:${logId}`;
+        if (seenLogIds.has(scopedId)) {
+          logId = `${logId}-${idx}`;
+        }
+        seenLogIds.add(`${kind}:${logId}`);
+        const createdMs = Number(
+          item.createdAtMs || item.timestampMs || (item.timestampISO ? Date.parse(item.timestampISO) : 0) || (item.loginAt ? Date.parse(item.loginAt) : 0) || nowMs
+        );
+        insertLog.run(
+          `${kind}:${logId}`,
+          kind,
+          idx,
+          Number.isFinite(createdMs) ? createdMs : nowMs,
+          JSON.stringify(item)
+        );
+      });
+    };
+    writeLogBucket("access_session", state.accessSessionLogs, 150);
+    writeLogBucket("school_notice", state.schoolNotices, 60);
+    writeLogBucket("calendar_audit", state.calendarAuditLogs, 200);
+    writeLogBucket("security_audit", state.securityAuditLogs, 300);
+    writeLogBucket("fcm_alert", state.fcmAlerts, 60);
+    db.exec("COMMIT");
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+    }
+    throw err;
+  }
+};
+var queryStudentsFromSqlite = (options) => {
+  const db = ensureDb();
+  const maxRows = Math.min(Math.max(Number(options?.limit || 100), 1), 1500);
+  const cleanClassId = options?.classId?.trim() || "";
+  const cleanSearch = options?.search?.trim() || "";
+  const whereClauses = [];
+  const params = [];
+  if (cleanClassId) {
+    whereClauses.push("class_id = ?");
+    params.push(cleanClassId);
+  }
+  if (cleanSearch) {
+    whereClauses.push("(UPPER(name) LIKE UPPER(?) OR ra LIKE ?)");
+    params.push(`%${cleanSearch}%`, `%${cleanSearch}%`);
+  }
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+  params.push(maxRows);
+  const rows = db.prepare(
+    `SELECT id, class_id, ra, name, number, active, total_absences_month, consecutive_absences
+       FROM school_students
+       ${whereSql}
+       ORDER BY class_id ASC, number ASC
+       LIMIT ?`
+  ).all(...params);
+  return rows.map((r) => ({
+    id: r.id,
+    classId: r.class_id,
+    ra: r.ra,
+    name: r.name,
+    number: r.number,
+    active: r.active === 1,
+    totalAbsencesMonth: r.total_absences_month,
+    consecutiveAbsences: r.consecutive_absences
+  }));
+};
+var getSqliteDatabaseStats = () => {
+  const db = ensureDb();
+  const countTable = (tableName) => {
+    const row = db.prepare(`SELECT COUNT(*) AS cnt FROM ${tableName}`).get();
+    return Number(row?.cnt || 0);
+  };
+  let journalMode = "wal";
+  try {
+    const jm = db.prepare("PRAGMA journal_mode").get();
+    if (jm?.journal_mode) journalMode = String(jm.journal_mode);
+  } catch {
+  }
+  let dbFileSizeBytes = 0;
+  try {
+    if (resolvedDbPath && fs.existsSync(resolvedDbPath)) {
+      dbFileSizeBytes = fs.statSync(resolvedDbPath).size;
+    }
+  } catch {
+  }
+  return {
+    engine: "sqlite",
+    journalMode,
+    dbPath: resolvedDbPath,
+    dbFileSizeBytes,
+    classesCount: countTable("school_classes"),
+    studentsCount: countTable("school_students"),
+    usersCount: countTable("school_users"),
+    holidaysCount: countTable("school_holidays"),
+    logsCount: countTable("school_logs"),
+    quotaLimit: "unlimited",
+    firestoreEnabled: false
+  };
+};
+
 // src/utils/serverValidation.ts
 var FORBIDDEN_PROTO_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 var MAX_TRAVERSAL_DEPTH = 16;
@@ -2094,34 +2555,35 @@ var parseAndValidateSchoolDates = (rawText, holidays = OFFICIAL_DEFAULT_HOLIDAYS
   };
 };
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path.dirname(__filename);
-var DEFAULT_PERSISTENT_DIR = path.join(__dirname, ".emeb_data");
+var __dirname = path2.dirname(__filename);
+var DEFAULT_PERSISTENT_DIR = path2.join(__dirname, ".emeb_data");
 var resolveWritableDataDir = () => {
   const candidates = [
     process.env.EMEB_DATA_DIR?.trim(),
     DEFAULT_PERSISTENT_DIR,
-    os.tmpdir()
+    os2.tmpdir()
   ].filter((d) => Boolean(d));
   for (const dir of candidates) {
     try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      if (!fs2.existsSync(dir)) {
+        fs2.mkdirSync(dir, { recursive: true });
       }
-      fs.accessSync(dir, fs.constants.W_OK);
+      fs2.accessSync(dir, fs2.constants.W_OK);
       return dir;
     } catch {
     }
   }
-  return os.tmpdir();
+  return os2.tmpdir();
 };
 var DATA_DIR = resolveWritableDataDir();
+var SQLITE_DB_PATH = initSqliteStore(DATA_DIR);
 var STATE_FILE_NAME = "emeb_candelario_shared_school_state_2027_v2.json";
 var SECRETS_FILE_NAME = "emeb_candelario_server_secrets_v1.json";
-var STATE_FILE_PATH = path.join(DATA_DIR, STATE_FILE_NAME);
-var SECRETS_FILE_PATH = path.join(DATA_DIR, SECRETS_FILE_NAME);
-var TMP_STATE_FILE_PATH = path.join(os.tmpdir(), STATE_FILE_NAME);
-var TMP_SECRETS_FILE_PATH = path.join(os.tmpdir(), SECRETS_FILE_NAME);
-var LEGACY_STATE_FILE_PATH = path.join(__dirname, "shared_school_state_2027_v2.json");
+var STATE_FILE_PATH = path2.join(DATA_DIR, STATE_FILE_NAME);
+var SECRETS_FILE_PATH = path2.join(DATA_DIR, SECRETS_FILE_NAME);
+var TMP_STATE_FILE_PATH = path2.join(os2.tmpdir(), STATE_FILE_NAME);
+var TMP_SECRETS_FILE_PATH = path2.join(os2.tmpdir(), SECRETS_FILE_NAME);
+var LEGACY_STATE_FILE_PATH = path2.join(__dirname, "shared_school_state_2027_v2.json");
 var SERVER_CLEAN_RESET_EPOCH_ID = "clean_zero_data_2026_11_16_v1";
 var deduplicateUsersByEmail = (users) => {
   if (!Array.isArray(users)) return users;
@@ -2204,9 +2666,9 @@ var secretsFlushChain = Promise.resolve();
 var readServerSecrets = () => {
   if (cachedServerSecrets) return cachedServerSecrets;
   try {
-    const secretsFile = fs.existsSync(SECRETS_FILE_PATH) ? SECRETS_FILE_PATH : fs.existsSync(TMP_SECRETS_FILE_PATH) ? TMP_SECRETS_FILE_PATH : null;
+    const secretsFile = fs2.existsSync(SECRETS_FILE_PATH) ? SECRETS_FILE_PATH : fs2.existsSync(TMP_SECRETS_FILE_PATH) ? TMP_SECRETS_FILE_PATH : null;
     if (secretsFile) {
-      const raw = fs.readFileSync(secretsFile, "utf-8");
+      const raw = fs2.readFileSync(secretsFile, "utf-8");
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
         const resolvedSecrets = parsed;
@@ -2228,10 +2690,10 @@ var writeServerSecrets = (patch) => {
   const serialized = JSON.stringify(next);
   secretsFlushChain = secretsFlushChain.then(async () => {
     const tmpPath = `${SECRETS_FILE_PATH}.tmp`;
-    await fs.promises.writeFile(tmpPath, serialized, { encoding: "utf-8", mode: 384 });
-    await fs.promises.rename(tmpPath, SECRETS_FILE_PATH);
+    await fs2.promises.writeFile(tmpPath, serialized, { encoding: "utf-8", mode: 384 });
+    await fs2.promises.rename(tmpPath, SECRETS_FILE_PATH);
     try {
-      await fs.promises.chmod(SECRETS_FILE_PATH, 384);
+      await fs2.promises.chmod(SECRETS_FILE_PATH, 384);
     } catch {
     }
   }).catch((err) => {
@@ -2244,18 +2706,10 @@ var flushSharedStateToDiskAsync = async () => {
   stateFlushInProgress = (async () => {
     while (pendingStateFlushDirty && cachedSharedState) {
       pendingStateFlushDirty = false;
-      const snapshotJson = JSON.stringify(cachedSharedState);
-      const tmpPath = `${STATE_FILE_PATH}.tmp`;
-      const bakPath = `${STATE_FILE_PATH}.bak`;
       try {
-        await fs.promises.writeFile(tmpPath, snapshotJson, "utf-8");
-        await fs.promises.rename(tmpPath, STATE_FILE_PATH);
-        try {
-          await fs.promises.copyFile(STATE_FILE_PATH, bakPath);
-        } catch {
-        }
+        writeSharedStateToSqlite(cachedSharedState);
       } catch (err) {
-        console.warn("Erro ao gravar shared_school_state_2027.json:", err);
+        console.warn("Erro ao gravar estado no SQLite:", err);
       }
     }
   })().finally(() => {
@@ -2301,138 +2755,150 @@ var buildDefaultSharedState = () => {
 var readSharedState = () => {
   if (cachedSharedState) return cachedSharedState;
   try {
-    const fileToRead = fs.existsSync(STATE_FILE_PATH) ? STATE_FILE_PATH : fs.existsSync(TMP_STATE_FILE_PATH) ? TMP_STATE_FILE_PATH : fs.existsSync(LEGACY_STATE_FILE_PATH) ? LEGACY_STATE_FILE_PATH : null;
-    if (fileToRead) {
-      const raw = fs.readFileSync(fileToRead, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
-        let migratedSecrets = false;
-        const secretPatch = {};
-        if (parsed.sessionHmacSecret) {
-          secretPatch.sessionHmacSecret = parsed.sessionHmacSecret;
-          delete parsed.sessionHmacSecret;
-          migratedSecrets = true;
+    let parsed = readSharedStateFromSqlite();
+    let migratedFromLegacyJson = false;
+    if (!parsed) {
+      const fileToRead = fs2.existsSync(STATE_FILE_PATH) ? STATE_FILE_PATH : fs2.existsSync(TMP_STATE_FILE_PATH) ? TMP_STATE_FILE_PATH : fs2.existsSync(LEGACY_STATE_FILE_PATH) ? LEGACY_STATE_FILE_PATH : null;
+      if (fileToRead) {
+        const raw = fs2.readFileSync(fileToRead, "utf-8");
+        const jsonParsed = JSON.parse(raw);
+        if (jsonParsed && typeof jsonParsed === "object") {
+          parsed = jsonParsed;
+          migratedFromLegacyJson = true;
         }
-        if (parsed.adminDriveToken) {
-          secretPatch.adminDriveToken = parsed.adminDriveToken;
-          secretPatch.adminDriveTokenUpdatedAtMs = parsed.adminDriveTokenUpdatedAtMs || Date.now();
-          delete parsed.adminDriveToken;
-          delete parsed.adminDriveTokenUpdatedAtMs;
-          migratedSecrets = true;
-        }
-        if (parsed.webPushVapidKeys) {
-          secretPatch.webPushVapidKeys = parsed.webPushVapidKeys;
-          delete parsed.webPushVapidKeys;
-          migratedSecrets = true;
-        }
-        if (migratedSecrets) {
-          writeServerSecrets(secretPatch);
-        }
-        if (Array.isArray(parsed.authorizedUsers) && parsed.authorizedUsers.length > 0) {
-          parsed.authorizedUsers = deduplicateUsersByEmail(parsed.authorizedUsers);
-        } else {
-          parsed.authorizedUsers = deduplicateUsersByEmail(INITIAL_AUTHORIZED_USERS);
-        }
-        if (Array.isArray(parsed.classes)) {
-          parsed.classes = sanitizeAndDeduplicateClasses(parsed.classes);
-        }
-        parsed.cloudLinks = {
-          photosFolderId: "1FzKx1qghv2_WhOjw7ttvbT_rvaTGYPpn",
-          photosFolderUrl: "https://drive.google.com/drive/folders/1FzKx1qghv2_WhOjw7ttvbT_rvaTGYPpn",
-          fichasPdfFolderId: "1GDEdQuNfhc0vps4mZXv4LLv4kDLZnauJ",
-          fichasPdfFolderUrl: "https://drive.google.com/drive/folders/1GDEdQuNfhc0vps4mZXv4LLv4kDLZnauJ",
-          ...parsed.cloudLinks || {}
-        };
-        if (!parsed.cloudLinks.photosFolderId || parsed.cloudLinks.photosFolderUrl?.includes("my-drive")) {
-          parsed.cloudLinks.photosFolderId = "1FzKx1qghv2_WhOjw7ttvbT_rvaTGYPpn";
-          parsed.cloudLinks.photosFolderUrl = "https://drive.google.com/drive/folders/1FzKx1qghv2_WhOjw7ttvbT_rvaTGYPpn";
-        }
-        if (!Array.isArray(parsed.holidays) || parsed.holidays.length === 0) {
-          parsed.holidays = OFFICIAL_DEFAULT_HOLIDAYS_2027;
-        }
-        if (!parsed.officialCalendarConfig || !Array.isArray(parsed.officialCalendarConfig.schoolDays) || parsed.officialCalendarConfig.schoolDays.length !== 200) {
-          const defaultDays = generateOfficial200SchoolDays2027(parsed.holidays);
-          const validation = parseAndValidateSchoolDates(defaultDays.join("\n"), parsed.holidays);
-          parsed.officialCalendarConfig = {
-            year: 2027,
-            schoolDays: defaultDays,
-            calendarDays: validation.calendarDays,
-            monthlyDistribution: validation.monthlyDistribution,
-            holidays: parsed.holidays,
-            updatedAtMs: Date.now(),
-            updatedByEmail: "emebjfreitas@jundiai.sp.gov.br",
-            updatedByName: "Administrador EMEB Joaquim Candel\xE1rio de Freitas",
-            version: 1
-          };
-        }
-        if (!Array.isArray(parsed.calendarAuditLogs) || parsed.calendarAuditLogs.length === 0) {
-          parsed.calendarAuditLogs = [
-            {
-              id: "audit-init-2027",
-              timestampISO: (/* @__PURE__ */ new Date()).toISOString(),
-              adminEmail: "emebjfreitas@jundiai.sp.gov.br",
-              adminName: "Sistema SME Jundia\xED",
-              action: "RESTORE_DEFAULT",
-              previousDaysCount: 0,
-              newDaysCount: 200,
-              holidaysCount: OFFICIAL_DEFAULT_HOLIDAYS_2027.length,
-              details: "Inicializa\xE7\xE3o oficial da matriz centralizada de 200 dias letivos (2027)."
-            }
-          ];
-        }
-        let needsCleanEpochPersist = migratedSecrets;
-        if (parsed.cleanResetEpochId !== SERVER_CLEAN_RESET_EPOCH_ID) {
-          needsCleanEpochPersist = true;
-          const nowEpochMs = Date.now();
-          parsed.cleanResetEpochId = SERVER_CLEAN_RESET_EPOCH_ID;
-          parsed.classesUpdatedAtMs = nowEpochMs;
-          parsed.updatedAtMs = nowEpochMs;
-          parsed.accessSessionLogs = [];
-          parsed.schoolNotices = [];
-          parsed.securityAuditLogs = [];
-          parsed.discoveredNominalPdfs = [];
-          parsed.discoveredDrivePhotos = [];
-          parsed.fcmAlerts = [];
-          if (Array.isArray(parsed.classes)) {
-            parsed.classes = parsed.classes.map((cls) => ({
-              ...cls,
-              students: [],
-              totalStudents: 0,
-              monthlyAbsences: 0,
-              presenceRate: 0,
-              statusText: "Aguardando importa\xE7\xE3o de estudantes",
-              isPending: false,
-              weeklyPerformance: [],
-              pedagogicalNotes: "",
-              updatedAtMs: nowEpochMs
-            }));
-          }
-          if (Array.isArray(parsed.authorizedUsers)) {
-            parsed.authorizedUsers = parsed.authorizedUsers.map((u) => ({
-              ...u,
-              totalAccessCount: 0,
-              totalDurationSeconds: 0,
-              lastSessionDurationSeconds: 0,
-              lastLoginAt: void 0,
-              lastActiveAt: void 0,
-              lastScreenVisited: void 0
-            }));
-          }
-        }
-        const resolvedState = parsed;
-        cachedSharedState = resolvedState;
-        if (needsCleanEpochPersist) {
-          pendingStateFlushDirty = true;
-          void flushSharedStateToDiskAsync();
-        }
-        return resolvedState;
       }
     }
+    if (parsed && typeof parsed === "object") {
+      let migratedSecrets = false;
+      const secretPatch = {};
+      if (parsed.sessionHmacSecret) {
+        secretPatch.sessionHmacSecret = parsed.sessionHmacSecret;
+        delete parsed.sessionHmacSecret;
+        migratedSecrets = true;
+      }
+      if (parsed.adminDriveToken) {
+        secretPatch.adminDriveToken = parsed.adminDriveToken;
+        secretPatch.adminDriveTokenUpdatedAtMs = parsed.adminDriveTokenUpdatedAtMs || Date.now();
+        delete parsed.adminDriveToken;
+        delete parsed.adminDriveTokenUpdatedAtMs;
+        migratedSecrets = true;
+      }
+      if (parsed.webPushVapidKeys) {
+        secretPatch.webPushVapidKeys = parsed.webPushVapidKeys;
+        delete parsed.webPushVapidKeys;
+        migratedSecrets = true;
+      }
+      if (migratedSecrets) {
+        writeServerSecrets(secretPatch);
+      }
+      if (Array.isArray(parsed.authorizedUsers) && parsed.authorizedUsers.length > 0) {
+        parsed.authorizedUsers = deduplicateUsersByEmail(parsed.authorizedUsers);
+      } else {
+        parsed.authorizedUsers = deduplicateUsersByEmail(INITIAL_AUTHORIZED_USERS);
+      }
+      if (Array.isArray(parsed.classes)) {
+        parsed.classes = sanitizeAndDeduplicateClasses(parsed.classes);
+      }
+      parsed.cloudLinks = {
+        photosFolderId: "1FzKx1qghv2_WhOjw7ttvbT_rvaTGYPpn",
+        photosFolderUrl: "https://drive.google.com/drive/folders/1FzKx1qghv2_WhOjw7ttvbT_rvaTGYPpn",
+        fichasPdfFolderId: "1GDEdQuNfhc0vps4mZXv4LLv4kDLZnauJ",
+        fichasPdfFolderUrl: "https://drive.google.com/drive/folders/1GDEdQuNfhc0vps4mZXv4LLv4kDLZnauJ",
+        ...parsed.cloudLinks || {}
+      };
+      if (!parsed.cloudLinks.photosFolderId || parsed.cloudLinks.photosFolderUrl?.includes("my-drive")) {
+        parsed.cloudLinks.photosFolderId = "1FzKx1qghv2_WhOjw7ttvbT_rvaTGYPpn";
+        parsed.cloudLinks.photosFolderUrl = "https://drive.google.com/drive/folders/1FzKx1qghv2_WhOjw7ttvbT_rvaTGYPpn";
+      }
+      if (!Array.isArray(parsed.holidays) || parsed.holidays.length === 0) {
+        parsed.holidays = OFFICIAL_DEFAULT_HOLIDAYS_2027;
+      }
+      if (!parsed.officialCalendarConfig || !Array.isArray(parsed.officialCalendarConfig.schoolDays) || parsed.officialCalendarConfig.schoolDays.length !== 200) {
+        const defaultDays = generateOfficial200SchoolDays2027(parsed.holidays);
+        const validation = parseAndValidateSchoolDates(defaultDays.join("\n"), parsed.holidays);
+        parsed.officialCalendarConfig = {
+          year: 2027,
+          schoolDays: defaultDays,
+          calendarDays: validation.calendarDays,
+          monthlyDistribution: validation.monthlyDistribution,
+          holidays: parsed.holidays,
+          updatedAtMs: Date.now(),
+          updatedByEmail: "emebjfreitas@jundiai.sp.gov.br",
+          updatedByName: "Administrador EMEB Joaquim Candel\xE1rio de Freitas",
+          version: 1
+        };
+      }
+      if (!Array.isArray(parsed.calendarAuditLogs) || parsed.calendarAuditLogs.length === 0) {
+        parsed.calendarAuditLogs = [
+          {
+            id: "audit-init-2027",
+            timestampISO: (/* @__PURE__ */ new Date()).toISOString(),
+            adminEmail: "emebjfreitas@jundiai.sp.gov.br",
+            adminName: "Sistema SME Jundia\xED",
+            action: "RESTORE_DEFAULT",
+            previousDaysCount: 0,
+            newDaysCount: 200,
+            holidaysCount: OFFICIAL_DEFAULT_HOLIDAYS_2027.length,
+            details: "Inicializa\xE7\xE3o oficial da matriz centralizada de 200 dias letivos (2027)."
+          }
+        ];
+      }
+      let needsCleanEpochPersist = migratedSecrets;
+      if (parsed.cleanResetEpochId !== SERVER_CLEAN_RESET_EPOCH_ID) {
+        needsCleanEpochPersist = true;
+        const nowEpochMs = Date.now();
+        parsed.cleanResetEpochId = SERVER_CLEAN_RESET_EPOCH_ID;
+        parsed.classesUpdatedAtMs = nowEpochMs;
+        parsed.updatedAtMs = nowEpochMs;
+        parsed.accessSessionLogs = [];
+        parsed.schoolNotices = [];
+        parsed.securityAuditLogs = [];
+        parsed.discoveredNominalPdfs = [];
+        parsed.discoveredDrivePhotos = [];
+        parsed.fcmAlerts = [];
+        if (Array.isArray(parsed.classes)) {
+          parsed.classes = parsed.classes.map((cls) => ({
+            ...cls,
+            students: [],
+            totalStudents: 0,
+            monthlyAbsences: 0,
+            presenceRate: 0,
+            statusText: "Aguardando importa\xE7\xE3o de estudantes",
+            isPending: false,
+            weeklyPerformance: [],
+            pedagogicalNotes: "",
+            updatedAtMs: nowEpochMs
+          }));
+        }
+        if (Array.isArray(parsed.authorizedUsers)) {
+          parsed.authorizedUsers = parsed.authorizedUsers.map((u) => ({
+            ...u,
+            totalAccessCount: 0,
+            totalDurationSeconds: 0,
+            lastSessionDurationSeconds: 0,
+            lastLoginAt: void 0,
+            lastActiveAt: void 0,
+            lastScreenVisited: void 0
+          }));
+        }
+      }
+      const resolvedState = parsed;
+      cachedSharedState = resolvedState;
+      if (needsCleanEpochPersist || migratedFromLegacyJson) {
+        pendingStateFlushDirty = true;
+        void flushSharedStateToDiskAsync();
+      }
+      return resolvedState;
+    }
   } catch (err) {
-    console.warn("Erro ao ler shared_school_state_2027.json:", err);
+    console.warn("Erro ao ler estado no SQLite:", err);
   }
   const fallbackState = buildDefaultSharedState();
   cachedSharedState = fallbackState;
+  try {
+    writeSharedStateToSqlite(fallbackState);
+  } catch {
+  }
   return fallbackState;
 };
 var writeSharedState = (patch) => {
@@ -2919,7 +3385,62 @@ async function startServer() {
   };
   app.get("/api/health", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
-    res.json({ ok: true, service: "emeb-candelario-2027" });
+    res.json({
+      ok: true,
+      service: "emeb-candelario-2027",
+      dbEngine: "sqlite",
+      sqliteReady: Boolean(SQLITE_DB_PATH),
+      firestoreEnabled: false,
+      quotaLimit: "unlimited"
+    });
+  });
+  app.get("/api/sql/stats", requireInstitutionalAuth, (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(getSqliteDatabaseStats());
+  });
+  app.get("/api/sql/students", requireInstitutionalAuth, (req, res) => {
+    const user = extractRequestUser(req);
+    const requestedClassId = typeof req.query.classId === "string" ? req.query.classId.trim() : "";
+    const search = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : 100;
+    if (!user.isAdmin) {
+      const current = readSharedState();
+      const matchedUser = (current.authorizedUsers || []).find(
+        (u) => u && typeof u.email === "string" && u.email.trim().toLowerCase() === user.email
+      );
+      const allowedIds = /* @__PURE__ */ new Set();
+      if (matchedUser?.assignedClassId && matchedUser.assignedClassId !== "all") {
+        allowedIds.add(String(matchedUser.assignedClassId).toLowerCase());
+      }
+      if (Array.isArray(matchedUser?.assignedClassIds)) {
+        matchedUser.assignedClassIds.forEach((id) => {
+          if (id && id !== "all") allowedIds.add(String(id).toLowerCase());
+        });
+      }
+      (current.classes || []).forEach((c) => {
+        if (!c?.id) return;
+        const primary = String(c.teacherEmail || "").trim().toLowerCase();
+        const extra = Array.isArray(c.authorizedTeacherEmails) && c.authorizedTeacherEmails.some((e) => String(e).trim().toLowerCase() === user.email);
+        if (primary === user.email || extra) {
+          allowedIds.add(String(c.id).toLowerCase());
+        }
+      });
+      const allMatching = queryStudentsFromSqlite({
+        classId: requestedClassId || void 0,
+        search: search || void 0,
+        limit: Number.isFinite(limit) ? limit : 100
+      }).filter((row) => allowedIds.has(row.classId.toLowerCase()));
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ ok: true, engine: "sqlite", count: allMatching.length, students: allMatching });
+      return;
+    }
+    const students = queryStudentsFromSqlite({
+      classId: requestedClassId || void 0,
+      search: search || void 0,
+      limit: Number.isFinite(limit) ? limit : 100
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ok: true, engine: "sqlite", count: students.length, students });
   });
   app.post("/api/auth/session", async (req, res) => {
     try {
@@ -3054,10 +3575,10 @@ async function startServer() {
     });
     res.json({ ok: true });
   });
-  const PHOTOS_DIR = path.join(DATA_DIR, "emeb_candelario_student_photos_v1");
-  if (!fs.existsSync(PHOTOS_DIR)) {
+  const PHOTOS_DIR = path2.join(DATA_DIR, "emeb_candelario_student_photos_v1");
+  if (!fs2.existsSync(PHOTOS_DIR)) {
     try {
-      fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+      fs2.mkdirSync(PHOTOS_DIR, { recursive: true });
     } catch {
     }
   }
@@ -3132,40 +3653,40 @@ async function startServer() {
     const exts = ["jpg", "jpeg", "png", "webp", "gif", "avif"];
     for (const ext of exts) {
       if (ext === keepExt) continue;
-      const candidate = path.join(PHOTOS_DIR, `${cleanId}.${ext}`);
-      if (fs.existsSync(candidate)) {
+      const candidate = path2.join(PHOTOS_DIR, `${cleanId}.${ext}`);
+      if (fs2.existsSync(candidate)) {
         try {
-          fs.unlinkSync(candidate);
+          fs2.unlinkSync(candidate);
         } catch {
         }
       }
     }
   };
   app.get("/api/photos/:filename", requireInstitutionalAuth, (req, res) => {
-    const filename = path.basename(req.params.filename || "");
+    const filename = path2.basename(req.params.filename || "");
     if (!filename || filename.includes("..")) {
       res.status(400).end();
       return;
     }
-    let filePath = path.join(PHOTOS_DIR, filename);
-    if (!fs.existsSync(filePath)) {
+    let filePath = path2.join(PHOTOS_DIR, filename);
+    if (!fs2.existsSync(filePath)) {
       const stem = filename.replace(/\.[^/.]+$/, "");
       for (const fallbackExt of [".webp", ".jpg", ".jpeg", ".png"]) {
-        const altPath = path.join(PHOTOS_DIR, `${stem}${fallbackExt}`);
-        if (fs.existsSync(altPath)) {
+        const altPath = path2.join(PHOTOS_DIR, `${stem}${fallbackExt}`);
+        if (fs2.existsSync(altPath)) {
           filePath = altPath;
           break;
         }
       }
     }
-    if (!fs.existsSync(filePath)) {
+    if (!fs2.existsSync(filePath)) {
       res.status(404).end();
       return;
     }
-    const resolvedExt = path.extname(filePath).toLowerCase();
+    const resolvedExt = path2.extname(filePath).toLowerCase();
     res.setHeader("Content-Type", PHOTO_MIME_BY_EXT[resolvedExt] || "image/jpeg");
     res.setHeader("Cache-Control", "private, max-age=86400");
-    fs.createReadStream(filePath).pipe(res);
+    fs2.createReadStream(filePath).pipe(res);
   });
   const savePhotoBufferToFile = (studentId, buffer) => {
     const detected = detectImageTypeFromBuffer(buffer);
@@ -3174,13 +3695,13 @@ async function startServer() {
     }
     const cleanId = String(studentId).replace(/[^a-zA-Z0-9-_]/g, "_");
     const filename = `${cleanId}.${detected.ext}`;
-    const filePath = path.join(PHOTOS_DIR, filename);
+    const filePath = path2.join(PHOTOS_DIR, filename);
     const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
     removeStaleStudentPhotoExtensions(cleanId, detected.ext);
     let needsWrite = true;
-    if (fs.existsSync(filePath)) {
+    if (fs2.existsSync(filePath)) {
       try {
-        const existingBuf = fs.readFileSync(filePath);
+        const existingBuf = fs2.readFileSync(filePath);
         const existingSha = crypto.createHash("sha256").update(existingBuf).digest("hex");
         if (existingSha === sha256) {
           needsWrite = false;
@@ -3190,7 +3711,7 @@ async function startServer() {
       }
     }
     if (needsWrite) {
-      fs.writeFileSync(filePath, buffer);
+      fs2.writeFileSync(filePath, buffer);
     }
     return {
       photoUrl: `/api/photos/${filename}`,
@@ -3232,7 +3753,7 @@ async function startServer() {
       const cleanId = String(item.studentId).replace(/[^a-zA-Z0-9-_]/g, "_");
       if (existingInfo?.sha256 && existingInfo.sha256 === actualSha && existingInfo.photo) {
         const rawPathName = existingInfo.photo.split("?")[0].split("/").pop() || `${cleanId}.webp`;
-        if (fs.existsSync(path.join(PHOTOS_DIR, rawPathName))) {
+        if (fs2.existsSync(path2.join(PHOTOS_DIR, rawPathName))) {
           skippedCount++;
           continue;
         }
@@ -3455,28 +3976,28 @@ async function startServer() {
       if (typeof item !== "string") continue;
       const trimmed = item.trim();
       const withoutQuery = trimmed.split("?")[0].split("#")[0];
-      const filename = path.basename(withoutQuery);
+      const filename = path2.basename(withoutQuery);
       if (!filename || filename === "." || filename === ".." || withoutQuery.includes("..")) {
         results[trimmed] = { accessible: false, reason: "invalid_name" };
         continue;
       }
-      let filePath = path.join(PHOTOS_DIR, filename);
-      if (!fs.existsSync(filePath)) {
+      let filePath = path2.join(PHOTOS_DIR, filename);
+      if (!fs2.existsSync(filePath)) {
         const stem = filename.replace(/\.[^/.]+$/, "");
         for (const fallbackExt of [".webp", ".jpg", ".jpeg", ".png"]) {
-          const altPath = path.join(PHOTOS_DIR, `${stem}${fallbackExt}`);
-          if (fs.existsSync(altPath)) {
+          const altPath = path2.join(PHOTOS_DIR, `${stem}${fallbackExt}`);
+          if (fs2.existsSync(altPath)) {
             filePath = altPath;
             break;
           }
         }
       }
-      if (!fs.existsSync(filePath)) {
+      if (!fs2.existsSync(filePath)) {
         results[trimmed] = { accessible: false, reason: "missing" };
         continue;
       }
       try {
-        const stats = fs.statSync(filePath);
+        const stats = fs2.statSync(filePath);
         if (!stats.isFile() || stats.size <= 0) {
           results[trimmed] = { accessible: false, reason: "empty" };
           continue;
@@ -3495,11 +4016,11 @@ async function startServer() {
       return;
     }
     try {
-      if (fs.existsSync(PHOTOS_DIR)) {
-        const files = fs.readdirSync(PHOTOS_DIR);
+      if (fs2.existsSync(PHOTOS_DIR)) {
+        const files = fs2.readdirSync(PHOTOS_DIR);
         for (const file of files) {
           try {
-            fs.unlinkSync(path.join(PHOTOS_DIR, file));
+            fs2.unlinkSync(path2.join(PHOTOS_DIR, file));
           } catch {
           }
         }
@@ -3547,28 +4068,28 @@ async function startServer() {
       res.status(500).json({ error: err.message || "Falha ao limpar fotos" });
     }
   });
-  const PDFS_DIR = path.join(DATA_DIR, "emeb_candelario_student_pdfs_v1");
-  if (!fs.existsSync(PDFS_DIR)) {
+  const PDFS_DIR = path2.join(DATA_DIR, "emeb_candelario_student_pdfs_v1");
+  if (!fs2.existsSync(PDFS_DIR)) {
     try {
-      fs.mkdirSync(PDFS_DIR, { recursive: true });
+      fs2.mkdirSync(PDFS_DIR, { recursive: true });
     } catch {
     }
   }
   app.get("/api/pdfs/:filename", requireInstitutionalAuth, (req, res) => {
-    const filename = path.basename(req.params.filename || "");
+    const filename = path2.basename(req.params.filename || "");
     if (!filename || filename.includes("..")) {
       res.status(400).end();
       return;
     }
-    const filePath = path.join(PDFS_DIR, filename);
-    if (!fs.existsSync(filePath)) {
+    const filePath = path2.join(PDFS_DIR, filename);
+    if (!fs2.existsSync(filePath)) {
       res.status(404).end();
       return;
     }
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
     res.setHeader("Cache-Control", "private, max-age=86400");
-    fs.createReadStream(filePath).pipe(res);
+    fs2.createReadStream(filePath).pipe(res);
   });
   const savePdfBufferToFile = (studentId, buffer) => {
     if (!hasPdfSignatureInBuffer(buffer)) {
@@ -3576,12 +4097,12 @@ async function startServer() {
     }
     const cleanId = String(studentId).replace(/[^a-zA-Z0-9-_]/g, "_");
     const filename = `${cleanId}.pdf`;
-    const filePath = path.join(PDFS_DIR, filename);
+    const filePath = path2.join(PDFS_DIR, filename);
     const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
     let needsWrite = true;
-    if (fs.existsSync(filePath)) {
+    if (fs2.existsSync(filePath)) {
       try {
-        const existingBuf = fs.readFileSync(filePath);
+        const existingBuf = fs2.readFileSync(filePath);
         const existingSha = crypto.createHash("sha256").update(existingBuf).digest("hex");
         if (existingSha === sha256) {
           needsWrite = false;
@@ -3591,7 +4112,7 @@ async function startServer() {
       }
     }
     if (needsWrite) {
-      fs.writeFileSync(filePath, buffer);
+      fs2.writeFileSync(filePath, buffer);
     }
     return {
       pdfUrl: `/api/pdfs/${filename}`,
@@ -3639,7 +4160,7 @@ async function startServer() {
       const md5Checksum = crypto.createHash("md5").update(item.buffer).digest("hex");
       const cleanId = String(item.studentId).replace(/[^a-zA-Z0-9-_]/g, "_");
       const existingInfo = existingStudentShaMap.get(item.studentId);
-      if (existingInfo?.sha256 && existingInfo.sha256 === actualSha && existingInfo.pdfUrl && fs.existsSync(path.join(PDFS_DIR, `${cleanId}.pdf`))) {
+      if (existingInfo?.sha256 && existingInfo.sha256 === actualSha && existingInfo.pdfUrl && fs2.existsSync(path2.join(PDFS_DIR, `${cleanId}.pdf`))) {
         skippedCount++;
         continue;
       }
@@ -3763,11 +4284,11 @@ async function startServer() {
       return;
     }
     try {
-      if (fs.existsSync(PDFS_DIR)) {
-        const files = fs.readdirSync(PDFS_DIR);
+      if (fs2.existsSync(PDFS_DIR)) {
+        const files = fs2.readdirSync(PDFS_DIR);
         for (const file of files) {
           try {
-            fs.unlinkSync(path.join(PDFS_DIR, file));
+            fs2.unlinkSync(path2.join(PDFS_DIR, file));
           } catch {
           }
         }
@@ -4213,10 +4734,10 @@ async function startServer() {
     const nowMs = Date.now();
     for (const dirPath of [PHOTOS_DIR, PDFS_DIR]) {
       try {
-        if (fs.existsSync(dirPath)) {
-          for (const file of fs.readdirSync(dirPath)) {
+        if (fs2.existsSync(dirPath)) {
+          for (const file of fs2.readdirSync(dirPath)) {
             try {
-              fs.unlinkSync(path.join(dirPath, file));
+              fs2.unlinkSync(path2.join(dirPath, file));
             } catch {
             }
           }
@@ -4770,8 +5291,8 @@ async function startServer() {
     let raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     if ((!raw || !raw.trim()) && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       try {
-        if (fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
-          raw = fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8");
+        if (fs2.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+          raw = fs2.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8");
         }
       } catch {
       }
@@ -5373,14 +5894,14 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = path2.join(process.cwd(), "dist");
     app.use(
       express.static(distPath, {
         setHeaders: (res, filePath) => {
-          const base = path.basename(filePath).toLowerCase();
+          const base = path2.basename(filePath).toLowerCase();
           if (base === "index.html" || base === "sw.js" || base === "firebase-messaging-sw.js" || base === "manifest.json") {
             res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-          } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          } else if (filePath.includes(`${path2.sep}assets${path2.sep}`)) {
             res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
           }
         }
@@ -5388,7 +5909,7 @@ async function startServer() {
     );
     app.get("*", (_req, res) => {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path2.join(distPath, "index.html"));
     });
   }
   const wss = new WebSocketServer({

@@ -46,6 +46,7 @@ import {
 } from '../utils/genderDictionary';
 import { getStoredClasses } from './db';
 
+export const FIRESTORE_DISABLED_SQL_MODE = true;
 export const CLEAN_DB_RESET_EPOCH_ID = 'clean_zero_data_2026_11_16_v1';
 export const DB_CLEAN_EPOCH_STORAGE_KEY = 'emeb_candelario_db_clean_epoch_v1';
 export const DB_EPOCH_META_STORAGE_KEY = 'emeb_candelario_db_epoch_meta_v1';
@@ -79,49 +80,51 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const firebaseApp = app;
 
 const rawFirebaseConfig = firebaseConfig as Record<string, string | undefined>;
-let firestoreDbInstance: Firestore;
-try {
-  let localCache;
+let firestoreDbInstance: Firestore = undefined as unknown as Firestore;
+if (!FIRESTORE_DISABLED_SQL_MODE) {
   try {
-    localCache = persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-      cacheSizeBytes: CACHE_SIZE_UNLIMITED,
-    });
-  } catch {
-    localCache = memoryLocalCache();
-  }
-  const settings = {
-    localCache,
-    ignoreUndefinedProperties: true,
-    experimentalAutoDetectLongPolling: true,
-  };
-  const targetNamedDb =
-    rawFirebaseConfig.firestoreDatabaseId &&
-    rawFirebaseConfig.firestoreDatabaseId !== '(default)' &&
-    rawFirebaseConfig.firestoreDatabaseId.trim() !== ''
-      ? rawFirebaseConfig.firestoreDatabaseId.trim()
-      : undefined;
+    let localCache;
+    try {
+      localCache = persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+        cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+      });
+    } catch {
+      localCache = memoryLocalCache();
+    }
+    const settings = {
+      localCache,
+      ignoreUndefinedProperties: true,
+      experimentalAutoDetectLongPolling: true,
+    };
+    const targetNamedDb =
+      rawFirebaseConfig.firestoreDatabaseId &&
+      rawFirebaseConfig.firestoreDatabaseId !== '(default)' &&
+      rawFirebaseConfig.firestoreDatabaseId.trim() !== ''
+        ? rawFirebaseConfig.firestoreDatabaseId.trim()
+        : undefined;
 
-  try {
-    firestoreDbInstance = targetNamedDb
-      ? initializeFirestore(app, settings, targetNamedDb)
-      : initializeFirestore(app, settings);
+    try {
+      firestoreDbInstance = targetNamedDb
+        ? initializeFirestore(app, settings, targetNamedDb)
+        : initializeFirestore(app, settings);
+    } catch {
+      firestoreDbInstance = targetNamedDb
+        ? getFirestore(app, targetNamedDb)
+        : getFirestore(app);
+    }
   } catch {
+    const targetNamedDb =
+      rawFirebaseConfig.firestoreDatabaseId &&
+      rawFirebaseConfig.firestoreDatabaseId !== '(default)' &&
+      rawFirebaseConfig.firestoreDatabaseId.trim() !== ''
+        ? rawFirebaseConfig.firestoreDatabaseId.trim()
+        : undefined;
+
     firestoreDbInstance = targetNamedDb
       ? getFirestore(app, targetNamedDb)
       : getFirestore(app);
   }
-} catch {
-  const targetNamedDb =
-    rawFirebaseConfig.firestoreDatabaseId &&
-    rawFirebaseConfig.firestoreDatabaseId !== '(default)' &&
-    rawFirebaseConfig.firestoreDatabaseId.trim() !== ''
-      ? rawFirebaseConfig.firestoreDatabaseId.trim()
-      : undefined;
-
-  firestoreDbInstance = targetNamedDb
-    ? getFirestore(app, targetNamedDb)
-    : getFirestore(app);
 }
 export const firestoreDb = firestoreDbInstance;
 
@@ -195,6 +198,7 @@ export const isFirestoreInternalAssertionError = (error: unknown): boolean => {
 };
 
 export const isFirestoreQuotaExceeded = (): boolean => {
+  if (FIRESTORE_DISABLED_SQL_MODE) return false;
   const now = Date.now();
   if (memoryQuotaPausedUntilMs > now) return true;
   try {
@@ -681,6 +685,26 @@ export async function monitorFirestoreIntegrityOnBoot(options?: {
       localMeta.epochUpdatedAtMs,
       options?.localClassesUpdatedAtMs || 0
     );
+
+    if (FIRESTORE_DISABLED_SQL_MODE) {
+      return setIntegrityReport({
+        status: 'aligned',
+        connected: true,
+        checkedAtISO: new Date().toISOString(),
+        localEpochId: localMeta.epochId,
+        remoteEpochId: localMeta.epochId,
+        localEpochVersion: localMeta.epochVersion,
+        remoteEpochVersion: localMeta.epochVersion,
+        localEpochUpdatedAtMs: localMeta.epochUpdatedAtMs,
+        remoteEpochUpdatedAtMs: localMeta.epochUpdatedAtMs,
+        localClassesUpdatedAtMs: localMeta.classesUpdatedAtMs,
+        remoteClassesUpdatedAtMs: localMeta.classesUpdatedAtMs,
+        pendingLocalOperations: pendingQueue.length,
+        preventedRemoteOverwrite: false,
+        protectedLocalWatermarkMs: localWatermark,
+        reason: 'Modo SQLite ativo sem dependência do Firebase Firestore (sem cotas).',
+      });
+    }
 
     beginBootIntegrityCheck(localWatermark);
 
@@ -1294,6 +1318,10 @@ export const saveClassesToFirestoreCloud = async (
   classes: ClassGroup[],
   updatedAtMs: number
 ): Promise<boolean> => {
+  if (FIRESTORE_DISABLED_SQL_MODE) {
+    touchLocalEpochState(updatedAtMs, CLEAN_DB_RESET_EPOCH_ID);
+    return true;
+  }
   if (isFirestoreQuotaExceeded()) {
     return false;
   }
@@ -1402,6 +1430,9 @@ export const wipeFirestoreSchoolDataOnly = async (
   baseClasses: ClassGroup[],
   epochId: string = CLEAN_DB_RESET_EPOCH_ID
 ): Promise<boolean> => {
+  if (FIRESTORE_DISABLED_SQL_MODE) {
+    return true;
+  }
   const auth = getAuth(app);
   if (!auth.currentUser) {
     return false;
@@ -1572,6 +1603,10 @@ export const saveConfigMetaToFirestoreCloud = async (payload: {
   discoveredDrivePhotos?: any[];
   genderDictionary?: NameGenderEntry[];
 }): Promise<boolean> => {
+  if (FIRESTORE_DISABLED_SQL_MODE) {
+    setLocalConfigUpdatedAtMs(Date.now());
+    return true;
+  }
   if (isFirestoreQuotaExceeded()) {
     return false;
   }
@@ -1663,6 +1698,9 @@ const AUTHORIZED_USERS_CACHE_TTL_MS = 2 * 60 * 1000;
 export const fetchAuthorizedUsersFromFirestore = async (
   forceRefresh = false
 ): Promise<AuthorizedUser[] | null> => {
+  if (FIRESTORE_DISABLED_SQL_MODE) {
+    return null;
+  }
   if (isFirestoreQuotaExceeded()) {
     return cachedAuthorizedUsers;
   }
@@ -1774,6 +1812,9 @@ export const fetchStateFromFirestoreCloud = async (
   lastClassDoc?: QueryDocumentSnapshot | null;
   hasMoreClasses?: boolean;
 } | null> => {
+  if (FIRESTORE_DISABLED_SQL_MODE) {
+    return null;
+  }
   if (isFirestoreQuotaExceeded()) {
     return null;
   }
@@ -1988,6 +2029,9 @@ export const fetchClassesFromFirestorePaginated = async (options?: {
   lastDoc: QueryDocumentSnapshot | null;
   hasMore: boolean;
 }> => {
+  if (FIRESTORE_DISABLED_SQL_MODE) {
+    return { classes: [], lastDoc: null, hasMore: false };
+  }
   if (isFirestoreQuotaExceeded()) {
     return { classes: [], lastDoc: null, hasMore: false };
   }
@@ -2051,6 +2095,7 @@ export const checkFirestoreDeltaOnResume = async (): Promise<void> => {
  * para obter imediatamente o estado mais recente (usado no botão "Sincronizar Agora").
  */
 export const forceRefreshFirestoreFromServer = async (): Promise<boolean> => {
+  if (FIRESTORE_DISABLED_SQL_MODE) return true;
   if (isFirestoreQuotaExceeded()) return false;
   cachedCloudState = null;
   lastCloudStateFetchTimeMs = 0;
@@ -2103,7 +2148,7 @@ export const subscribeToFirestoreRealtimeState = (callbacks: {
     activeRealtimeUnsubscribe = null;
   }
 
-  if (isFirestoreQuotaExceeded()) {
+  if (FIRESTORE_DISABLED_SQL_MODE || isFirestoreQuotaExceeded()) {
     return () => {};
   }
 
@@ -2382,6 +2427,13 @@ export const testFirestoreConnection = async (): Promise<{
   offline: boolean;
   error?: string;
 }> => {
+  if (FIRESTORE_DISABLED_SQL_MODE) {
+    return {
+      connected: false,
+      offline: false,
+      error: 'Firestore desativado — banco operando em SQLite sem cotas.',
+    };
+  }
   try {
     await getDocFromServer(doc(firestoreDb, 'school_meta_2027', 'state'));
     return { connected: true, offline: false };
@@ -2439,7 +2491,7 @@ export const upsertDriveFileSyncManifest = async (
 export const upsertDriveFileSyncBatch = async (
   manifests: DriveSyncFileManifest[]
 ): Promise<boolean> => {
-  if (manifests.length === 0 || isFirestoreQuotaExceeded()) {
+  if (FIRESTORE_DISABLED_SQL_MODE || manifests.length === 0 || isFirestoreQuotaExceeded()) {
     return false;
   }
   const auth = getAuth(app);
@@ -2475,7 +2527,7 @@ export const upsertDriveFileSyncBatch = async (
 export const fetchDriveFileSyncManifests = async (
   pageLimit = 200
 ): Promise<DriveSyncFileManifest[]> => {
-  if (isFirestoreQuotaExceeded()) {
+  if (FIRESTORE_DISABLED_SQL_MODE || isFirestoreQuotaExceeded()) {
     return [];
   }
   const auth = getAuth(app);
